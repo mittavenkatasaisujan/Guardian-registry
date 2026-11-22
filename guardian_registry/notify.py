@@ -42,6 +42,7 @@ URGENT_KINDS = {
     "kill_switch_off",
     "guardian_invited",
     "guardian_removal_proposed",
+    "sim_changed",          # a guardian's ward (or the guardian) had a SIM change / lost phone
 }
 
 
@@ -158,6 +159,10 @@ class Dispatcher:
             u = self.db.one("SELECT mobile_enc FROM users WHERE id=?", (n["recipient_id"],))
             if not u or not u["mobile_enc"]:
                 return False  # no number on file (enrolled before v2): in-app only
+            swapped = self.db.one("SELECT 1 FROM sim_events WHERE user_id=? AND cleared_at IS NULL "
+                                  "AND window_ends_at>?", (n["recipient_id"], iso(self.clock.now())))
+            if swapped:
+                return False  # the number may be in an attacker's hands: in-app only until cleared
             self.sms.send(decrypt_mobile(u["mobile_enc"]), f"{n['title']}: {n['body']}")
             return True
         if n["channel"] == "webhook":

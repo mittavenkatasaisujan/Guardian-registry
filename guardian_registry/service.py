@@ -25,6 +25,7 @@ from .clock import Clock, iso, ist_day
 from .db import Database
 from .errors import Conflict, Forbidden, Invalid, NotFound, TooMany, Unauthorized
 from .kyc import KycMixin
+from .simswap import SimSwapMixin
 from .models import (
     CHANNELS, ChangeKind, ChangeStatus, CheckStatus, GuardianStatus, Outcome, Rules, Transaction,
 )
@@ -45,6 +46,11 @@ OTP_RESEND_SECONDS = 30
 OTP_MAX_SENDS_PER_WINDOW = 3
 OTP_WINDOW_MINUTES = 15
 
+def _public_payload(payload: dict) -> dict:
+    """Hide hashes and ciphertext of a new number from views and the audit log."""
+    return {k: v for k, v in payload.items() if k not in ("new_mobile_hash", "new_mobile_enc")}
+
+
 _OUTCOME_TO_STATUS = {
     Outcome.ALLOW: CheckStatus.ALLOWED,
     Outcome.DELAY: CheckStatus.COOLING_OFF,
@@ -53,7 +59,7 @@ _OUTCOME_TO_STATUS = {
 }
 
 
-class Registry(KycMixin):
+class Registry(KycMixin, SimSwapMixin):
     def __init__(self, db: Database | None = None, clock: Clock | None = None):
         self.db = db or Database()
         self.clock = clock or Clock()
@@ -168,7 +174,7 @@ class Registry(KycMixin):
         return {"webhook_url": url, "webhook_secret": secret}
 
     # -------------------------------------------------------------------- users
-    def register_user(self, mobile: str, display_name: str) -> tuple[str, str]:
+    def register_user(self, mobile: str, display_name: str, device_id: str | None = None) -> tuple[str, str]:
         """Enrol a person and open a session. The API only reaches this after the number is
         proven by OTP (see verify_otp); it is public here for tests and back-office tools."""
         try:
@@ -185,14 +191,17 @@ class Registry(KycMixin):
             c.execute("INSERT INTO users (id, mobile_hash, mobile_enc, display_name, created_at) VALUES (?,?,?,?,?)",
                       (uid, mh, encrypt_mobile(mobile), display_name, self._now()))
             c.execute("INSERT INTO rules VALUES (?,?,?)", (uid, json.dumps(Rules().to_dict()), self._now()))
-            self._insert_session(c, uid, token)
+            self._insert_session(c, uid, token, *self._register_device(c, uid, device_id))
             self._audit(c, uid, "user.enrolled", uid)
         return uid, token
 
     # ----------------------------------------------------------------- sessions
-    def _insert_session(self, c: sqlite3.Connection, uid: str, token: str) -> None:
-        c.execute("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?,?,?,?)",
-                  (secret_hash(token), uid, self._now(), iso(self.clock.now() + timedelta(days=SESSION_DAYS))))
+    def _insert_session(self, c: sqlite3.Connection, uid: str, token: str,
+                        device_hash: str | None = None, probation_until: str | None = None) -> None:
+        c.execute("INSERT INTO sessions (token_hash, user_id, created_at, expires_at, device_hash, probation_until) "
+                  "VALUES (?,?,?,?,?,?)",
+                  (secret_hash(token), uid, self._now(), iso(self.clock.now() + timedelta(days=SESSION_DAYS)),
+                   device_hash, probation_until))
 
     def user_by_token(self, token: str) -> str | None:
         row = self.db.one("SELECT user_id FROM sessions WHERE token_hash=? AND revoked_at IS NULL AND expires_at>?",
@@ -241,8 +250,8 @@ class Registry(KycMixin):
                  "not even a guardian or a bank.")
         return code
 
-    def verify_otp(self, mobile: str, code: str, display_name: str | None = None) -> dict:
-        """Check the code. Enrolled number -> new session. New number -> enrol (needs display_name)."""
+    def _check_otp(self, mobile: str, code: str) -> str:
+        """Validate a code without consuming it. Returns the number's hash."""
         try:
             mh = mobile_hash(mobile)
         except ValueError as e:
@@ -256,19 +265,38 @@ class Registry(KycMixin):
             with self.db.tx() as c:
                 c.execute("UPDATE otps SET attempts=attempts+1 WHERE mobile_hash=?", (mh,))
             raise Unauthorized("wrong code")
+        return mh
+
+    def _consume_otp(self, mh: str) -> None:
+        with self.db.tx() as c:
+            c.execute("DELETE FROM otps WHERE mobile_hash=?", (mh,))  # single use
+
+    def verify_otp(self, mobile: str, code: str, display_name: str | None = None,
+                   device_id: str | None = None) -> dict:
+        """Check the code. Enrolled number -> new session. New number -> enrol (needs display_name).
+        `device_id` is a stable app-install id: a sign-in from a device this person hasn't used
+        before starts on probation (see simswap.py)."""
+        mh = self._check_otp(mobile, code)
         uid = self.user_by_mobile(mobile)
         if not uid and not (display_name or "").strip():
             raise Invalid("this number is not enrolled yet: send display_name to enrol")
-        with self.db.tx() as c:
-            c.execute("DELETE FROM otps WHERE mobile_hash=?", (mh,))  # single use
+        self._consume_otp(mh)
         if uid:
             token = new_secret("gut")
             with self.db.tx() as c:
-                self._insert_session(c, uid, token)
-                self._audit(c, uid, "session.created", uid, via="otp")
-            return {"user_id": uid, "token": token, "new_user": False}
-        uid, token = self.register_user(mobile, display_name)
-        return {"user_id": uid, "token": token, "new_user": True}
+                device_hash, probation_until = self._register_device(c, uid, device_id)
+                self._insert_session(c, uid, token, device_hash, probation_until)
+                self._audit(c, uid, "session.created", uid, via="otp", new_device_probation=probation_until is not None)
+                if probation_until:
+                    self._alert(c, [uid], "new_device_sign_in", "New device signed in",
+                                "Your account was signed in on a new device. For 24 hours that device can't approve "
+                                "payments or loosen protection. If this wasn't you, report a lost phone.", uid)
+            out = {"user_id": uid, "token": token, "new_user": False}
+            info = self.session_info(token)
+            out["restricted"], out["restriction_reasons"] = info["restricted"], info["reasons"]
+            return out
+        uid, token = self.register_user(mobile, display_name, device_id)
+        return {"user_id": uid, "token": token, "new_user": True, "restricted": False, "restriction_reasons": []}
 
     def user_by_mobile(self, mobile: str) -> str | None:
         try:
@@ -482,12 +510,14 @@ class Registry(KycMixin):
                       "VALUES (?,?,?,?,?,?,?,?)",
                       (cid, principal_id, kind.value, json.dumps(payload), ChangeStatus.PENDING.value,
                        principal_id, self._now(), effective))
-            self._audit(c, principal_id, "change.proposed", principal_id, change_id=cid, kind=kind.value, payload=payload)
+            self._audit(c, principal_id, "change.proposed", principal_id, change_id=cid, kind=kind.value,
+                        payload=_public_payload(payload))
             who = self._name(principal_id)
             what = {
                 ChangeKind.UPDATE_RULES: f"loosen their payment limits ({', '.join(payload.get('changes', {}))})",
                 ChangeKind.KILL_SWITCH_OFF: "switch payments back on",
                 ChangeKind.REMOVE_GUARDIAN: "remove a guardian",
+                ChangeKind.CHANGE_MOBILE: f"move their account to a new number ({payload.get('new_mobile_masked')})",
             }[kind]
             excluded = ()
             if kind is ChangeKind.REMOVE_GUARDIAN:
@@ -510,7 +540,7 @@ class Registry(KycMixin):
         if not r:
             raise NotFound("change not found")
         return {"id": r["id"], "principal_id": r["principal_id"], "kind": r["kind"],
-                "payload": json.loads(r["payload"]), "status": r["status"],
+                "payload": _public_payload(json.loads(r["payload"])), "status": r["status"],
                 "created_at": r["created_at"], "effective_at": r["effective_at"],
                 "decided_by": r["decided_by"], "decided_at": r["decided_at"]}
 
@@ -538,6 +568,8 @@ class Registry(KycMixin):
         elif kind is ChangeKind.REMOVE_GUARDIAN:
             c.execute("UPDATE guardianships SET status=?, ended_at=? WHERE id=? AND status=?",
                       (GuardianStatus.ENDED.value, self._now(), payload["guardianship_id"], GuardianStatus.ACTIVE.value))
+        elif kind is ChangeKind.CHANGE_MOBILE:
+            self._apply_mobile_change(c, pid, payload)
         c.execute("UPDATE pending_changes SET status=?, decided_by=?, decided_at=? WHERE id=?",
                   (ChangeStatus.APPLIED.value, actor, self._now(), r["id"]))
         self._audit(c, actor, "change.applied", pid, change_id=r["id"], kind=kind.value)
@@ -702,6 +734,7 @@ class Registry(KycMixin):
                 rules, Transaction(amount=amount, payee=payee, channel=channel),
                 spent_today=spent,
                 payee_known=self._payee_known(principal_id, payee),
+                sim_swap_recent=self.sim_swap_active(principal_id),
                 has_active_guardian=bool(self._approver_ids(principal_id)),
             )
             status = _OUTCOME_TO_STATUS[decision.outcome]

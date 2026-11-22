@@ -30,7 +30,7 @@ class TestOtp:
     def test_login_existing_user(self, reg, sms):
         uid, _ = reg.register_user(AMMA, "Amma")
         out = reg.verify_otp(AMMA, reg.request_otp(AMMA, sms))
-        assert out == {"user_id": uid, "token": out["token"], "new_user": False}
+        assert out["user_id"] == uid and out["new_user"] is False and reg.user_by_token(out["token"]) == uid
 
     def test_new_number_needs_name(self, reg, sms):
         code = reg.request_otp(AMMA, sms)

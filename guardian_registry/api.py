@@ -44,6 +44,22 @@ class VerifyIn(BaseModel):
     mobile: str
     code: str = Field(min_length=4, max_length=10)
     display_name: str | None = Field(default=None, max_length=80)
+    device_id: str | None = Field(default=None, max_length=200,
+                                  description="stable app-install id; new devices start on probation")
+
+
+class SimChangeIn(BaseModel):
+    mobile: str
+    changed_at: str | None = Field(default=None, description="ISO 8601 with timezone; default now")
+
+
+class NewMobileIn(BaseModel):
+    new_mobile: str
+
+
+class NewMobileVerifyIn(BaseModel):
+    new_mobile: str
+    code: str = Field(min_length=4, max_length=10)
 
 
 class LogoutIn(BaseModel):
@@ -175,6 +191,11 @@ def create_app(
     async def _registry_error(_: Request, exc: RegistryError):
         return JSONResponse(status_code=exc.status, content={"error": type(exc).__name__, "detail": str(exc)})
 
+    @app.exception_handler(HTTPException)
+    async def _http_error(_: Request, exc: HTTPException):
+        body = exc.detail if isinstance(exc.detail, dict) else {"detail": exc.detail}
+        return JSONResponse(status_code=exc.status_code, content=body, headers=getattr(exc, "headers", None))
+
     def limited(limiter: RateLimiter, key: str) -> None:
         ok, retry = limiter.hit(key)
         if not ok:
@@ -190,11 +211,28 @@ def create_app(
     def bearer_token(authorization: Annotated[str | None, Header()] = None) -> str | None:
         return authorization[7:] if authorization and authorization.lower().startswith("bearer ") else None
 
-    def user(token: Annotated[str | None, Depends(bearer_token)]) -> str:
-        uid = reg.user_by_token(token) if token else None
-        if not uid:
+    def session(token: Annotated[str | None, Depends(bearer_token)]) -> dict:
+        info = reg.session_info(token) if token else None
+        if not info:
             raise HTTPException(401, "missing, invalid or expired bearer token")
-        return uid
+        return info
+
+    def user(info: Annotated[dict, Depends(session)]) -> str:
+        return info["user_id"]
+
+    def restricted_error(info: dict) -> HTTPException:
+        return HTTPException(403, {
+            "error": "RestrictedSession",
+            "detail": "this sign-in can't do that yet: " + "; ".join(info["reasons"]),
+            "reasons": info["reasons"],
+            "allowed": ["read", "deny", "cancel", "veto", "kill switch on", "tighten rules", "report lost phone"],
+        })
+
+    def trusted_user(info: Annotated[dict, Depends(session)]) -> str:
+        """For actions a phone-number thief must not be able to take (see simswap.py)."""
+        if info["restricted"]:
+            raise restricted_error(info)
+        return info["user_id"]
 
     def operator(x_admin_token: Annotated[str | None, Header()] = None) -> None:
         if not admin:
@@ -204,6 +242,8 @@ def create_app(
 
     Participant = Annotated[str, Depends(participant)]
     User = Annotated[str, Depends(user)]
+    TrustedUser = Annotated[str, Depends(trusted_user)]
+    Session = Annotated[dict, Depends(session)]
     Operator = Annotated[None, Depends(operator)]
 
     # ------------------------------------------------------------------ ops
@@ -241,7 +281,7 @@ def create_app(
     @app.post("/v1/auth/verify", tags=["sign-in"])
     def verify_otp(body: VerifyIn, request: Request):
         limited(otp_limiter, "verify:" + (request.client.host if request.client else "unknown"))
-        return reg.verify_otp(body.mobile, body.code, body.display_name)
+        return reg.verify_otp(body.mobile, body.code, body.display_name, body.device_id)
 
     @app.post("/v1/auth/logout", status_code=204, tags=["sign-in"])
     def logout(body: LogoutIn, _: User, token: Annotated[str | None, Depends(bearer_token)]):
@@ -274,6 +314,11 @@ def create_app(
     def revoke_attestation(attestation_id: str, pid: Participant):
         return reg.revoke_attestation(pid, attestation_id)
 
+    @app.post("/v1/signals/sim-change", tags=["banks"])
+    def sim_change(body: SimChangeIn, pid: Participant):
+        """Report that a customer's SIM changed (from your mobile-operator data)."""
+        return reg.report_sim_change(pid, body.mobile, body.changed_at)
+
     @app.put("/v1/participant/webhook", tags=["banks"])
     def set_webhook(body: WebhookIn, pid: Participant):
         """Receive signed `check.updated` events instead of polling. Verify X-GR-Signature as
@@ -289,12 +334,40 @@ def create_app(
     def me(uid: User):
         return reg.profile(uid)
 
+    # ------------------------------------------------------- SIM-swap safety
+    @app.get("/v1/me/security", tags=["people"])
+    def my_security(info: Session):
+        return {**reg.security_status(info["user_id"], info["user_id"]),
+                "this_session": {"restricted": info["restricted"], "reasons": info["reasons"]}}
+
+    @app.post("/v1/me/security/lost-phone", tags=["people"])
+    def my_lost_phone(uid: User):
+        """Signs you out everywhere (this session too) and opens the SIM-swap window."""
+        return reg.report_lost_phone(uid, uid)
+
+    @app.post("/v1/me/security/confirm-sim-change", tags=["people"])
+    def my_confirm_sim(uid: TrustedUser):
+        return reg.confirm_sim_change(uid, uid)
+
+    @app.post("/v1/me/mobile/change", status_code=202, tags=["people"])
+    def change_mobile(body: NewMobileIn, uid: TrustedUser, request: Request):
+        limited(otp_limiter, request.client.host if request.client else "unknown")
+        code = reg.request_mobile_change(uid, body.new_mobile, sms)
+        out = {"sent": True, "expires_in_seconds": OTP_TTL_MINUTES * 60}
+        if dev_echo:
+            out["dev_code"] = code
+        return out
+
+    @app.post("/v1/me/mobile/verify", tags=["people"])
+    def verify_mobile(body: NewMobileVerifyIn, uid: TrustedUser):
+        return reg.confirm_mobile_change(uid, body.new_mobile, body.code)
+
     @app.get("/v1/me/identity", tags=["people"])
     def my_identity(uid: User):
         return reg.identity(uid)
 
     @app.post("/v1/me/identity/attestations/{attestation_id}/approve", tags=["people"])
-    def approve_attestation(attestation_id: str, uid: User):
+    def approve_attestation(attestation_id: str, uid: TrustedUser):
         return reg.respond_to_attestation(uid, attestation_id, True)
 
     @app.post("/v1/me/identity/attestations/{attestation_id}/reject", tags=["people"])
@@ -322,19 +395,24 @@ def create_app(
         return reg.get_rules(uid).to_dict()
 
     @app.patch("/v1/me/rules", tags=["people"])
-    def patch_rules(body: RulesPatch, uid: User):
-        return reg.update_rules(uid, body.model_dump(exclude_unset=True))
+    def patch_rules(body: RulesPatch, info: Session):
+        changes = body.model_dump(exclude_unset=True)
+        if info["restricted"] and reg.would_loosen(info["user_id"], changes):
+            raise restricted_error(info)
+        return reg.update_rules(info["user_id"], changes)
 
     @app.post("/v1/me/rules/preset/{name}", tags=["people"])
-    def apply_preset(name: str, uid: User):
-        return reg.apply_preset(uid, name)
+    def apply_preset(name: str, info: Session):
+        if info["restricted"] and name in PRESETS and reg.would_loosen(info["user_id"], PRESETS[name]["rules"]):
+            raise restricted_error(info)
+        return reg.apply_preset(info["user_id"], name)
 
     @app.post("/v1/me/kill-switch/on", tags=["people"])
     def my_kill_on(uid: User):
         return reg.engage_kill_switch(uid, uid).to_dict()
 
     @app.post("/v1/me/kill-switch/off", tags=["people"])
-    def my_kill_off(uid: User):
+    def my_kill_off(uid: TrustedUser):
         return reg.release_kill_switch(uid, uid)
 
     @app.get("/v1/me/guardians", tags=["people"])
@@ -342,11 +420,11 @@ def create_app(
         return reg.guardians_of(uid)
 
     @app.post("/v1/me/guardians", status_code=201, tags=["people"])
-    def invite(body: InviteIn, uid: User):
+    def invite(body: InviteIn, uid: TrustedUser):
         return reg.invite_guardian(uid, body.mobile)
 
     @app.delete("/v1/me/guardians/{guardianship_id}", tags=["people"])
-    def remove(guardianship_id: str, uid: User):
+    def remove(guardianship_id: str, uid: TrustedUser):
         return reg.remove_guardian(uid, guardianship_id)
 
     @app.get("/v1/me/changes", tags=["people"])
@@ -375,7 +453,7 @@ def create_app(
         return reg.wards_of(uid)
 
     @app.post("/v1/guardian/invitations/{guardianship_id}/accept", tags=["guardians"])
-    def accept(guardianship_id: str, uid: User):
+    def accept(guardianship_id: str, uid: TrustedUser):
         return reg.respond_to_invite(uid, guardianship_id, True)
 
     @app.post("/v1/guardian/invitations/{guardianship_id}/decline", tags=["guardians"])
@@ -387,7 +465,7 @@ def create_app(
         return reg.resign(uid, guardianship_id)
 
     @app.post("/v1/guardian/payments/{check_id}/approve", tags=["guardians"])
-    def approve(check_id: str, uid: User):
+    def approve(check_id: str, uid: TrustedUser):
         return reg.approve_check(uid, check_id)
 
     @app.post("/v1/guardian/payments/{check_id}/deny", tags=["guardians"])
@@ -399,7 +477,7 @@ def create_app(
         return reg.cancel_check(uid, check_id)
 
     @app.post("/v1/guardian/changes/{change_id}/approve", tags=["guardians"])
-    def approve_change(change_id: str, uid: User):
+    def approve_change(change_id: str, uid: TrustedUser):
         return reg.approve_change(uid, change_id)
 
     @app.post("/v1/guardian/changes/{change_id}/veto", tags=["guardians"])
@@ -424,11 +502,23 @@ def create_app(
         return reg.engage_kill_switch(principal_id, uid).to_dict()
 
     @app.post("/v1/guardian/wards/{principal_id}/kill-switch/off", tags=["guardians"])
-    def ward_kill_off(principal_id: str, uid: User):
+    def ward_kill_off(principal_id: str, uid: TrustedUser):
         return reg.release_kill_switch(principal_id, uid)
 
+    @app.get("/v1/guardian/wards/{principal_id}/security", tags=["guardians"])
+    def ward_security(principal_id: str, uid: User):
+        return reg.security_status(uid, principal_id)
+
+    @app.post("/v1/guardian/wards/{principal_id}/lost-phone", tags=["guardians"])
+    def ward_lost_phone(principal_id: str, uid: User):
+        return reg.report_lost_phone(uid, principal_id)
+
+    @app.post("/v1/guardian/wards/{principal_id}/confirm-sim-change", tags=["guardians"])
+    def ward_confirm_sim(principal_id: str, uid: TrustedUser):
+        return reg.confirm_sim_change(uid, principal_id)
+
     @app.post("/v1/guardian/wards/{principal_id}/trusted-payees", status_code=201, tags=["guardians"])
-    def vouch(principal_id: str, body: PayeeIn, uid: User):
+    def vouch(principal_id: str, body: PayeeIn, uid: TrustedUser):
         reg.vouch_payee(uid, principal_id, body.payee)
         return {"trusted_payees": reg.trusted_payees(principal_id)}
 

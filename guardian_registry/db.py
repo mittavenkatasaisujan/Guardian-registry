@@ -183,7 +183,36 @@ CREATE INDEX ix_kyc_user ON kyc_attestations(user_id, status);
 CREATE INDEX ix_kyc_participant ON kyc_attestations(participant_id, status);
 """
 
-MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3]
+# v4: SIM-swap protection. A reported SIM change (or lost phone) opens a risk window;
+# sign-ins from new devices start on probation until the device is trusted.
+SCHEMA_V4 = """
+CREATE TABLE sim_events (
+    id             TEXT PRIMARY KEY,
+    user_id        TEXT NOT NULL REFERENCES users(id),
+    source         TEXT NOT NULL,         -- 'participant' | 'self' | 'guardian'
+    reported_by    TEXT NOT NULL,
+    changed_at     TEXT NOT NULL,         -- when the SIM changed (or the phone was lost)
+    created_at     TEXT NOT NULL,
+    window_ends_at TEXT NOT NULL,
+    cleared_at     TEXT,
+    cleared_by     TEXT
+);
+CREATE INDEX ix_sim_user ON sim_events(user_id, window_ends_at);
+
+CREATE TABLE devices (
+    user_id     TEXT NOT NULL REFERENCES users(id),
+    device_hash TEXT NOT NULL,
+    first_seen  TEXT NOT NULL,
+    last_seen   TEXT NOT NULL,
+    trusted_at  TEXT NOT NULL,           -- a new device is trusted only after its probation
+    PRIMARY KEY (user_id, device_hash)
+);
+
+ALTER TABLE sessions ADD COLUMN device_hash TEXT;
+ALTER TABLE sessions ADD COLUMN probation_until TEXT;
+"""
+
+MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4]
 
 
 class Database:
