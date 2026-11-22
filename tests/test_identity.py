@@ -178,6 +178,14 @@ class TestProductionConfig:
         with pytest.raises(RuntimeError, match="GR_PEPPER"):
             check_production_config()
 
+    def test_refuses_missing_sms_gateway(self, monkeypatch):
+        monkeypatch.setenv("GR_ENV", "production")
+        monkeypatch.setenv("GR_PEPPER", "p")
+        monkeypatch.setenv("GR_DATA_KEY", "x" * 43 + "=")
+        monkeypatch.delenv("GR_SMS_URL", raising=False)
+        with pytest.raises(RuntimeError, match="GR_SMS_URL"):
+            check_production_config()
+
     def test_refuses_otp_echo(self, monkeypatch):
         monkeypatch.setenv("GR_ENV", "production")
         monkeypatch.setenv("GR_PEPPER", "p")
@@ -191,4 +199,5 @@ class TestProductionConfig:
         monkeypatch.setenv("GR_PEPPER", "p")
         monkeypatch.setenv("GR_DATA_KEY", "x" * 43 + "=")
         monkeypatch.delenv("GR_OTP_DEV_ECHO", raising=False)
+        monkeypatch.setenv("GR_SMS_URL", "https://sms.example/send")
         check_production_config()

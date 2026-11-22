@@ -124,7 +124,13 @@ class Dispatcher:
                  http: httpx.Client | None = None):
         self.db, self.clock = db, clock
         self.sms = sms or sms_sender_from_env()
-        self.http = http or httpx.Client(timeout=10)
+        self._http = http
+
+    @property
+    def http(self) -> httpx.Client:
+        if self._http is None:  # created lazily: building a TLS context is slow
+            self._http = httpx.Client(timeout=10)
+        return self._http
 
     def run_once(self, limit: int = 100) -> DispatchStats:
         stats = DispatchStats()

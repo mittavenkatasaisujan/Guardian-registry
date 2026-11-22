@@ -1,12 +1,15 @@
 """HTTP-level tests: auth, status codes and a full family scenario over the wire."""
 
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 
 from guardian_registry.api import create_app
 from guardian_registry.clock import FixedClock
 from guardian_registry.db import Database
-from guardian_registry.service import LOOSENING_DELAY_HOURS, Registry
+from guardian_registry.notify import LogSmsSender
+from guardian_registry.service import LOOSENING_DELAY_HOURS, OTP_RESEND_SECONDS, Registry
 
 from .conftest import AMMA, PRIYA, RAVI, R
 
@@ -19,8 +22,22 @@ def clock():
 
 
 @pytest.fixture
-def client(clock):
-    return TestClient(create_app(Registry(Database(), clock), admin_token=ADMIN))
+def sms():
+    return LogSmsSender()
+
+
+@pytest.fixture
+def client(clock, sms):
+    return TestClient(create_app(Registry(Database(), clock), admin_token=ADMIN, sms=sms, run_worker=False))
+
+
+def sign_in(client, sms, mobile, name=None):
+    """Full OTP flow: request a code, read it from the (fake) SMS, verify it."""
+    assert client.post("/v1/auth/otp", json={"mobile": mobile}).status_code == 202
+    code = re.search(r"code: (\d{6})", sms.sent[-1][1]).group(1)
+    r = client.post("/v1/auth/verify", json={"mobile": mobile, "code": code, "display_name": name})
+    assert r.status_code == 200, r.text
+    return r.json()
 
 
 def bearer(t):
@@ -28,9 +45,9 @@ def bearer(t):
 
 
 @pytest.fixture
-def world(client):
-    amma = client.post("/v1/users", json={"mobile": AMMA, "display_name": "Amma"}).json()
-    ravi = client.post("/v1/users", json={"mobile": RAVI, "display_name": "Ravi"}).json()
+def world(client, sms):
+    amma = sign_in(client, sms, AMMA, "Amma")
+    ravi = sign_in(client, sms, RAVI, "Ravi")
     bank = client.post("/v1/admin/participants", json={"name": "Demo Bank"},
                        headers={"X-Admin-Token": ADMIN}).json()
     g = client.post("/v1/me/guardians", json={"mobile": RAVI}, headers=bearer(amma["token"])).json()
@@ -78,12 +95,13 @@ class TestAuth:
 
 
 class TestErrors:
-    def test_duplicate_enrol_409(self, client, world):
-        r = client.post("/v1/users", json={"mobile": AMMA, "display_name": "Again"})
-        assert r.status_code == 409 and r.json()["error"] == "Conflict"
+    def test_sign_in_again_logs_in_same_user(self, client, world, sms, clock):
+        clock.advance(seconds=OTP_RESEND_SECONDS)
+        again = sign_in(client, sms, AMMA, "Ignored")
+        assert again["new_user"] is False and again["user_id"] == world["amma"]["user_id"]
 
     def test_bad_mobile_422(self, client):
-        assert client.post("/v1/users", json={"mobile": "12", "display_name": "X"}).status_code == 422
+        assert client.post("/v1/auth/otp", json={"mobile": "12"}).status_code == 422
 
     def test_unknown_rule_field_422(self, client, world):
         r = client.patch("/v1/me/rules", headers=bearer(world["amma"]["token"]), json={"kill_switch": False})
@@ -93,7 +111,7 @@ class TestErrors:
         assert check(client, world, "c", 10, channel="pigeon").status_code == 422
 
     def test_outsider_403(self, client, world):
-        priya = client.post("/v1/users", json={"mobile": PRIYA, "display_name": "Priya"}).json()
+        priya = sign_in(client, client.app.state.dispatcher.sms, PRIYA, "Priya")
         amma_id = world["amma"]["user_id"]
         r = client.post(f"/v1/guardian/wards/{amma_id}/kill-switch/on", headers=bearer(priya["token"]))
         assert r.status_code == 403
@@ -170,3 +188,106 @@ class TestScenario:
     def test_openapi_docs_build(self, client):
         spec = client.get("/openapi.json").json()
         assert "/v1/checks" in spec["paths"]
+
+
+class TestSignIn:
+    def test_wrong_code_401(self, client):
+        client.post("/v1/auth/otp", json={"mobile": AMMA})
+        r = client.post("/v1/auth/verify", json={"mobile": AMMA, "code": "abcdef", "display_name": "A"})
+        assert r.status_code == 401
+
+    def test_resend_too_soon_429(self, client):
+        client.post("/v1/auth/otp", json={"mobile": AMMA})
+        assert client.post("/v1/auth/otp", json={"mobile": AMMA}).status_code == 429
+
+    def test_response_does_not_leak_code_or_enrolment(self, client, world):
+        r = client.post("/v1/auth/otp", json={"mobile": "9000000002"}).json()
+        assert r == {"sent": True, "expires_in_seconds": 300}
+
+    def test_dev_echo_only_when_enabled(self, clock, monkeypatch):
+        monkeypatch.setenv("GR_OTP_DEV_ECHO", "1")
+        c = TestClient(create_app(Registry(Database(), clock), admin_token=ADMIN, sms=LogSmsSender(), run_worker=False))
+        assert len(c.post("/v1/auth/otp", json={"mobile": AMMA}).json()["dev_code"]) == 6
+
+    def test_ip_rate_limit(self, clock):
+        c = TestClient(create_app(Registry(Database(), clock), admin_token=ADMIN, sms=LogSmsSender(),
+                                  run_worker=False, otp_rate="2/60"))
+        assert c.post("/v1/auth/otp", json={"mobile": "9000000011"}).status_code == 202
+        assert c.post("/v1/auth/otp", json={"mobile": "9000000012"}).status_code == 202
+        r = c.post("/v1/auth/otp", json={"mobile": "9000000013"})
+        assert r.status_code == 429 and int(r.headers["Retry-After"]) >= 1
+
+    def test_logout(self, client, world):
+        t = bearer(world["amma"]["token"])
+        assert client.post("/v1/auth/logout", json={}, headers=t).status_code == 204
+        assert client.get("/v1/me", headers=t).status_code == 401
+
+
+class TestAlertsOverHttp:
+    def test_guardian_sees_alert_and_gets_sms(self, client, world, sms):
+        r = check(client, world, "alert-1", 25_000).json()
+        feed = client.get("/v1/guardian/inbox", headers=bearer(world["ravi"]["token"])).json()
+        assert feed["held_payments"][0]["check_id"] == r["check_id"]
+        notes = client.get("/v1/me/notifications", headers=bearer(world["ravi"]["token"])).json()
+        assert notes[0]["kind"] == "approval_needed" and "₹25,000.00" in notes[0]["body"]
+        out = client.post("/v1/admin/sweep", headers={"X-Admin-Token": ADMIN}).json()
+        assert out["delivered"] >= 1
+        assert any("Approve payment?" in text for to, text in sms.sent if to.endswith(RAVI))
+        marked = client.post("/v1/me/notifications/read", json={}, headers=bearer(world["ravi"]["token"])).json()
+        assert marked["marked"] >= 1
+        assert client.get("/v1/me/notifications?unread_only=true",
+                          headers=bearer(world["ravi"]["token"])).json() == []
+
+    def test_presets_endpoint(self, client, world):
+        assert "senior_with_guardian" in client.get("/v1/presets").json()
+        r = client.post("/v1/me/rules/preset/strict", headers=bearer(world["amma"]["token"])).json()
+        assert r["rules"]["blocked_channels"] == ["rtgs"]
+        assert client.post("/v1/me/rules/preset/nope", headers=bearer(world["amma"]["token"])).status_code == 404
+
+
+class TestBankFeatures:
+    def test_webhook_registration_and_key_rotation(self, client, world):
+        r = client.put("/v1/participant/webhook", headers=world["bank"], json={"url": "https://bank.example/h"}).json()
+        assert r["webhook_secret"].startswith("whs_")
+        assert client.put("/v1/participant/webhook", headers=world["bank"],
+                          json={"url": "http://evil.example/h"}).status_code == 422
+        new = client.post("/v1/participant/rotate-key", headers=world["bank"]).json()
+        assert client.get("/healthz").status_code == 200
+        assert check(client, world, "old-key", 10).status_code == 200            # grace period
+        assert client.post("/v1/checks", headers={"X-Api-Key": new["api_key"]}, json={
+            "mobile": AMMA, "participant_txn_id": "new-key", "amount": 1000, "payee": "a@upi"}).status_code == 200
+
+    def test_check_rate_limit(self, clock, sms):
+        c = TestClient(create_app(Registry(Database(), clock), admin_token=ADMIN, sms=sms,
+                                  run_worker=False, check_rate="3/60"))
+        key = c.post("/v1/admin/participants", json={"name": "B"}, headers={"X-Admin-Token": ADMIN}).json()["api_key"]
+        codes = [c.post("/v1/checks", headers={"X-Api-Key": key}, json={
+            "mobile": "9000000001", "participant_txn_id": f"r{i}", "amount": 100, "payee": "a@upi"}).status_code
+            for i in range(4)]
+        assert codes == [200, 200, 200, 429]
+
+
+class TestWorker:
+    def test_worker_runs_in_lifespan(self, monkeypatch):
+        """A cooling-off payment is released by the background worker on its own, without any read."""
+        monkeypatch.setenv("GR_WORKER_INTERVAL", "0.05")
+        clock = FixedClock()
+        reg = Registry(Database(), clock)
+        sms = LogSmsSender()
+        app = create_app(reg, admin_token=ADMIN, sms=sms, run_worker=True)
+        with TestClient(app) as c:
+            amma = sign_in(c, sms, AMMA, "Amma")
+            c.patch("/v1/me/rules", headers=bearer(amma["token"]),
+                    json={"new_payee_delay_threshold": 100})  # tightening: applies now, 60-min wait
+            key = c.post("/v1/admin/participants", json={"name": "B"}, headers={"X-Admin-Token": ADMIN}).json()["api_key"]
+            r = c.post("/v1/checks", headers={"X-Api-Key": key}, json={
+                "mobile": AMMA, "participant_txn_id": "w1", "amount": 500, "payee": "new@upi"}).json()
+            assert r["status"] == "cooling_off"
+            clock.advance(minutes=60)
+            import time
+            for _ in range(60):
+                row = reg.db.one("SELECT status FROM checks WHERE id=?", (r["check_id"],))
+                if row["status"] == "released":
+                    break
+                time.sleep(0.05)
+            assert row["status"] == "released"
