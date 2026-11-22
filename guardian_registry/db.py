@@ -65,9 +65,11 @@ CREATE TABLE IF NOT EXISTS checks (
     expires_at         TEXT,
     decided_by         TEXT,
     decided_at         TEXT,
+    completed_at       TEXT,               -- bank confirmed money moved
     UNIQUE (participant_id, participant_txn_id)
 );
 CREATE INDEX IF NOT EXISTS ix_checks_day ON checks(principal_id, day);
+CREATE INDEX IF NOT EXISTS ix_checks_payee ON checks(principal_id, payee);
 
 CREATE TABLE IF NOT EXISTS pending_changes (
     id           TEXT PRIMARY KEY,
