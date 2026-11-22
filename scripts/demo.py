@@ -109,10 +109,25 @@ print("preset applied now:", list(out["applied"]))
 out = call("PATCH", "/v1/me/rules", headers=A, json={"per_txn_limit": 50_000 * R, "daily_limit": 60_000 * R})
 print("tightened now:", list(out["applied"]))
 
+step("Bank A vouches for Amma and Ravi (KYC); each approves in their app")
+for who, tok, n, dob, ref in ((amma, A, 1, "1952-03-10", "CIF-1001"), (ravi, G, 2, "1984-08-15", "CIF-2002")):
+    att = call("POST", "/v1/kyc/attestations", 201, headers=sbi, json={
+        "mobile": mobile(n), "kyc_level": "full", "customer_ref": ref, "verified_on": "2025-06-01",
+        "date_of_birth": dob})
+    note = call("GET", "/v1/me/notifications", headers=tok)[0]
+    print(f"alert: {note['title']} - {note['body'][:80]}...")
+    call("POST", f"/v1/me/identity/attestations/{att['attestation_id']}/approve", headers=tok)
+ident = call("GET", "/v1/me/identity", headers=A)
+print(f"Amma: identity={ident['level']} senior={ident['senior']} (banks never see the date of birth)")
+print("Ravi as guardian:", call("GET", "/v1/me/guardians", headers=A)[0]["guardian_identity_level"])
+print("Amma requires bank-verified approvers:",
+      call("PATCH", "/v1/me/rules", headers=A, json={"require_verified_guardian": True})["applied"])
+
 step("Bank A: ₹800 to the vegetable seller -> allowed")
 r = call("POST", "/v1/checks", headers=sbi, json={"mobile": mobile(1), "participant_txn_id": "veg-1",
                                                   "amount": 800 * R, "payee": "veggies@upi"})
-print(r["outcome"], "| may_execute:", r["may_execute"])
+print(r["outcome"], "| may_execute:", r["may_execute"], "| customer:", r["customer"])
+assert r["customer"] == {"identity_level": "bank_verified", "senior": True}
 call("POST", f"/v1/checks/{r['check_id']}/outcome", headers=sbi, json={"completed": True})
 
 step("SCAM CALL: UPI App B, ₹45,000 to 'refund-desk@upi' -> needs Ravi's approval")
@@ -158,17 +173,25 @@ print("after approval:", bill["status"], "| may_execute:", bill["may_execute"])
 call("POST", f"/v1/checks/{bill['check_id']}/outcome", headers=sbi, json={"completed": True})
 
 step("Bank A was told by webhook instead of polling")
+def check_events():
+    return [e for e in HOOK_EVENTS if e["event"] == "check.updated"]
+
+
 for _ in range(50):  # the server's background worker delivers within a few seconds
-    if any(e["data"]["check"]["check_id"] == bill["check_id"] for e in HOOK_EVENTS):
+    if any(e["data"]["check"]["check_id"] == bill["check_id"] for e in check_events()):
         break
     time.sleep(0.2)
 else:
     call("POST", "/v1/admin/sweep", headers={"X-Admin-Token": ADMIN})
     time.sleep(0.5)
-ev = next(e for e in HOOK_EVENTS if e["data"]["check"]["check_id"] == bill["check_id"])
+ev = next(e for e in check_events() if e["data"]["check"]["check_id"] == bill["check_id"])
 print(f"webhook {ev['event']}: status={ev['data']['check']['status']} may_execute={ev['data']['check']['may_execute']} "
       f"signature_ok={ev['signature_ok']}")
 assert ev["signature_ok"]
+kyc_events = [e for e in HOOK_EVENTS if e["event"] == "kyc.updated"]
+print(f"Bank A also got {len(kyc_events)} kyc.updated events (consent decisions): "
+      f"{[e['data']['attestation']['status'] for e in kyc_events]}")
+assert len(kyc_events) == 2 and all(e["signature_ok"] for e in kyc_events)
 
 step("Daily limit is shared across banks (₹60,000/day)")
 spent = 800 + 15_000

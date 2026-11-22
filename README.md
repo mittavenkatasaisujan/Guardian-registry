@@ -15,6 +15,8 @@ its own version, a family with three bank accounts sets up three separate locks.
 | Feature | Behaviour |
 |---|---|
 | Sign-in | SMS one-time code (6 digits, 5 min, single use, 5 wrong tries locks it, 30 s resend cooldown, 3 codes per 15 min, plus a per-IP limit). The response is the same whether or not a number is enrolled. Sessions last 30 days; you can sign out of one device or all of them. |
+| **Bank-vouched KYC** | A participant bank that has already KYC'd its customer sends a claim (KYC level `full` or `minimum`, KYC date, optional date of birth, its customer ID). **It counts only after the customer approves it in the app.** Unanswered claims lapse after 7 days. Approved ones expire after a year (re-confirm yearly), and the customer can withdraw or the bank revoke at any time. The customer ID is stored only as a keyed hash and the date of birth only encrypted. Banks get a yes/no **`senior`** flag (70+, per RBI's proposal) in every check response, never the date. If two banks disagree on the date of birth, `senior` becomes unknown and the customer is told. |
+| Verified guardians | Every guardian listing shows the guardian's identity level (`bank_verified`, `bank_min_kyc` or `otp`). The rule `require_verified_guardian` lets **only bank-verified guardians approve** payments. Any guardian can still deny or cancel, since that only protects. Turning the rule off is a loosening, so it's held for 24 h. |
 | Two-way consent | The principal invites a guardian; the link is active only after the guardian accepts. At most 3 guardians. A guardian can step down at any time. |
 | Rules | Per-payment limit, daily limit (shared across **all** banks, resets at IST midnight), guardian-approval threshold, cooling-off for first payments to a new payee, blocked channels. One-tap **presets** (`rbi_high_value_delay`, `senior_with_guardian`, `strict`). |
 | Decisions | `block` › `needs_approval` › `delay` › `allow`, with human-readable reasons in ₹. With no active guardian, an approval falls back to a cooling-off delay, so nobody is locked out. |
@@ -77,14 +79,16 @@ Amounts are **integer paise**.
 |---|---|
 | Sign-in | `POST /v1/auth/otp`, `POST /v1/auth/verify` (send `display_name` the first time to enrol), `POST /v1/auth/logout` |
 | Operator | `POST /v1/admin/participants`, `GET /v1/admin/audit/verify`, `POST /v1/admin/sweep` |
-| Bank / app | `POST /v1/checks`, `GET /v1/checks/{id}`, `POST /v1/checks/{id}/outcome`, `PUT /v1/participant/webhook`, `POST /v1/participant/rotate-key` |
-| Person | `GET /v1/me`, `GET /v1/me/notifications`, `POST /v1/me/notifications/read`, `GET /v1/presets`, `GET/PATCH /v1/me/rules`, `POST /v1/me/rules/preset/{name}`, `POST /v1/me/kill-switch/{on,off}`, `GET/POST /v1/me/guardians`, `DELETE /v1/me/guardians/{id}`, `GET /v1/me/changes`, `GET /v1/me/payments`, `POST /v1/me/payments/{id}/cancel`, `GET /v1/me/audit` |
+| Bank / app | `POST /v1/checks`, `GET /v1/checks/{id}`, `POST /v1/checks/{id}/outcome`, `POST /v1/kyc/attestations`, `GET/DELETE /v1/kyc/attestations/{id}`, `PUT /v1/participant/webhook`, `POST /v1/participant/rotate-key` |
+| Person | `GET /v1/me`, `GET /v1/me/identity`, `POST /v1/me/identity/attestations/{id}/{approve,reject}`, `DELETE /v1/me/identity/attestations/{id}`, `GET /v1/me/notifications`, `POST /v1/me/notifications/read`, `GET /v1/presets`, `GET/PATCH /v1/me/rules`, `POST /v1/me/rules/preset/{name}`, `POST /v1/me/kill-switch/{on,off}`, `GET/POST /v1/me/guardians`, `DELETE /v1/me/guardians/{id}`, `GET /v1/me/changes`, `GET /v1/me/payments`, `POST /v1/me/payments/{id}/cancel`, `GET /v1/me/audit` |
 | Guardian | `GET /v1/guardian/inbox`, `GET /v1/guardian/wards`, `POST /v1/guardian/invitations/{id}/{accept,decline}`, `POST /v1/guardian/guardianships/{id}/resign`, `POST /v1/guardian/payments/{id}/{approve,deny,cancel}`, `POST /v1/guardian/changes/{id}/{approve,veto}`, `GET /v1/guardian/wards/{pid}/{rules,payments,audit}`, `POST /v1/guardian/wards/{pid}/kill-switch/{on,off}`, `POST /v1/guardian/wards/{pid}/trusted-payees` |
 
 **How a bank integrates:**
 1. Call `POST /v1/checks` before executing a payment.
 2. If `may_execute` is true, execute it, then report with `POST /v1/checks/{id}/outcome`.
 3. If the status is `cooling_off` or `pending_approval`, wait for the `check.updated` webhook (or poll `GET /v1/checks/{id}`).
+
+Banks also get a `kyc.updated` webhook when a customer approves, rejects or withdraws a KYC claim, or when one lapses or expires.
 
 To verify a webhook, compare the `X-GR-Signature` header with `"sha256=" + hex(HMAC_SHA256(webhook_secret, raw_body))` using a constant-time comparison. Each delivery carries a unique `X-GR-Delivery` ID, so retries can be de-duplicated.
 
@@ -96,19 +100,21 @@ guardian_registry/
   policy.py     pure rules engine (no I/O)
   service.py    registry: sign-in, consent, held changes, checks, approvals, sweeper
   notify.py     alert outbox, SMS senders, signed webhooks, retrying dispatcher
+  kyc.py        bank-vouched identity: attestations, consent, senior flag
   presets.py    named rule bundles (RBI-proposal-shaped, not final rules)
   audit.py      hash-chained audit log + verify
   db.py         SQLite schema with versioned migrations
   security.py   hashing, encryption, OTP, signatures, production checks
   ratelimit.py  sliding-window limiter
   api.py        FastAPI app (create_app factory) + background worker
-tests/          191 tests
+tests/          229 tests
 scripts/demo.py end-to-end story over real HTTP (also runs in CI)
 ```
 
 ## Still open
 
-- **RBI's final rules:** the paper is a proposal. Presets live in one file ([presets.py](guardian_registry/presets.py)), so the numbers can change when RBI publishes its final text. The 70+ age rule needs a verified date of birth, which this registry doesn't hold.
-- **Bank-vouched identity:** OTP proves someone holds the number, not who they are. The next step is letting a participant bank assert KYC status at enrolment.
+- **RBI's final rules:** the paper is a proposal. Presets live in one file ([presets.py](guardian_registry/presets.py)), so the numbers can change when RBI publishes its final text. The age cut-off is `SENIOR_AGE` in [kyc.py](guardian_registry/kyc.py).
+- **Trusting the banks:** any onboarded participant can make a KYC claim. The customer's consent is the check, but a real network would also need onboarding rules (only RBI-regulated entities) and a way to suspend a bank that makes false claims.
+- **Number changes and SIM swaps:** a bank-verified identity is tied to the mobile number. Moving to a new number, or spotting a SIM swap (a new sign-in shortly after a bank reports a SIM change), isn't handled yet.
 - **Multi-node scale:** SQLite and the in-process rate limiter suit a single-node pilot. Running several nodes needs Postgres, a shared limiter (Redis or the gateway) and mTLS for banks.
 - **Delivery channels:** SMS and in-app are built. WhatsApp and push notifications need a provider account.
