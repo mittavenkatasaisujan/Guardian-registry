@@ -24,6 +24,7 @@ from . import audit, notify
 from .clock import Clock, iso, ist_day
 from .db import Database
 from .errors import Conflict, Forbidden, Invalid, NotFound, TooMany, Unauthorized
+from .kyc import KycMixin
 from .models import (
     CHANNELS, ChangeKind, ChangeStatus, CheckStatus, GuardianStatus, Outcome, Rules, Transaction,
 )
@@ -52,7 +53,7 @@ _OUTCOME_TO_STATUS = {
 }
 
 
-class Registry:
+class Registry(KycMixin):
     def __init__(self, db: Database | None = None, clock: Clock | None = None):
         self.db = db or Database()
         self.clock = clock or Clock()
@@ -91,6 +92,14 @@ class Registry:
         return [r["guardian_id"] for r in self.db.all(
             "SELECT guardian_id FROM guardianships WHERE principal_id=? AND status=?",
             (principal_id, GuardianStatus.ACTIVE.value))]
+
+    def _approver_ids(self, principal_id: str) -> list[str]:
+        """Guardians allowed to APPROVE a payment. With require_verified_guardian on, only
+        bank-verified ones. (Any active guardian may still deny or cancel: that only protects.)"""
+        ids = self._active_guardian_ids(principal_id)
+        if self._rules_raw(principal_id).require_verified_guardian:
+            ids = [g for g in ids if self.identity_level(g) == "bank_verified"]
+        return ids
 
     def _name(self, user_id: str) -> str:
         return self._user(user_id)["display_name"]
@@ -271,7 +280,8 @@ class Registry:
 
     def profile(self, user_id: str) -> dict:
         u = self._user(user_id)
-        return {"id": u["id"], "display_name": u["display_name"], "enrolled_at": u["created_at"]}
+        return {"id": u["id"], "display_name": u["display_name"], "enrolled_at": u["created_at"],
+                "identity_level": self.identity_level(user_id)}
 
     # ---------------------------------------------------------------- guardians
     def invite_guardian(self, principal_id: str, guardian_mobile: str) -> dict:
@@ -308,6 +318,7 @@ class Registry:
             "guardian_name": self._user(r["guardian_id"])["display_name"],
             "status": r["status"], "invited_at": r["invited_at"],
             "accepted_at": r["accepted_at"], "ended_at": r["ended_at"],
+            "guardian_identity_level": self.identity_level(r["guardian_id"]),
         }
 
     def respond_to_invite(self, guardian_id: str, gid: str, accept: bool) -> dict:
@@ -393,6 +404,8 @@ class Registry:
                 raise Invalid(f"{f} must be a positive whole number of paise or null")
         if not 0 <= rules.cooling_off_minutes <= 7 * 24 * 60:
             raise Invalid("cooling_off_minutes must be between 0 and 10080")
+        if not isinstance(rules.require_verified_guardian, bool):
+            raise Invalid("require_verified_guardian must be true or false")
         if not 1 <= rules.approval_timeout_minutes <= 24 * 60:
             raise Invalid("approval_timeout_minutes must be between 1 and 1440")
         bad = set(rules.blocked_channels) - set(CHANNELS)
@@ -689,7 +702,7 @@ class Registry:
                 rules, Transaction(amount=amount, payee=payee, channel=channel),
                 spent_today=spent,
                 payee_known=self._payee_known(principal_id, payee),
-                has_active_guardian=bool(self._active_guardian_ids(principal_id)),
+                has_active_guardian=bool(self._approver_ids(principal_id)),
             )
             status = _OUTCOME_TO_STATUS[decision.outcome]
             release_at = iso(now + timedelta(minutes=decision.delay_minutes)) if decision.outcome is Outcome.DELAY else None
@@ -708,9 +721,9 @@ class Registry:
             who, amt = self._name(principal_id), rupees(amount)
             why = "; ".join(decision.reasons)
             if decision.outcome is Outcome.NEEDS_APPROVAL:
-                self._alert_guardians(c, principal_id, "approval_needed", "Approve payment?",
-                                      f"{who} wants to pay {amt} to {payee}. Approve or deny within "
-                                      f"{decision.approval_timeout_minutes} min. Reason held: {why}.", check_id=cid)
+                self._alert(c, self._approver_ids(principal_id), "approval_needed", "Approve payment?",
+                            f"{who} wants to pay {amt} to {payee}. Approve or deny within "
+                            f"{decision.approval_timeout_minutes} min. Reason held: {why}.", principal_id, check_id=cid)
                 self._alert(c, [principal_id], "payment_waiting", "Waiting for your guardian",
                             f"{amt} to {payee} needs a guardian's approval. They have been alerted.", principal_id,
                             check_id=cid)
@@ -724,7 +737,14 @@ class Registry:
             elif decision.outcome is Outcome.BLOCK:
                 self._alert(c, [principal_id], "payment_blocked", "Payment blocked",
                             f"{amt} to {payee} was blocked: {why}.", principal_id, check_id=cid)
-        return self._check_view(cid, for_participant=True)
+        return self._with_customer_facts(self._check_view(cid, for_participant=True), principal_id)
+
+    def _with_customer_facts(self, view: dict, principal_id: str) -> dict:
+        """What a bank may learn about its own customer: identity level and a yes/no senior
+        flag (None if unknown). Never the date of birth."""
+        view["customer"] = {"identity_level": self.identity_level(principal_id),
+                            "senior": self.age_facts(principal_id)["senior"]}
+        return view
 
     def _load_check(self, cid: str) -> sqlite3.Row:
         r = self.db.one("SELECT * FROM checks WHERE id=?", (cid,))
@@ -739,7 +759,7 @@ class Registry:
         r = self._load_check(cid)
         if r["participant_id"] != participant_id:
             raise NotFound("check not found")
-        return self._check_view(cid, for_participant=True)
+        return self._with_customer_facts(self._check_view(cid, for_participant=True), r["principal_id"])
 
     def report_outcome(self, participant_id: str, cid: str, completed: bool) -> dict:
         """Bank tells the registry whether the money actually moved. A failed payment stops
@@ -767,6 +787,8 @@ class Registry:
             pid = r["principal_id"]
             if not (allow_principal and actor_id == pid):
                 self._require_guardian(pid, actor_id)
+            if new_status is CheckStatus.APPROVED and actor_id not in self._approver_ids(pid):
+                raise Forbidden("this person's rules require a bank-verified guardian to approve payments")
             if CheckStatus(r["status"]) not in allowed_from:
                 raise Conflict(f"payment is {r['status']}; it can no longer be changed")
             c.execute("UPDATE checks SET status=?, decided_by=?, decided_at=? WHERE id=?",
@@ -839,7 +861,11 @@ class Registry:
                 self._refresh_principal(c, pid)
         for pid in changes:
             self._apply_due_changes(pid)
-        return {"principals_refreshed": len(principals), "principals_with_changes": len(changes)}
+        out = {"principals_refreshed": len(principals), "principals_with_changes": len(changes)}
+        kyc = self.sweep_kyc()
+        if kyc:
+            out["kyc_updated"] = kyc
+        return out
 
     # ---------------------------------------------------------- notifications
     def notifications(self, user_id: str, unread_only: bool = False, limit: int = 50) -> list[dict]:

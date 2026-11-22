@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from guardian_registry.db import SCHEMA_V1, Database
+from guardian_registry.db import MIGRATIONS, SCHEMA_V1, Database
 from guardian_registry.errors import Invalid, NotFound, TooMany, Unauthorized
 from guardian_registry.notify import LogSmsSender
 from guardian_registry.presets import PRESETS
@@ -164,11 +164,11 @@ class TestMigration:
         raw.close()
 
         reg = Registry(Database(path), clock)
-        assert reg.db.conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert reg.db.conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
         assert reg.user_by_token("old-token") == "usr_old"
         assert reg.db.conn.execute("PRAGMA foreign_key_check").fetchall() == []
         reg.db.close()
-        assert Database(path).migrate() == 2  # re-opening is a no-op
+        assert Database(path).migrate() == len(MIGRATIONS)  # re-opening is a no-op
 
 
 class TestProductionConfig:

@@ -72,6 +72,7 @@ class Rules:
     cooling_off_minutes: int = 60
     approval_timeout_minutes: int = 30
     blocked_channels: list[str] = field(default_factory=list)
+    require_verified_guardian: bool = False     # only bank-KYC'd guardians may approve
     kill_switch: bool = False
 
     def to_dict(self) -> dict:
@@ -106,6 +107,8 @@ class Rules:
         if new.approval_timeout_minutes > self.approval_timeout_minutes:
             return True  # longer window gives a coached victim more time to pressure a guardian
         if set(self.blocked_channels) - set(new.blocked_channels):
+            return True
+        if self.require_verified_guardian and not new.require_verified_guardian:
             return True
         if self.kill_switch and not new.kill_switch:
             return True

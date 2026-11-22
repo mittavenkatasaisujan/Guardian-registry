@@ -72,6 +72,16 @@ class RulesPatch(BaseModel):
     cooling_off_minutes: int | None = None
     approval_timeout_minutes: int | None = None
     blocked_channels: list[str] | None = None
+    require_verified_guardian: bool | None = None
+
+
+class AttestIn(BaseModel):
+    """A bank vouches that it has KYC'd this registry user. The customer must approve it."""
+    mobile: str
+    kyc_level: Literal["full", "minimum"]
+    customer_ref: str = Field(min_length=1, max_length=100, description="your own customer id; stored only hashed")
+    verified_on: str = Field(description="date KYC was completed, YYYY-MM-DD")
+    date_of_birth: str | None = Field(default=None, description="optional, YYYY-MM-DD; only a senior yes/no is shared")
 
 
 class PayeeIn(BaseModel):
@@ -252,6 +262,18 @@ def create_app(
     def check_outcome(check_id: str, body: OutcomeIn, pid: Participant):
         return reg.report_outcome(pid, check_id, body.completed)
 
+    @app.post("/v1/kyc/attestations", status_code=201, tags=["banks"])
+    def attest(body: AttestIn, pid: Participant):
+        return reg.attest(pid, body.mobile, body.kyc_level, body.customer_ref, body.verified_on, body.date_of_birth)
+
+    @app.get("/v1/kyc/attestations/{attestation_id}", tags=["banks"])
+    def read_attestation(attestation_id: str, pid: Participant):
+        return reg.bank_attestation(pid, attestation_id)
+
+    @app.delete("/v1/kyc/attestations/{attestation_id}", tags=["banks"])
+    def revoke_attestation(attestation_id: str, pid: Participant):
+        return reg.revoke_attestation(pid, attestation_id)
+
     @app.put("/v1/participant/webhook", tags=["banks"])
     def set_webhook(body: WebhookIn, pid: Participant):
         """Receive signed `check.updated` events instead of polling. Verify X-GR-Signature as
@@ -266,6 +288,22 @@ def create_app(
     @app.get("/v1/me", tags=["people"])
     def me(uid: User):
         return reg.profile(uid)
+
+    @app.get("/v1/me/identity", tags=["people"])
+    def my_identity(uid: User):
+        return reg.identity(uid)
+
+    @app.post("/v1/me/identity/attestations/{attestation_id}/approve", tags=["people"])
+    def approve_attestation(attestation_id: str, uid: User):
+        return reg.respond_to_attestation(uid, attestation_id, True)
+
+    @app.post("/v1/me/identity/attestations/{attestation_id}/reject", tags=["people"])
+    def reject_attestation(attestation_id: str, uid: User):
+        return reg.respond_to_attestation(uid, attestation_id, False)
+
+    @app.delete("/v1/me/identity/attestations/{attestation_id}", tags=["people"])
+    def withdraw_attestation(attestation_id: str, uid: User):
+        return reg.withdraw_attestation(uid, attestation_id)
 
     @app.get("/v1/me/notifications", tags=["people"])
     def my_notifications(uid: User, unread_only: bool = False, limit: int = 50):

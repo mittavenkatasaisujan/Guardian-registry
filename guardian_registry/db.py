@@ -161,7 +161,29 @@ ALTER TABLE participants ADD COLUMN prev_key_hash TEXT;
 ALTER TABLE participants ADD COLUMN prev_key_expires_at TEXT;
 """
 
-MIGRATIONS = [SCHEMA_V1, SCHEMA_V2]
+# v3: bank-vouched KYC. A bank asserts it has KYC'd its customer; the customer consents.
+# Date of birth (optional) is encrypted and only ever used to compute a yes/no senior flag.
+SCHEMA_V3 = """
+CREATE TABLE kyc_attestations (
+    id                 TEXT PRIMARY KEY,
+    user_id            TEXT NOT NULL REFERENCES users(id),
+    participant_id     TEXT NOT NULL REFERENCES participants(id),
+    kyc_level          TEXT NOT NULL,     -- 'full' | 'minimum'
+    dob_enc            TEXT,              -- Fernet-encrypted YYYY-MM-DD, optional
+    customer_ref_hash  TEXT NOT NULL,     -- HMAC of the bank's own customer id
+    verified_on        TEXT NOT NULL,     -- date the bank completed KYC
+    status             TEXT NOT NULL,     -- pending_consent|active|rejected|lapsed|withdrawn|revoked|expired|superseded
+    created_at         TEXT NOT NULL,
+    consent_expires_at TEXT NOT NULL,
+    decided_at         TEXT,
+    expires_at         TEXT NOT NULL,
+    ended_by           TEXT
+);
+CREATE INDEX ix_kyc_user ON kyc_attestations(user_id, status);
+CREATE INDEX ix_kyc_participant ON kyc_attestations(participant_id, status);
+"""
+
+MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3]
 
 
 class Database:
