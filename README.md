@@ -17,6 +17,8 @@ its own version, a family with three bank accounts sets up three separate locks.
 | Sign-in | SMS one-time code (6 digits, 5 min, single use, 5 wrong tries locks it, 30 s resend cooldown, 3 codes per 15 min, plus a per-IP limit). The response is the same whether or not a number is enrolled. Sessions last 30 days; you can sign out of one device or all of them. |
 | **Bank-vouched KYC** | A participant bank that has already KYC'd its customer sends a claim (KYC level `full` or `minimum`, KYC date, optional date of birth, its customer ID). **It counts only after the customer approves it in the app.** Unanswered claims lapse after 7 days. Approved ones expire after a year (re-confirm yearly), and the customer can withdraw or the bank revoke at any time. The customer ID is stored only as a keyed hash and the date of birth only encrypted. Banks get a yes/no **`senior`** flag (70+, per RBI's proposal) in every check response, never the date. If two banks disagree on the date of birth, `senior` becomes unknown and the customer is told. |
 | Verified guardians | Every guardian listing shows the guardian's identity level (`bank_verified`, `bank_min_kyc` or `otp`). The rule `require_verified_guardian` lets **only bank-verified guardians approve** payments. Any guardian can still deny or cancel, since that only protects. Turning the rule off is a loosening, so it's held for 24 h. |
+| **SIM-swap protection** | A fraudster who gets a victim's number moved to their own SIM receives the sign-in codes. Defences: (1) a bank reports a SIM change (`POST /v1/signals/sim-change`), or the person or a guardian reports a lost phone, which signs that person out everywhere. Either one opens a **72-hour risk window**. (2) Sign-ins after the SIM change, and sign-ins from a **new device (24 h probation)**, are **restricted**. They can read, deny, cancel, veto, tighten rules and switch the kill switch on. They can't approve payments, accept a guardian role, invite guardians, loosen rules, confirm the SIM change or change the number. A late bank report still restricts sessions that started after the change. (3) During the window, payments to new payees (any amount) and ₹2,000+ to known payees need a guardian's approval, or wait 24 h without one (rule `sim_swap_hold`, on by default). (4) No SMS goes to the swapped number; guardians are told instead, and the people a swapped guardian protects are warned. (5) Only a trusted session (the person's old phone, or a guardian) can end the window early. |
+| Number change | A new number is proven by an OTP, then the move is **held for 24 h** with guardian veto or early approval. Existing bank KYC claims end, since they vouched for the old number. |
 | Two-way consent | The principal invites a guardian; the link is active only after the guardian accepts. At most 3 guardians. A guardian can step down at any time. |
 | Rules | Per-payment limit, daily limit (shared across **all** banks, resets at IST midnight), guardian-approval threshold, cooling-off for first payments to a new payee, blocked channels. One-tap **presets** (`rbi_high_value_delay`, `senior_with_guardian`, `strict`). |
 | Decisions | `block` › `needs_approval` › `delay` › `allow`, with human-readable reasons in ₹. With no active guardian, an approval falls back to a cooling-off delay, so nobody is locked out. |
@@ -77,11 +79,11 @@ Amounts are **integer paise**.
 
 | Who | Endpoints |
 |---|---|
-| Sign-in | `POST /v1/auth/otp`, `POST /v1/auth/verify` (send `display_name` the first time to enrol), `POST /v1/auth/logout` |
+| Sign-in | `POST /v1/auth/otp`, `POST /v1/auth/verify` (send `display_name` the first time to enrol and a stable `device_id`; the response says if the session is `restricted`), `POST /v1/auth/logout` |
 | Operator | `POST /v1/admin/participants`, `GET /v1/admin/audit/verify`, `POST /v1/admin/sweep` |
-| Bank / app | `POST /v1/checks`, `GET /v1/checks/{id}`, `POST /v1/checks/{id}/outcome`, `POST /v1/kyc/attestations`, `GET/DELETE /v1/kyc/attestations/{id}`, `PUT /v1/participant/webhook`, `POST /v1/participant/rotate-key` |
-| Person | `GET /v1/me`, `GET /v1/me/identity`, `POST /v1/me/identity/attestations/{id}/{approve,reject}`, `DELETE /v1/me/identity/attestations/{id}`, `GET /v1/me/notifications`, `POST /v1/me/notifications/read`, `GET /v1/presets`, `GET/PATCH /v1/me/rules`, `POST /v1/me/rules/preset/{name}`, `POST /v1/me/kill-switch/{on,off}`, `GET/POST /v1/me/guardians`, `DELETE /v1/me/guardians/{id}`, `GET /v1/me/changes`, `GET /v1/me/payments`, `POST /v1/me/payments/{id}/cancel`, `GET /v1/me/audit` |
-| Guardian | `GET /v1/guardian/inbox`, `GET /v1/guardian/wards`, `POST /v1/guardian/invitations/{id}/{accept,decline}`, `POST /v1/guardian/guardianships/{id}/resign`, `POST /v1/guardian/payments/{id}/{approve,deny,cancel}`, `POST /v1/guardian/changes/{id}/{approve,veto}`, `GET /v1/guardian/wards/{pid}/{rules,payments,audit}`, `POST /v1/guardian/wards/{pid}/kill-switch/{on,off}`, `POST /v1/guardian/wards/{pid}/trusted-payees` |
+| Bank / app | `POST /v1/signals/sim-change`, `POST /v1/checks`, `GET /v1/checks/{id}`, `POST /v1/checks/{id}/outcome`, `POST /v1/kyc/attestations`, `GET/DELETE /v1/kyc/attestations/{id}`, `PUT /v1/participant/webhook`, `POST /v1/participant/rotate-key` |
+| Person | `GET /v1/me`, `GET /v1/me/security`, `POST /v1/me/security/{lost-phone,confirm-sim-change}`, `POST /v1/me/mobile/{change,verify}`, `GET /v1/me/identity`, `POST /v1/me/identity/attestations/{id}/{approve,reject}`, `DELETE /v1/me/identity/attestations/{id}`, `GET /v1/me/notifications`, `POST /v1/me/notifications/read`, `GET /v1/presets`, `GET/PATCH /v1/me/rules`, `POST /v1/me/rules/preset/{name}`, `POST /v1/me/kill-switch/{on,off}`, `GET/POST /v1/me/guardians`, `DELETE /v1/me/guardians/{id}`, `GET /v1/me/changes`, `GET /v1/me/payments`, `POST /v1/me/payments/{id}/cancel`, `GET /v1/me/audit` |
+| Guardian | `GET /v1/guardian/inbox`, `GET /v1/guardian/wards`, `POST /v1/guardian/invitations/{id}/{accept,decline}`, `POST /v1/guardian/guardianships/{id}/resign`, `POST /v1/guardian/payments/{id}/{approve,deny,cancel}`, `POST /v1/guardian/changes/{id}/{approve,veto}`, `GET /v1/guardian/wards/{pid}/{rules,payments,audit,security}`, `POST /v1/guardian/wards/{pid}/{lost-phone,confirm-sim-change}`, `POST /v1/guardian/wards/{pid}/kill-switch/{on,off}`, `POST /v1/guardian/wards/{pid}/trusted-payees` |
 
 **How a bank integrates:**
 1. Call `POST /v1/checks` before executing a payment.
@@ -101,13 +103,14 @@ guardian_registry/
   service.py    registry: sign-in, consent, held changes, checks, approvals, sweeper
   notify.py     alert outbox, SMS senders, signed webhooks, retrying dispatcher
   kyc.py        bank-vouched identity: attestations, consent, senior flag
+  simswap.py    SIM-swap windows, device probation, restricted sessions, number change
   presets.py    named rule bundles (RBI-proposal-shaped, not final rules)
   audit.py      hash-chained audit log + verify
   db.py         SQLite schema with versioned migrations
   security.py   hashing, encryption, OTP, signatures, production checks
   ratelimit.py  sliding-window limiter
   api.py        FastAPI app (create_app factory) + background worker
-tests/          229 tests
+tests/          263 tests
 scripts/demo.py end-to-end story over real HTTP (also runs in CI)
 ```
 
@@ -115,6 +118,6 @@ scripts/demo.py end-to-end story over real HTTP (also runs in CI)
 
 - **RBI's final rules:** the paper is a proposal. Presets live in one file ([presets.py](guardian_registry/presets.py)), so the numbers can change when RBI publishes its final text. The age cut-off is `SENIOR_AGE` in [kyc.py](guardian_registry/kyc.py).
 - **Trusting the banks:** any onboarded participant can make a KYC claim. The customer's consent is the check, but a real network would also need onboarding rules (only RBI-regulated entities) and a way to suspend a bank that makes false claims.
-- **Number changes and SIM swaps:** a bank-verified identity is tied to the mobile number. Moving to a new number, or spotting a SIM swap (a new sign-in shortly after a bank reports a SIM change), isn't handled yet.
+- **SIM-swap signals depend on banks:** the registry reacts to SIM changes but doesn't detect them itself. A direct feed from mobile operators would close the gap before a bank reports. The device ID is chosen by the app, so it shows a device is new but doesn't prove one is the same: a thief can claim an old device ID. That's why a SIM change restricts every sign-in after it, whatever device it claims.
 - **Multi-node scale:** SQLite and the in-process rate limiter suit a single-node pilot. Running several nodes needs Postgres, a shared limiter (Redis or the gateway) and mTLS for banks.
 - **Delivery channels:** SMS and in-app are built. WhatsApp and push notifications need a provider account.

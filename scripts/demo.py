@@ -193,6 +193,27 @@ print(f"Bank A also got {len(kyc_events)} kyc.updated events (consent decisions)
       f"{[e['data']['attestation']['status'] for e in kyc_events]}")
 assert len(kyc_events) == 2 and all(e["signature_ok"] for e in kyc_events)
 
+step("SIM SWAP: a thief gets Ravi's number moved to their SIM and signs in as Ravi")
+print("Bank A reports the SIM change:",
+      call("POST", "/v1/signals/sim-change", headers=sbi, json={"mobile": mobile(2)})["window_open"])
+pending = call("POST", "/v1/checks", headers=app, json={"mobile": mobile(1), "participant_txn_id": "swap-1",
+                                                        "amount": 30_000 * R, "payee": "mule@upi"})
+print("₹30,000 to mule@upi ->", pending["outcome"])
+wait = 31  # the thief has to wait out the OTP resend cooldown from Ravi's earlier sign-in
+print(f"(waiting {wait}s for the OTP resend cooldown...)")
+time.sleep(wait)
+code = call("POST", "/v1/auth/otp", 202, json={"mobile": mobile(2)})["dev_code"]  # the code reaches the thief's SIM
+thief = call("POST", "/v1/auth/verify", json={"mobile": mobile(2), "code": code, "device_id": "thief-phone"})
+print("thief signed in, restricted:", thief["restricted"], "|", thief["restriction_reasons"][0][:60] + "...")
+T = bearer(thief["token"])
+r = c.post(f"/v1/guardian/payments/{pending['check_id']}/approve", headers=T)
+print("thief tries to approve ->", r.status_code, r.json()["error"])
+r = c.post("/v1/me/security/confirm-sim-change", headers=T)
+print("thief tries to 'confirm' the SIM change ->", r.status_code)
+print("real Ravi (old phone) denies it:", call("POST", f"/v1/guardian/payments/{pending['check_id']}/deny", headers=G)["status"])
+print("risk window still open while Ravi sorts it out with his operator:",
+      call("GET", "/v1/me/security", headers=G)["sim_swap_window_open"])
+
 step("Daily limit is shared across banks (₹60,000/day)")
 spent = 800 + 15_000
 i = 0
