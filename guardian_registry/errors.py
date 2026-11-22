@@ -16,3 +16,11 @@ class Conflict(RegistryError):
 
 class Invalid(RegistryError):
     status = 422
+
+
+class Unauthorized(RegistryError):
+    status = 401
+
+
+class TooMany(RegistryError):
+    status = 429

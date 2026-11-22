@@ -73,14 +73,14 @@ class TestDatabase:
         db = Database()
         with pytest.raises(RuntimeError):
             with db.tx() as c:
-                c.execute("INSERT INTO participants VALUES ('p1','Bank','h','t')")
+                c.execute("INSERT INTO participants (id,name,key_hash,created_at) VALUES ('p1','Bank','h','t')")
                 raise RuntimeError("boom")
         assert db.one("SELECT COUNT(*) n FROM participants")["n"] == 0
 
     def test_nested_tx_commits_once(self):
         db = Database()
         with db.tx() as c:
-            c.execute("INSERT INTO participants VALUES ('p1','Bank','h','t')")
+            c.execute("INSERT INTO participants (id,name,key_hash,created_at) VALUES ('p1','Bank','h','t')")
             with db.tx() as c2:
-                c2.execute("INSERT INTO participants VALUES ('p2','Bank2','h2','t')")
+                c2.execute("INSERT INTO participants (id,name,key_hash,created_at) VALUES ('p2','Bank2','h2','t')")
         assert db.one("SELECT COUNT(*) n FROM participants")["n"] == 2

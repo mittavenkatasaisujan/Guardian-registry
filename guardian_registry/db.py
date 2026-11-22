@@ -6,7 +6,7 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 
-SCHEMA = """
+SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS users (
     id           TEXT PRIMARY KEY,
     mobile_hash  TEXT NOT NULL UNIQUE,
@@ -97,6 +97,72 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 """
 
+# v2: OTP sign-in with expiring sessions (token moves off users), encrypted mobile for
+# alerts, notification outbox, participant webhooks and key rotation.
+SCHEMA_V2 = """
+CREATE TABLE users_v2 (
+    id           TEXT PRIMARY KEY,
+    mobile_hash  TEXT NOT NULL UNIQUE,
+    mobile_enc   TEXT,                    -- Fernet-encrypted, only for sending SMS
+    display_name TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+);
+INSERT INTO users_v2 (id, mobile_hash, display_name, created_at)
+    SELECT id, mobile_hash, display_name, created_at FROM users;
+
+CREATE TABLE sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    revoked_at TEXT
+);
+INSERT INTO sessions (token_hash, user_id, created_at, expires_at)
+    SELECT token_hash, id, created_at, '2099-01-01T00:00:00+00:00' FROM users;
+
+DROP TABLE users;
+ALTER TABLE users_v2 RENAME TO users;
+CREATE INDEX ix_sessions_user ON sessions(user_id);
+
+CREATE TABLE otps (
+    mobile_hash  TEXT PRIMARY KEY,
+    code_hash    TEXT NOT NULL,
+    expires_at   TEXT NOT NULL,
+    attempts     INTEGER NOT NULL DEFAULT 0,
+    window_start TEXT NOT NULL,           -- for per-number send rate limit
+    sends        INTEGER NOT NULL,
+    last_sent_at TEXT NOT NULL
+);
+
+CREATE TABLE notifications (
+    id              TEXT PRIMARY KEY,
+    recipient_type  TEXT NOT NULL,        -- 'user' | 'participant'
+    recipient_id    TEXT NOT NULL,
+    principal_id    TEXT,
+    kind            TEXT NOT NULL,
+    channel         TEXT NOT NULL,        -- 'inapp' | 'sms' | 'webhook'
+    title           TEXT NOT NULL,
+    body            TEXT NOT NULL,
+    payload         TEXT NOT NULL,        -- JSON
+    status          TEXT NOT NULL,        -- 'pending' | 'sent' | 'failed' | 'skipped'
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TEXT NOT NULL,
+    last_error      TEXT,
+    created_at      TEXT NOT NULL,
+    sent_at         TEXT,
+    read_at         TEXT
+);
+CREATE INDEX ix_notif_due ON notifications(status, next_attempt_at);
+CREATE INDEX ix_notif_recipient ON notifications(recipient_type, recipient_id, created_at);
+
+ALTER TABLE participants ADD COLUMN webhook_url TEXT;
+ALTER TABLE participants ADD COLUMN webhook_secret TEXT;
+ALTER TABLE participants ADD COLUMN prev_key_hash TEXT;
+ALTER TABLE participants ADD COLUMN prev_key_expires_at TEXT;
+"""
+
+MIGRATIONS = [SCHEMA_V1, SCHEMA_V2]
+
 
 class Database:
     def __init__(self, path: str = ":memory:"):
@@ -105,9 +171,27 @@ class Database:
         self.conn.execute("PRAGMA foreign_keys = ON")
         if path != ":memory:":
             self.conn.execute("PRAGMA journal_mode = WAL")
-        self.conn.executescript(SCHEMA)
         self._lock = threading.RLock()
         self._depth = 0
+        self.migrate()
+
+    def migrate(self) -> int:
+        """Apply pending migrations in order. PRAGMA user_version records the schema version."""
+        version = self.conn.execute("PRAGMA user_version").fetchone()[0]
+        for target, script in enumerate(MIGRATIONS, start=1):
+            if version >= target:
+                continue
+            self.conn.execute("PRAGMA foreign_keys = OFF")  # table rebuilds need this off
+            try:
+                self.conn.executescript(f"BEGIN;\n{script}\nPRAGMA user_version = {target};\nCOMMIT;")
+            except BaseException:
+                if self.conn.in_transaction:
+                    self.conn.execute("ROLLBACK")
+                raise
+            finally:
+                self.conn.execute("PRAGMA foreign_keys = ON")
+            version = target
+        return version
 
     @contextmanager
     def tx(self):

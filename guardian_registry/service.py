@@ -9,26 +9,40 @@ Design rules that matter for fraud:
   * Guardians cannot loosen a principal's rules; they can only protect (kill switch on,
     approve/deny, cancel a held payment, vouch for a payee, veto a loosening).
   * Every state change writes a hash-chained audit entry in the same transaction.
+  * Everyone who must react to an event gets an alert queued in that same transaction
+    (see notify.py); urgent ones also go out by SMS.
 """
 
 from __future__ import annotations
 
+import hmac
 import json
 import sqlite3
-from datetime import timedelta
+from datetime import datetime, timedelta
 
-from . import audit
-from .clock import Clock, iso, ist_day, parse
+from . import audit, notify
+from .clock import Clock, iso, ist_day
 from .db import Database
-from .errors import Conflict, Forbidden, Invalid, NotFound
+from .errors import Conflict, Forbidden, Invalid, NotFound, TooMany, Unauthorized
 from .models import (
     CHANNELS, ChangeKind, ChangeStatus, CheckStatus, GuardianStatus, Outcome, Rules, Transaction,
 )
-from .policy import evaluate
-from .security import mobile_hash, new_id, new_secret, normalize_mobile, secret_hash
+from .policy import _rupees as rupees, evaluate
+from .presets import PRESETS
+from .security import (
+    encrypt_mobile, is_production, mobile_hash, new_id, new_otp, new_secret, normalize_mobile,
+    otp_hash, secret_hash,
+)
 
 LOOSENING_DELAY_HOURS = 24
 MAX_GUARDIANS = 3
+SESSION_DAYS = 30
+KEY_ROTATION_GRACE_HOURS = 24
+OTP_TTL_MINUTES = 5
+OTP_MAX_ATTEMPTS = 5
+OTP_RESEND_SECONDS = 30
+OTP_MAX_SENDS_PER_WINDOW = 3
+OTP_WINDOW_MINUTES = 15
 
 _OUTCOME_TO_STATUS = {
     Outcome.ALLOW: CheckStatus.ALLOWED,
@@ -78,6 +92,24 @@ class Registry:
             "SELECT guardian_id FROM guardianships WHERE principal_id=? AND status=?",
             (principal_id, GuardianStatus.ACTIVE.value))]
 
+    def _name(self, user_id: str) -> str:
+        return self._user(user_id)["display_name"]
+
+    def _alert(self, c: sqlite3.Connection, user_ids, kind: str, title: str, body: str,
+               principal_id: str | None, **payload) -> None:
+        for uid in dict.fromkeys(user_ids):  # de-duplicate, keep order
+            notify.enqueue_user(c, self._now(), uid, kind, title, body, principal_id, payload)
+
+    def _alert_guardians(self, c: sqlite3.Connection, principal_id: str, kind: str, title: str, body: str,
+                         exclude: tuple = (), **payload) -> None:
+        ids = [g for g in self._active_guardian_ids(principal_id) if g not in exclude]
+        self._alert(c, ids, kind, title, body, principal_id, **payload)
+
+    def _webhook_check(self, c: sqlite3.Connection, cid: str) -> None:
+        r = c.execute("SELECT participant_id, principal_id FROM checks WHERE id=?", (cid,)).fetchone()
+        notify.enqueue_participant(c, self._now(), r["participant_id"], "check.updated",
+                                   {"check": self._check_view(cid, for_participant=True)}, r["principal_id"])
+
     # ------------------------------------------------------------- participants
     def register_participant(self, name: str) -> tuple[str, str]:
         """A bank or payment app. Returns (participant_id, api_key); the key is shown once."""
@@ -88,18 +120,48 @@ class Registry:
             raise Conflict("participant already registered")
         pid, key = new_id("prt"), new_secret("grk")
         with self.db.tx() as c:
-            c.execute("INSERT INTO participants VALUES (?,?,?,?)", (pid, name, secret_hash(key), self._now()))
+            c.execute("INSERT INTO participants (id, name, key_hash, created_at) VALUES (?,?,?,?)",
+                      (pid, name, secret_hash(key), self._now()))
             self._audit(c, "admin", "participant.registered", None, participant_id=pid, name=name)
         return pid, key
 
     def participant_by_key(self, key: str) -> str | None:
-        row = self.db.one("SELECT id FROM participants WHERE key_hash=?", (secret_hash(key),))
+        h = secret_hash(key)
+        row = self.db.one("SELECT id FROM participants WHERE key_hash=?", (h,))
+        if row:
+            return row["id"]
+        row = self.db.one("SELECT id FROM participants WHERE prev_key_hash=? AND prev_key_expires_at>?",
+                          (h, self._now()))
         return row["id"] if row else None
+
+    def rotate_participant_key(self, participant_id: str) -> dict:
+        """Issue a new API key. The old one keeps working for KEY_ROTATION_GRACE_HOURS so the
+        bank can roll it out without downtime."""
+        key = new_secret("grk")
+        grace = iso(self.clock.now() + timedelta(hours=KEY_ROTATION_GRACE_HOURS))
+        with self.db.tx() as c:
+            c.execute("UPDATE participants SET prev_key_hash=key_hash, prev_key_expires_at=?, key_hash=? WHERE id=?",
+                      (grace, secret_hash(key), participant_id))
+            self._audit(c, participant_id, "participant.key_rotated", None, participant_id=participant_id)
+        return {"api_key": key, "previous_key_valid_until": grace}
+
+    def set_webhook(self, participant_id: str, url: str | None) -> dict:
+        """Register (or clear) the URL that receives signed check.updated events."""
+        if url:
+            url = url.strip()
+            local = url.startswith(("http://localhost", "http://127.0.0.1"))
+            if not (url.startswith("https://") or (local and not is_production())):
+                raise Invalid("webhook url must be https:// (http://localhost allowed outside production)")
+        secret = new_secret("whs") if url else None
+        with self.db.tx() as c:
+            c.execute("UPDATE participants SET webhook_url=?, webhook_secret=? WHERE id=?", (url, secret, participant_id))
+            self._audit(c, participant_id, "participant.webhook_set", None, participant_id=participant_id, url=url)
+        return {"webhook_url": url, "webhook_secret": secret}
 
     # -------------------------------------------------------------------- users
     def register_user(self, mobile: str, display_name: str) -> tuple[str, str]:
-        """Enrol a person. In production the bank/app would vouch for identity (OTP, KYC);
-        here enrolment returns a bearer token the person's app uses afterwards."""
+        """Enrol a person and open a session. The API only reaches this after the number is
+        proven by OTP (see verify_otp); it is public here for tests and back-office tools."""
         try:
             mh = mobile_hash(mobile)
         except ValueError as e:
@@ -111,14 +173,93 @@ class Registry:
             raise Conflict("this mobile number is already enrolled")
         uid, token = new_id("usr"), new_secret("gut")
         with self.db.tx() as c:
-            c.execute("INSERT INTO users VALUES (?,?,?,?,?)", (uid, mh, display_name, secret_hash(token), self._now()))
+            c.execute("INSERT INTO users (id, mobile_hash, mobile_enc, display_name, created_at) VALUES (?,?,?,?,?)",
+                      (uid, mh, encrypt_mobile(mobile), display_name, self._now()))
             c.execute("INSERT INTO rules VALUES (?,?,?)", (uid, json.dumps(Rules().to_dict()), self._now()))
+            self._insert_session(c, uid, token)
             self._audit(c, uid, "user.enrolled", uid)
         return uid, token
 
+    # ----------------------------------------------------------------- sessions
+    def _insert_session(self, c: sqlite3.Connection, uid: str, token: str) -> None:
+        c.execute("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?,?,?,?)",
+                  (secret_hash(token), uid, self._now(), iso(self.clock.now() + timedelta(days=SESSION_DAYS))))
+
     def user_by_token(self, token: str) -> str | None:
-        row = self.db.one("SELECT id FROM users WHERE token_hash=?", (secret_hash(token),))
-        return row["id"] if row else None
+        row = self.db.one("SELECT user_id FROM sessions WHERE token_hash=? AND revoked_at IS NULL AND expires_at>?",
+                          (secret_hash(token), self._now()))
+        return row["user_id"] if row else None
+
+    def logout(self, token: str, everywhere: bool = False) -> None:
+        uid = self.user_by_token(token)
+        if not uid:
+            return
+        with self.db.tx() as c:
+            if everywhere:
+                c.execute("UPDATE sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL", (self._now(), uid))
+            else:
+                c.execute("UPDATE sessions SET revoked_at=? WHERE token_hash=?", (self._now(), secret_hash(token)))
+            self._audit(c, uid, "session.revoked", uid, everywhere=everywhere)
+
+    # ---------------------------------------------------------------------- OTP
+    def request_otp(self, mobile: str, sms: "notify.SmsSender") -> str:
+        """Send a one-time code to prove the person holds this number. Behaves the same whether
+        or not the number is enrolled, so it can't be used to probe who is registered.
+        Returns the code (the API echoes it only when GR_OTP_DEV_ECHO=1 outside production)."""
+        try:
+            mh = mobile_hash(mobile)
+        except ValueError as e:
+            raise Invalid(str(e)) from None
+        now = self.clock.now()
+        row = self.db.one("SELECT * FROM otps WHERE mobile_hash=?", (mh,))
+        window_start, sends = iso(now), 0
+        if row:
+            last = datetime.fromisoformat(row["last_sent_at"])
+            if (now - last).total_seconds() < OTP_RESEND_SECONDS:
+                raise TooMany(f"wait {OTP_RESEND_SECONDS} seconds before asking for another code")
+            if now - datetime.fromisoformat(row["window_start"]) < timedelta(minutes=OTP_WINDOW_MINUTES):
+                window_start, sends = row["window_start"], row["sends"]
+                if sends >= OTP_MAX_SENDS_PER_WINDOW:
+                    raise TooMany(f"too many codes requested; try again in {OTP_WINDOW_MINUTES} minutes")
+        code = new_otp()
+        with self.db.tx() as c:
+            c.execute("INSERT OR REPLACE INTO otps (mobile_hash, code_hash, expires_at, attempts, window_start, sends, "
+                      "last_sent_at) VALUES (?,?,?,0,?,?,?)",
+                      (mh, otp_hash(mh, code), iso(now + timedelta(minutes=OTP_TTL_MINUTES)),
+                       window_start, sends + 1, iso(now)))
+        sms.send(normalize_mobile(mobile),
+                 f"Guardian Registry code: {code}. Valid {OTP_TTL_MINUTES} min. Never share it with anyone, "
+                 "not even a guardian or a bank.")
+        return code
+
+    def verify_otp(self, mobile: str, code: str, display_name: str | None = None) -> dict:
+        """Check the code. Enrolled number -> new session. New number -> enrol (needs display_name)."""
+        try:
+            mh = mobile_hash(mobile)
+        except ValueError as e:
+            raise Invalid(str(e)) from None
+        row = self.db.one("SELECT * FROM otps WHERE mobile_hash=?", (mh,))
+        if not row or row["expires_at"] <= self._now():
+            raise Unauthorized("code expired or not requested")
+        if row["attempts"] >= OTP_MAX_ATTEMPTS:
+            raise Unauthorized("too many wrong codes; request a new one")
+        if not hmac.compare_digest(row["code_hash"], otp_hash(mh, (code or "").strip())):
+            with self.db.tx() as c:
+                c.execute("UPDATE otps SET attempts=attempts+1 WHERE mobile_hash=?", (mh,))
+            raise Unauthorized("wrong code")
+        uid = self.user_by_mobile(mobile)
+        if not uid and not (display_name or "").strip():
+            raise Invalid("this number is not enrolled yet: send display_name to enrol")
+        with self.db.tx() as c:
+            c.execute("DELETE FROM otps WHERE mobile_hash=?", (mh,))  # single use
+        if uid:
+            token = new_secret("gut")
+            with self.db.tx() as c:
+                self._insert_session(c, uid, token)
+                self._audit(c, uid, "session.created", uid, via="otp")
+            return {"user_id": uid, "token": token, "new_user": False}
+        uid, token = self.register_user(mobile, display_name)
+        return {"user_id": uid, "token": token, "new_user": True}
 
     def user_by_mobile(self, mobile: str) -> str | None:
         try:
@@ -151,6 +292,9 @@ class Registry:
             c.execute("INSERT INTO guardianships (id, principal_id, guardian_id, status, invited_at) VALUES (?,?,?,?,?)",
                       (gid, principal_id, guardian_id, GuardianStatus.INVITED.value, self._now()))
             self._audit(c, principal_id, "guardian.invited", principal_id, guardianship_id=gid, guardian_id=guardian_id)
+            self._alert(c, [guardian_id], "guardian_invited", "Guardian request",
+                        f"{self._name(principal_id)} asked you to be their payment guardian. Accept or decline in the app.",
+                        principal_id, guardianship_id=gid)
         return self.guardianship(gid)
 
     def guardianship(self, gid: str) -> dict:
@@ -181,6 +325,10 @@ class Registry:
                           (GuardianStatus.DECLINED.value, self._now(), gid))
             self._audit(c, guardian_id, "guardian.accepted" if accept else "guardian.declined",
                         r["principal_id"], guardianship_id=gid)
+            self._alert(c, [r["principal_id"]], "guardian_accepted" if accept else "guardian_declined",
+                        "Guardian " + ("accepted" if accept else "declined"),
+                        f"{self._name(guardian_id)} {'is now your guardian' if accept else 'declined your request'}.",
+                        r["principal_id"], guardianship_id=gid)
         return self.guardianship(gid)
 
     def resign(self, guardian_id: str, gid: str) -> dict:
@@ -194,6 +342,8 @@ class Registry:
             c.execute("UPDATE guardianships SET status=?, ended_at=? WHERE id=?",
                       (GuardianStatus.ENDED.value, self._now(), gid))
             self._audit(c, guardian_id, "guardian.resigned", r["principal_id"], guardianship_id=gid)
+            self._alert(c, [r["principal_id"]], "guardian_resigned", "Guardian stepped down",
+                        f"{self._name(guardian_id)} is no longer your guardian.", r["principal_id"], guardianship_id=gid)
         return self.guardianship(gid)
 
     def remove_guardian(self, principal_id: str, gid: str) -> dict:
@@ -285,6 +435,10 @@ class Registry:
             with self.db.tx() as c:
                 self._write_rules(c, principal_id, current)
                 self._audit(c, actor_id, "kill_switch.on", principal_id, by=role)
+                self._alert(c, [principal_id, *self._active_guardian_ids(principal_id)], "kill_switch_on",
+                            "Payments paused",
+                            f"{self._name(actor_id)} paused all outgoing payments for {self._name(principal_id)}.",
+                            principal_id)
         return current
 
     def release_kill_switch(self, principal_id: str, actor_id: str) -> dict:
@@ -299,6 +453,10 @@ class Registry:
             with self.db.tx() as c:
                 self._write_rules(c, principal_id, current)
                 self._audit(c, actor_id, "kill_switch.off", principal_id, by=role)
+                self._alert(c, [principal_id, *self._active_guardian_ids(principal_id)], "kill_switch_off",
+                            "Payments resumed",
+                            f"{self._name(actor_id)} switched payments back on for {self._name(principal_id)}.",
+                            principal_id)
             return {"applied": True, "rules": current.to_dict()}
         return self._propose_change(principal_id, ChangeKind.KILL_SWITCH_OFF, {})
 
@@ -312,6 +470,26 @@ class Registry:
                       (cid, principal_id, kind.value, json.dumps(payload), ChangeStatus.PENDING.value,
                        principal_id, self._now(), effective))
             self._audit(c, principal_id, "change.proposed", principal_id, change_id=cid, kind=kind.value, payload=payload)
+            who = self._name(principal_id)
+            what = {
+                ChangeKind.UPDATE_RULES: f"loosen their payment limits ({', '.join(payload.get('changes', {}))})",
+                ChangeKind.KILL_SWITCH_OFF: "switch payments back on",
+                ChangeKind.REMOVE_GUARDIAN: "remove a guardian",
+            }[kind]
+            excluded = ()
+            if kind is ChangeKind.REMOVE_GUARDIAN:
+                g = c.execute("SELECT guardian_id FROM guardianships WHERE id=?", (payload["guardianship_id"],)).fetchone()
+                excluded = (g["guardian_id"],) if g else ()
+                # the guardian being removed still hears about it, as an urgent alert
+                self._alert(c, excluded, "guardian_removal_proposed", "You are being removed as guardian",
+                            f"{who} asked to remove you as guardian. It takes effect in {LOOSENING_DELAY_HOURS} hours. "
+                            "If this sounds like pressure from someone else, call them.", principal_id, change_id=cid)
+            self._alert_guardians(c, principal_id, "change_proposed", "Protection change requested",
+                                  f"{who} asked to {what}. It takes effect in {LOOSENING_DELAY_HOURS} hours unless you "
+                                  "veto it. If they are on a call with a stranger, veto.", exclude=excluded, change_id=cid)
+            self._alert(c, [principal_id], "change_held", "Change on hold",
+                        f"For your safety this takes effect in {LOOSENING_DELAY_HOURS} hours. Your guardians have been told.",
+                        principal_id, change_id=cid)
         return {"applied": False, "change": self.change(cid)}
 
     def change(self, cid: str) -> dict:
@@ -350,6 +528,9 @@ class Registry:
         c.execute("UPDATE pending_changes SET status=?, decided_by=?, decided_at=? WHERE id=?",
                   (ChangeStatus.APPLIED.value, actor, self._now(), r["id"]))
         self._audit(c, actor, "change.applied", pid, change_id=r["id"], kind=kind.value)
+        self._alert(c, [pid, *self._active_guardian_ids(pid)], "change_applied", "Protection change applied",
+                    f"The requested change ({kind.value.replace('_', ' ')}) for {self._name(pid)} is now in effect.",
+                    pid, change_id=r["id"])
 
     def _apply_due_changes(self, principal_id: str) -> None:
         due = self.db.all("SELECT * FROM pending_changes WHERE principal_id=? AND status=? AND effective_at<=?",
@@ -387,6 +568,9 @@ class Registry:
             c.execute("UPDATE pending_changes SET status=?, decided_by=?, decided_at=? WHERE id=?",
                       (ChangeStatus.VETOED.value, guardian_id, self._now(), cid))
             self._audit(c, guardian_id, "change.vetoed", r["principal_id"], change_id=cid)
+            self._alert(c, [r["principal_id"]], "change_vetoed", "Change stopped",
+                        f"{self._name(guardian_id)} stopped your requested change. Your protection stays as it was.",
+                        r["principal_id"], change_id=cid)
         return self.change(cid)
 
     # ----------------------------------------------------------- trusted payees
@@ -419,11 +603,19 @@ class Registry:
             c.execute("UPDATE checks SET status=?, decided_by=?, decided_at=? WHERE id=?",
                       (CheckStatus.RELEASED.value, "system:cooling_off_elapsed", r["release_at"], r["id"]))
             self._audit(c, "system", "check.released", r["principal_id"], check_id=r["id"])
+            self._alert(c, [r["principal_id"]], "payment_released", "Payment can go ahead",
+                        f"The waiting period for {rupees(r['amount'])} to {r['payee']} is over.", r["principal_id"],
+                        check_id=r["id"])
+            self._webhook_check(c, r["id"])
             return True
         if r["status"] == CheckStatus.PENDING_APPROVAL.value and r["expires_at"] <= now:
             c.execute("UPDATE checks SET status=?, decided_by=?, decided_at=? WHERE id=?",
                       (CheckStatus.EXPIRED.value, "system:approval_timeout", r["expires_at"], r["id"]))
             self._audit(c, "system", "check.expired", r["principal_id"], check_id=r["id"])
+            self._alert(c, [r["principal_id"]], "payment_expired", "Payment not approved in time",
+                        f"No guardian approved {rupees(r['amount'])} to {r['payee']}, so it was not sent.",
+                        r["principal_id"], check_id=r["id"])
+            self._webhook_check(c, r["id"])
             return True
         return False
 
@@ -513,6 +705,25 @@ class Registry:
             )
             self._audit(c, participant_id, "check.decided", principal_id, check_id=cid,
                         amount=amount, payee=payee, channel=channel, outcome=decision.outcome.value)
+            who, amt = self._name(principal_id), rupees(amount)
+            why = "; ".join(decision.reasons)
+            if decision.outcome is Outcome.NEEDS_APPROVAL:
+                self._alert_guardians(c, principal_id, "approval_needed", "Approve payment?",
+                                      f"{who} wants to pay {amt} to {payee}. Approve or deny within "
+                                      f"{decision.approval_timeout_minutes} min. Reason held: {why}.", check_id=cid)
+                self._alert(c, [principal_id], "payment_waiting", "Waiting for your guardian",
+                            f"{amt} to {payee} needs a guardian's approval. They have been alerted.", principal_id,
+                            check_id=cid)
+            elif decision.outcome is Outcome.DELAY:
+                self._alert_guardians(c, principal_id, "payment_held", "Payment on hold",
+                                      f"{who} is paying {amt} to {payee}. It goes through in {decision.delay_minutes} "
+                                      f"min unless you or they cancel it. Reason: {why}.", check_id=cid)
+                self._alert(c, [principal_id], "payment_waiting", "Payment on hold",
+                            f"{amt} to {payee} will go through in {decision.delay_minutes} min. You can cancel it "
+                            "until then.", principal_id, check_id=cid)
+            elif decision.outcome is Outcome.BLOCK:
+                self._alert(c, [principal_id], "payment_blocked", "Payment blocked",
+                            f"{amt} to {payee} was blocked: {why}.", principal_id, check_id=cid)
         return self._check_view(cid, for_participant=True)
 
     def _load_check(self, cid: str) -> sqlite3.Row:
@@ -561,6 +772,11 @@ class Registry:
             c.execute("UPDATE checks SET status=?, decided_by=?, decided_at=? WHERE id=?",
                       (new_status.value, actor_id, self._now(), cid))
             self._audit(c, actor_id, f"check.{new_status.value}", pid, check_id=cid)
+            verb = {CheckStatus.APPROVED: "approved", CheckStatus.DENIED: "denied",
+                    CheckStatus.CANCELLED: "cancelled"}[new_status]
+            self._alert(c, [pid, *self._active_guardian_ids(pid)], f"payment_{verb}", f"Payment {verb}",
+                        f"{self._name(actor_id)} {verb} {rupees(r['amount'])} to {r['payee']}.", pid, check_id=cid)
+            self._webhook_check(c, cid)
         return self._check_view(cid)
 
     def approve_check(self, guardian_id: str, cid: str) -> dict:
@@ -598,6 +814,52 @@ class Registry:
             changes.extend(self.changes_for(pid, only_pending=True))
         invites = [g for g in self.wards_of(guardian_id) if g["status"] == GuardianStatus.INVITED.value]
         return {"held_payments": approvals, "pending_changes": changes, "invitations": invites}
+
+    # -------------------------------------------------------------- presets
+    def apply_preset(self, principal_id: str, name: str) -> dict:
+        """Apply a named rule bundle. It goes through update_rules, so any loosening is held."""
+        if name not in PRESETS:
+            raise NotFound(f"unknown preset; choose one of {sorted(PRESETS)}")
+        return self.update_rules(principal_id, dict(PRESETS[name]["rules"]))
+
+    # ---------------------------------------------------------------- sweeper
+    def sweep(self) -> dict:
+        """Move time-based state forward for everyone: release finished cooling-offs, expire
+        unanswered approvals, apply held changes whose delay is over. The background worker
+        calls this so alerts and webhooks fire on time even if nobody is reading."""
+        now = self._now()
+        principals = {r["principal_id"] for r in self.db.all(
+            "SELECT DISTINCT principal_id FROM checks WHERE (status=? AND release_at<=?) OR (status=? AND expires_at<=?)",
+            (CheckStatus.COOLING_OFF.value, now, CheckStatus.PENDING_APPROVAL.value, now))}
+        changes = {r["principal_id"] for r in self.db.all(
+            "SELECT DISTINCT principal_id FROM pending_changes WHERE status=? AND effective_at<=?",
+            (ChangeStatus.PENDING.value, now))}
+        for pid in principals:
+            with self.db.tx() as c:
+                self._refresh_principal(c, pid)
+        for pid in changes:
+            self._apply_due_changes(pid)
+        return {"principals_refreshed": len(principals), "principals_with_changes": len(changes)}
+
+    # ---------------------------------------------------------- notifications
+    def notifications(self, user_id: str, unread_only: bool = False, limit: int = 50) -> list[dict]:
+        sql = ("SELECT * FROM notifications WHERE recipient_type='user' AND recipient_id=? AND channel='inapp'"
+               + (" AND read_at IS NULL" if unread_only else "") + " ORDER BY created_at DESC, rowid DESC LIMIT ?")
+        return [{"id": r["id"], "kind": r["kind"], "title": r["title"], "body": r["body"],
+                 "principal_id": r["principal_id"], "data": json.loads(r["payload"]),
+                 "created_at": r["created_at"], "read": r["read_at"] is not None}
+                for r in self.db.all(sql, (user_id, limit))]
+
+    def mark_read(self, user_id: str, ids: list[str] | None = None) -> int:
+        with self.db.tx() as c:
+            if ids:
+                q = ",".join("?" * len(ids))
+                cur = c.execute(f"UPDATE notifications SET read_at=? WHERE recipient_type='user' AND recipient_id=? "
+                                f"AND read_at IS NULL AND id IN ({q})", (self._now(), user_id, *ids))
+            else:
+                cur = c.execute("UPDATE notifications SET read_at=? WHERE recipient_type='user' AND recipient_id=? "
+                                "AND read_at IS NULL", (self._now(), user_id))
+            return cur.rowcount
 
     # -------------------------------------------------------------------- audit
     def audit_trail(self, actor_id: str, principal_id: str) -> list[dict]:
