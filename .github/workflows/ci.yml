@@ -112,7 +112,7 @@ jobs:
         run: gradle -p android :app:assembleDebug :app:testDebugUnitTest --no-daemon
 
   ios:
-    runs-on: macos-15
+    runs-on: macos-15-intel   # arm64 macOS runners were repeatedly unavailable (GitHub capacity)
     steps:
       - uses: actions/checkout@v5
       - name: Swift wire self-check (bytes the server must agree with)
