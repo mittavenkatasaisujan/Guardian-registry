@@ -50,31 +50,37 @@ MAX_KEYS = 5
 class KeyAttestor:
     """Checks platform evidence for a device key."""
 
-    def verify(self, public_key_b64: str, attestation: str, platform: str | None) -> dict:  # pragma: no cover
-        """Return {"hardware_backed": bool, "app_genuine": bool}."""
+    def verify(self, public_key_b64: str, attestation: str, platform: str | None,
+               challenge: str = "") -> dict:  # pragma: no cover
+        """Return {"hardware_backed": bool, "app_genuine": bool}. `challenge` is the sign-in
+        challenge the evidence must be bound to."""
         raise NotImplementedError
 
 
 class HttpKeyAttestor(KeyAttestor):
-    """POST {"public_key", "attestation", "platform"} to GR_KEY_ATTESTATION_URL: an adapter
-    that calls Google's Play Integrity decode API or verifies an Apple App Attest object."""
+    """POST {"public_key", "attestation", "platform", "challenge"} to GR_KEY_ATTESTATION_URL,
+    for an external verifier. attestation.LocalKeyAttestor verifies Android Key Attestation
+    and Apple App Attest in-process instead."""
 
     def __init__(self, url: str, token: str | None = None, client: httpx.Client | None = None):
         self.url, self.token = url, token
         self.client = client or httpx.Client(timeout=5)
 
-    def verify(self, public_key_b64: str, attestation: str, platform: str | None) -> dict:
+    def verify(self, public_key_b64: str, attestation: str, platform: str | None, challenge: str = "") -> dict:
         r = self.client.post(self.url, json={"public_key": public_key_b64, "attestation": attestation,
-                                             "platform": platform},
+                                             "platform": platform, "challenge": challenge},
                              headers={"Authorization": f"Bearer {self.token}"} if self.token else {})
         r.raise_for_status()
         body = r.json()
         return {"hardware_backed": bool(body.get("hardware_backed")), "app_genuine": bool(body.get("app_genuine"))}
 
 
-def key_attestor_from_env() -> KeyAttestor | None:
+def key_attestor_from_env(clock=None) -> KeyAttestor | None:
     url = os.environ.get("GR_KEY_ATTESTATION_URL")
-    return HttpKeyAttestor(url, os.environ.get("GR_KEY_ATTESTATION_TOKEN")) if url else None
+    if url:
+        return HttpKeyAttestor(url, os.environ.get("GR_KEY_ATTESTATION_TOKEN"))
+    from .attestation import local_attestor_from_env
+    return local_attestor_from_env(clock)
 
 
 def attestation_required() -> bool:
@@ -132,7 +138,8 @@ class DeviceKeyMixin:
         return self.db.one("SELECT * FROM device_keys WHERE user_id=? AND key_id=?", (uid, key_id))
 
     def _register_key(self, c, uid: str, key_id: str, public_key_b64: str, attestation: str | None,
-                      platform: str | None, new_account: bool = False) -> tuple[bool, str | None]:
+                      platform: str | None, new_account: bool = False,
+                      challenge: str = "") -> tuple[bool, str | None]:
         """Returns (proven, key_probation_until). A trusted, unrevoked key proves the device."""
         now = self.clock.now()
         row = c.execute("SELECT * FROM device_keys WHERE user_id=? AND key_id=?", (uid, key_id)).fetchone()
@@ -143,15 +150,20 @@ class DeviceKeyMixin:
             return False, row["trusted_at"]
         if row and row["revoked_at"]:
             raise Unauthorized("this device key was revoked; reinstall the app to create a new one")
-        attested = False
+        attested, why = False, None
         if self.key_attestor and attestation:
             try:
-                verdict = self.key_attestor.verify(public_key_b64, attestation, platform)
-                attested = verdict["hardware_backed"] and verdict["app_genuine"]
-            except Exception:  # noqa: BLE001 - an unreachable attestor means "not attested"
-                attested = False
+                verdict = self.key_attestor.verify(public_key_b64, attestation, platform, challenge)
+                attested = bool(verdict["hardware_backed"] and verdict["app_genuine"])
+                if not attested:
+                    why = "not hardware-backed" if not verdict["hardware_backed"] else "not the genuine app"
+            except Exception as e:  # noqa: BLE001 - bad evidence or an unreachable attestor: "not attested"
+                why = str(e)[:200] or type(e).__name__
+        elif attestation:
+            why = "no attestation verifier configured"
         if attestation_required() and not attested:
-            raise Unauthorized("this device key could not be verified as hardware-backed in a genuine app")
+            raise Unauthorized("this device key could not be verified as hardware-backed in a genuine app"
+                               + (f": {why}" if why else ""))
         live = c.execute("SELECT COUNT(*) n FROM device_keys WHERE user_id=? AND revoked_at IS NULL",
                          (uid,)).fetchone()["n"]
         ever = c.execute("SELECT COUNT(*) n FROM device_keys WHERE user_id=?", (uid,)).fetchone()["n"]
@@ -163,7 +175,8 @@ class DeviceKeyMixin:
         c.execute("INSERT INTO device_keys (user_id, key_id, public_key, platform_attested, created_at, trusted_at, "
                   "last_used_at) VALUES (?,?,?,?,?,?,?)",
                   (uid, key_id, public_key_b64, 1 if attested else 0, iso(now), iso(trusted_at), iso(now)))
-        self._audit(c, uid, "device_key.registered", uid, key_id=key_id[:16], attested=attested, first=first)
+        self._audit(c, uid, "device_key.registered", uid, key_id=key_id[:16], attested=attested, first=first,
+                    **({"attestation_problem": why} if why else {}))
         return False, None if first else iso(trusted_at)
 
     def device_keys(self, uid: str) -> list[dict]:

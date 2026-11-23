@@ -59,6 +59,14 @@ class SmsSender:
     def send(self, to: str, text: str) -> None:  # pragma: no cover - interface
         raise NotImplementedError
 
+    def send_otp(self, to: str, code: str, minutes: int) -> None:
+        """Template-based providers (DLT in India) override this to send a template id."""
+        self.send(to, f"Guardian Registry code: {code}. Valid {minutes} min. Never share it with anyone, "
+                      "not even a guardian or a bank.")
+
+    def send_alert(self, to: str, title: str, body: str) -> None:
+        self.send(to, f"{title}: {body}")
+
 
 @dataclass
 class LogSmsSender(SmsSender):
@@ -143,16 +151,28 @@ class HttpPushSender(PushSender):
 
 
 def whatsapp_sender_from_env() -> WhatsAppSender | None:
+    from .providers import whatsapp_from_env
+    direct = whatsapp_from_env()
+    if direct:
+        return direct
     url = os.environ.get("GR_WHATSAPP_URL")
     return HttpWhatsAppSender(url, os.environ.get("GR_WHATSAPP_TOKEN", "")) if url else None
 
 
 def push_sender_from_env() -> PushSender | None:
+    from .providers import push_from_env
+    direct = push_from_env()
+    if direct:
+        return direct
     url = os.environ.get("GR_PUSH_URL")
     return HttpPushSender(url, os.environ.get("GR_PUSH_TOKEN", "")) if url else None
 
 
 def sms_sender_from_env() -> SmsSender:
+    from .providers import sms_from_env
+    direct = sms_from_env()
+    if direct:
+        return direct
     url = os.environ.get("GR_SMS_URL")
     if url:
         return HttpSmsSender(url, os.environ.get("GR_SMS_TOKEN", ""))
@@ -256,11 +276,24 @@ class Dispatcher:
         if n["channel"] == "push":
             if self.push is None:
                 return False
-            tokens = self.db.all("SELECT token_enc, platform FROM push_tokens WHERE user_id=?", (n["recipient_id"],))
-            for t in tokens:
-                self.push.send(decrypt_text(t["token_enc"]), t["platform"], n["title"], n["body"],
-                               {"kind": n["kind"], "id": n["id"]})
-            return bool(tokens)
+            from .providers import DeadToken
+            tokens = self.db.all("SELECT token_hash, token_enc, platform FROM push_tokens WHERE user_id=?",
+                                 (n["recipient_id"],))
+            delivered, errors = 0, []
+            for t in tokens:  # one install failing must not re-send to the others on retry
+                try:
+                    self.push.send(decrypt_text(t["token_enc"]), t["platform"], n["title"], n["body"],
+                                   {"kind": n["kind"], "id": n["id"]})
+                    delivered += 1
+                except DeadToken:
+                    with self.db.tx(n["recipient_id"]) as c:  # uninstalled: never try it again
+                        c.execute("DELETE FROM push_tokens WHERE user_id=? AND token_hash=?",
+                                  (n["recipient_id"], t["token_hash"]))
+                except Exception as e:  # noqa: BLE001
+                    errors.append(str(e))
+            if errors and not delivered:
+                raise RuntimeError("; ".join(errors)[:500])
+            return bool(delivered)
         if n["channel"] in ("sms", "whatsapp"):
             u = self.db.one("SELECT mobile_enc FROM users WHERE id=?", (n["recipient_id"],))
             if not u or not u["mobile_enc"]:
@@ -273,7 +306,11 @@ class Dispatcher:
             if n["channel"] == "whatsapp" and self.whatsapp is not None:
                 self.whatsapp.send(to, n["title"], n["body"])
             else:  # SMS, or WhatsApp chosen but no provider configured
-                self.sms.send(to, f"{n['title']}: {n['body']}")
+                send_alert = getattr(self.sms, "send_alert", None)
+                if send_alert:
+                    send_alert(to, n["title"], n["body"])
+                else:
+                    self.sms.send(to, f"{n['title']}: {n['body']}")
             return True
         if n["channel"] == "webhook":
             p = self.db.one("SELECT webhook_url, webhook_secret FROM participants WHERE id=?", (n["recipient_id"],))

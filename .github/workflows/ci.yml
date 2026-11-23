@@ -96,3 +96,40 @@ jobs:
           echo "node B sees the same audit chain:"
           curl -sf -H "X-Admin-Token: ci-alice-token" http://127.0.0.1:8001/v1/admin/audit/verify | tee /tmp/b.json
           python -c "import json; d=json.load(open('/tmp/b.json')); assert d['ok'] and d['entries'] > 40, d"
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Build the Android app and run its unit tests
+        run: gradle -p android :app:assembleDebug :app:testDebugUnitTest --no-daemon
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Swift wire self-check (bytes the server must agree with)
+        run: |
+          swiftc ios/GuardianRegistry/Wire.swift ios/WireCheck/main.swift -o wirecheck
+          ./wirecheck | tee wirecheck.txt
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Server agrees with the Swift bytes
+        run: |
+          pip install -r requirements.txt
+          WIRECHECK_OUTPUT=wirecheck.txt python -m pytest -q tests/test_native_contract.py
+      - name: Build the iOS app for the simulator
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen
+          xcodebuild -project GuardianRegistry.xcodeproj -target GuardianRegistry -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO build | tail -40
+          test "${PIPESTATUS[0]}" -eq 0

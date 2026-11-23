@@ -66,7 +66,7 @@ class VerifyIn(BaseModel):
     device_proof: str | None = Field(default=None, max_length=400,
                                      description="base64 ECDSA-SHA256 signature of 'guardian-registry/v1:'+challenge")
     key_attestation: str | None = Field(default=None, max_length=20000,
-                                        description="Play Integrity token or App Attest object, optional")
+                                        description="JSON: Android Key Attestation chain or Apple App Attest object (see attestation.py)")
     platform: Literal["android", "ios", "web"] | None = None
 
 
@@ -136,6 +136,17 @@ class RegisterIn(BaseModel):
     source: str = Field(min_length=3, max_length=300, description="where the list came from, e.g. its URL")
     as_of: str = Field(min_length=4, max_length=40, description="date of the published list")
     entities: list[EntityIn] = Field(min_length=1, max_length=20000)
+
+
+class FeedIn(BaseModel):
+    url: str = Field(min_length=8, max_length=500, description="https URL of the published list")
+    format: Literal["csv", "json"] = "csv"
+    ref_field: str = Field(default="regulator_ref", min_length=1, max_length=60)
+    name_field: str = Field(default="name", min_length=1, max_length=60)
+    public_key: str | None = Field(default=None, max_length=100,
+                                   description="Ed25519 key (base64); the list must then be signed at <url>.sig")
+    max_drop_pct: int = Field(default=5, ge=0, le=100)
+    auto_suspend: bool = True
 
 
 class CertIn(BaseModel):
@@ -282,7 +293,7 @@ def create_app(
     if key_attestor is not None:
         reg.key_attestor = key_attestor
     elif reg.key_attestor is None:
-        reg.key_attestor = key_attestor_from_env()
+        reg.key_attestor = key_attestor_from_env(reg.clock)
     if operators is None:
         operators = parse_operators(os.environ.get("GR_OPERATORS"))
         admin = admin_token if admin_token is not None else os.environ.get("GR_ADMIN_TOKEN")
@@ -476,6 +487,43 @@ def create_app(
     @app.get("/v1/admin/register", tags=["ops"])
     def register_status(_: Operator):
         return reg.register_status()
+
+    @app.get("/v1/admin/register-feeds", tags=["ops"])
+    def list_feeds(_: Operator):
+        return reg.feeds()
+
+    @app.put("/v1/admin/register-feeds/{kind}", tags=["ops"])
+    def configure_feed(kind: str, body: FeedIn, op: Operator):
+        """Point a kind at a published list. A second operator must approve it; the worker
+        then refreshes it every GR_REGISTER_REFRESH_HOURS."""
+        return reg.configure_feed(op, kind, body.url, body.format, body.ref_field, body.name_field,
+                                  body.public_key, body.max_drop_pct, body.auto_suspend)
+
+    @app.post("/v1/admin/register-feeds/{kind}/approve", tags=["ops"])
+    def approve_feed(kind: str, op: Operator):
+        return reg.approve_feed(op, kind, allow_self=single_operator)
+
+    @app.post("/v1/admin/register-feeds/{kind}/refresh", tags=["ops"])
+    def refresh_feed(kind: str, _: Operator):
+        """Check this feed now instead of waiting for the next scheduled refresh."""
+        reg._feed_row(kind)
+        with reg.db.tx(shared=True) as c:
+            c.execute("UPDATE register_feeds SET last_checked_at=NULL WHERE kind=?", (kind,))
+        reg.refresh_registers()
+        return reg.feed_view(kind)
+
+    @app.post("/v1/admin/register-feeds/{kind}/held/apply", tags=["ops"])
+    def apply_held(kind: str, op: Operator):
+        """Apply a refresh that was held because it removed too many entities."""
+        return reg.apply_held_feed(op, kind)
+
+    @app.delete("/v1/admin/register-feeds/{kind}/held", tags=["ops"])
+    def discard_held(kind: str, op: Operator):
+        return reg.discard_held_feed(op, kind)
+
+    @app.delete("/v1/admin/register-feeds/{kind}", tags=["ops"])
+    def remove_feed(kind: str, op: Operator):
+        return reg.remove_feed(op, kind)
 
     @app.get("/v1/admin/participants", tags=["ops"])
     def all_participants(_: Operator, status: str | None = None):

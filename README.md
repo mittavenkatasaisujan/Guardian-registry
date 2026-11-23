@@ -25,6 +25,16 @@ Large text and buttons, light and dark themes, works on a phone. It is plain HTM
 third-party code, served with a strict Content Security Policy (no inline script or style, no framing) and puts
 names and payees on the page as text only.
 
+**Android and iOS apps** ([android/](android), [ios/](ios)) do the same jobs with the device key in **secure
+hardware**: Android Keystore (StrongBox when the phone has one) and the iOS Secure Enclave. The key is created at the
+first sign-in, after the app has the server's challenge, so the platform's evidence is bound to that sign-in:
+Android's Keystore attestation certificate carries the challenge, and iOS asks App Attest to vouch for
+`SHA256(prefix + challenge + device key)`. In the apps you sign in by SMS code, approve or deny payments (approvals
+ask you to confirm), stop held payments, accept guardian requests, pause your own payments, read alerts and report a
+lost phone. Push alerts come through FCM / APNs. CI compiles both apps on every push (Android on Linux with its unit
+tests, iOS for the simulator on macOS) and checks byte for byte that the apps and the server agree on the signing
+input, the key encoding and the attestation format.
+
 
 | Feature | Behaviour |
 |---|---|
@@ -32,6 +42,8 @@ names and payees on the page as text only.
 | **Official register** | Operators load each regulator's published list of entities (`PUT /v1/admin/register/{kind}`: RBI's banks, NBFCs and PPI issuers, NPCI's UPI apps, DoT's telecom licensees) with its source and date. Once a list for a kind is loaded, participants of that kind can only be registered, and approved or reinstated, with a reference on it. A participant shows which register entry it matched. In production a list is required (`GR_REQUIRE_ENTITY_REGISTER`). |
 | **Operator SSO** | Operators can sign in through the organisation's identity provider (OpenID Connect: Entra/Azure AD, Okta, Google, Keycloak) and send `Authorization: Bearer <ID token>`. The registry checks the signature against the provider's keys, issuer, audience, expiry, a verified email on the allow-list, and, on by default in production, that the sign-in used a **hardware security key** (`amr` contains `hwk`). The email is the operator's name for four-eyes checks and the audit log. |
 | **Mutual TLS for banks** | An API key alone stops being enough. TLS ends at the reverse proxy, which verifies the bank's certificate chain and forwards the certificate (header `X-Client-Cert`, accepted only from `GR_TRUSTED_PROXIES`). The registry pins each participant's certificates by SHA-256 fingerprint and checks their dates. Once a participant has a pin, every call needs a pinned certificate; `GR_REQUIRE_MTLS` (default on in production) requires it for all. A new pin from an operator waits for a **second operator**; a bank rotates its own certificate only in a call that already presents a pinned one; removing a pin is instant, and a bank can't remove the one it is calling with if it's the last. One certificate can belong to one participant only. |
+| **Platform attestation** | Checked **inside the registry**, with no outside attestation service ([attestation.py](guardian_registry/attestation.py)). **Android Key Attestation:** every certificate in the chain must be in date, signed by the next one up to a pinned Google root, and not on Google's revocation list (optional, fetched daily); the certified key must be the device key and the challenge this sign-in's. TEE or StrongBox, a locked bootloader and verified boot make it *hardware-backed*; our package name and signing-certificate digest make it *genuine*. **Apple App Attest:** the chain must reach the pinned Apple root; the nonce must equal `SHA256(authData + clientDataHash)`, where the client data binds the device key and the challenge; the key id must be the hash of the attested key; the app id hash must match, the counter must be 0 and the AAGUID must be the production one. A key that fails is recorded as not attested, with the reason in the audit log. With `GR_REQUIRE_KEY_ATTESTATION=1` it is refused, and the error says why. |
+| **Register refresh** | An operator points each kind at a published list (`PUT /v1/admin/register-feeds/{kind}`: CSV or JSON, naming the columns that hold the licence number and the name), and **a second operator approves it**. The worker re-reads the list every `GR_REGISTER_REFRESH_HOURS` (default 24); an unchanged file costs one hash. With an Ed25519 key, the list must be signed (`<url>.sig`) or it is refused. A refresh that would remove more than `max_drop_pct` of the entities (default 5%), or all of them, is **held** until an operator applies or discards it, so a truncated download can't wipe the register. When a licence leaves the list, every active participant registered with it is **suspended at once**, with the reason recorded and a webhook sent. Reinstating needs two operators. |
 | Sign-in | SMS one-time code (6 digits, 5 min, single use, 5 wrong tries locks it, 30 s resend cooldown, 3 codes per 15 min, plus a per-IP limit). The response is the same whether or not a number is enrolled. Sessions last 30 days; you can sign out of one device or all of them. |
 | **Bank-vouched KYC** | A participant bank that has already KYC'd its customer sends a claim (KYC level `full` or `minimum`, KYC date, optional date of birth, its customer ID). **It counts only after the customer approves it in the app.** Unanswered claims lapse after 7 days. Approved ones expire after a year (re-confirm yearly), and the customer can withdraw or the bank revoke at any time. The customer ID is stored only as a keyed hash and the date of birth only encrypted. Banks get a yes/no **`senior`** flag (70+, per RBI's proposal) in every check response, never the date. If two banks disagree on the date of birth, `senior` becomes unknown and the customer is told. |
 | Verified guardians | Every guardian listing shows the guardian's identity level (`bank_verified`, `bank_min_kyc` or `otp`). The rule `require_verified_guardian` lets **only bank-verified guardians approve** payments. Any guardian can still deny or cancel, since that only protects. Turning the rule off is a loosening, so it's held for 24 h. |
@@ -47,6 +59,7 @@ names and payees on the page as text only.
 | Anti-coaching | **Tightening applies at once. Loosening is held for 24 h** (raising limits, switching the kill switch off, removing a guardian). Any other guardian can veto it or approve it early. A guardian can't decide on their own removal. Guardians can't loosen anyone's rules. |
 | Kill switch | The principal or any guardian can pause all payments at once. A guardian can switch payments back on at once; the principal's own request is held. |
 | **Alerts** | Every event queues alerts **in the same database transaction**, so an alert is never lost or sent for something that rolled back. Guardians get SMS for urgent events (approval needed, payment on hold, protection being loosened, kill switch, guardian removal) and an in-app feed for everything. Delivery retries with backoff. |
+| **Direct providers** | Built-in connections that need only credentials ([providers.py](guardian_registry/providers.py)): **SMS** through Twilio or MSG91, **WhatsApp** through Meta's Cloud API with an approved two-variable template, and **push** through FCM HTTP v1 for Android (service-account OAuth, with the token cached) and APNs for iOS (token-based `.p8` auth over HTTP/2). MSG91 sends DLT-registered template ids, one for codes and one for alerts, as Indian rules require. A push token that the provider reports dead (the app was uninstalled) is deleted. If one device fails, the others don't get the alert twice. The generic HTTP adapters still work for any other provider. |
 | **WhatsApp and push** | Each person picks SMS (default) or **WhatsApp** for urgent alerts (`PUT /v1/me/alerts`); WhatsApp falls back to SMS if no provider is set. App installs register for **push** (`POST /v1/me/alerts/push`, tokens stored encrypted, at most 5). Push goes to the app, not the number, so it keeps flowing during a SIM-swap window when SMS and WhatsApp to that number stop. A lost-phone report or a recovery removes old push tokens. |
 | **Several servers (Postgres)** | Set `GR_DB=postgresql://...` and run as many API nodes as you like against one Postgres. The schema is built from the same migrations as SQLite. **Per-person locking:** payment checks, approvals, outcome reports and the worker's per-person sweep lock only that person, so checks for different people run **in parallel** on every node while each person's daily limit stays exact. Rare operations (rules, guardians, onboarding, recovery, KYC) take a database-wide lock and run alone. A transaction may only write audit entries for the people it locked and can't widen its lock when nested; both are checked on SQLite too, so the test suite catches a scope mistake. Workers on every node **claim** each alert before sending (60 s lease), and every sweep re-checks state under its lock, so nothing is sent or applied twice. With `GR_RATE_BACKEND=db` rate limits are shared too. CI runs the full suite on Postgres 16 (including real parallel-lock tests) and the demo against two live nodes. |
 | **Bank webhooks** | Banks register an `https://` URL and get a signed `check.updated` event when a held payment is approved, denied, released, expired or cancelled. No polling needed. |
@@ -120,18 +133,25 @@ docker build -t guardian-registry .
 | `GR_ADMIN_TOKEN` | Development shortcut: a single operator called `admin`, which approves its own onboarding requests. Refused in production. Unset (with no `GR_OPERATORS`) means admin is disabled. |
 | `GR_PEPPER` | Secret for hashing mobile numbers. **Required in production.** |
 | `GR_DATA_KEY` | Fernet key for encrypting mobile numbers. **Required in production.** Generate one with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
-| `GR_SMS_URL`, `GR_SMS_TOKEN` | SMS gateway: POST `{"to","text"}` with a bearer token. Put a thin adapter in front of MSG91, Gupshup, Twilio, etc. **Required in production.** |
+| `GR_SMS_PROVIDER` | `twilio` (`GR_TWILIO_ACCOUNT_SID`, `GR_TWILIO_AUTH_TOKEN`, `GR_TWILIO_FROM`: a number or a Messaging Service `MG...`) or `msg91` (`GR_MSG91_AUTHKEY`, `GR_MSG91_OTP_TEMPLATE` with variable `otp`, `GR_MSG91_ALERT_TEMPLATE` with variable `title`). **This or `GR_SMS_URL` is required in production.** |
+| `GR_SMS_URL`, `GR_SMS_TOKEN` | Any other SMS gateway: POST `{"to","text"}` with a bearer token, through a thin adapter |
 | `GR_OTP_DEV_ECHO` | `1` returns the OTP in the response (development only, refused in production) |
 | `GR_WORKER`, `GR_WORKER_INTERVAL` | Background worker on/off (default on) and interval in seconds (default 5) |
 | `GR_SIM_LOOKUP_URL`, `GR_SIM_LOOKUP_TOKEN` | Operator SIM-swap API: POST `{"phoneNumber": "+91..."}`, reply `{"latestSimChange": "<ISO 8601>" or null}` (CAMARA SIM Swap shape), bearer token. Unset means no live lookup. |
 | `GR_SIM_LOOKUP_FAIL` | `open` (default) or `closed`: what to do when the lookup API is down |
-| `GR_KEY_ATTESTATION_URL`, `GR_KEY_ATTESTATION_TOKEN` | Device-key attestation adapter: POST `{"public_key", "attestation", "platform"}`, reply `{"hardware_backed", "app_genuine"}` (wraps Play Integrity / App Attest) |
+| `GR_ANDROID_ATTESTATION_ROOTS`, `GR_ANDROID_PACKAGES`, `GR_ANDROID_CERT_DIGESTS` | Android Key Attestation: a PEM file of Google's hardware attestation roots (from the Android developer docs), your package name(s), and the SHA-256 of your app signing certificate(s), in hex |
+| `GR_ANDROID_ATTESTATION_STATUS_URL` | Google's attestation revocation list (`https://android.googleapis.com/attestation/status`), fetched at most once a day |
+| `GR_APPLE_ATTESTATION_ROOT`, `GR_APPLE_APP_IDS`, `GR_APPLE_APP_ATTEST_ENV` | App Attest: a PEM of Apple's App Attestation Root CA, a list of `<team id>.<bundle id>`, and `production` (default) or `development` |
+| `GR_KEY_ATTESTATION_URL`, `GR_KEY_ATTESTATION_TOKEN` | Use an external verifier instead of the built-in checks: POST `{"public_key", "attestation", "platform", "challenge"}`, reply `{"hardware_backed", "app_genuine"}` |
 | `GR_REQUIRE_KEY_ATTESTATION` | `1` refuses new device keys without good platform evidence |
 | `GR_REQUIRE_MTLS` | `1` requires a pinned client certificate from every participant. Default `1` in production. |
 | `GR_TRUSTED_PROXIES`, `GR_CLIENT_CERT_HEADER` | Addresses (IPs / CIDRs) allowed to forward client certificates (default `127.0.0.1,::1`) and the header name (default `X-Client-Cert`, PEM, URL-escaped allowed) |
 | `GR_RATE_BACKEND` | `memory` (default, per process) or `db`: counters in the shared database, so several API nodes enforce one limit |
-| `GR_WHATSAPP_URL`, `GR_WHATSAPP_TOKEN` | WhatsApp adapter: POST `{"to", "template": "guardian_alert", "params": [title, body]}` |
-| `GR_PUSH_URL`, `GR_PUSH_TOKEN` | Push adapter (FCM / APNs): POST `{"token", "platform", "title", "body", "data"}` |
+| `GR_WHATSAPP_PROVIDER` | `meta`: the WhatsApp Cloud API, with `GR_WHATSAPP_PHONE_NUMBER_ID`, `GR_WHATSAPP_ACCESS_TOKEN`, optional `GR_WHATSAPP_TEMPLATE` (default `guardian_alert`, body `{{1}}` = title, `{{2}}` = text) and optional `GR_WHATSAPP_LANGUAGE` (default `en`) |
+| `GR_WHATSAPP_URL`, `GR_WHATSAPP_TOKEN` | Any other WhatsApp provider: POST `{"to", "template": "guardian_alert", "params": [title, body]}` |
+| `GR_PUSH_PROVIDER` | `direct`: Android installs go through FCM (`GR_FCM_SERVICE_ACCOUNT`: the service-account JSON or its path), iOS installs through APNs (`GR_APNS_KEY`: the `.p8` key or its path, plus `GR_APNS_KEY_ID`, `GR_APNS_TEAM_ID`, `GR_APNS_TOPIC` = bundle id, and `GR_APNS_ENV` = `production` or `sandbox`). iOS uses FCM if APNs isn't set. |
+| `GR_PUSH_URL`, `GR_PUSH_TOKEN` | Any other push service: POST `{"token", "platform", "title", "body", "data"}` |
+| `GR_REGISTER_REFRESH_HOURS` | How often the worker re-reads each approved register feed (default 24) |
 | `GR_RATE_CHECKS`, `GR_RATE_OTP` | Rate limits as `requests/seconds` (defaults `600/60` per bank, `10/60` per IP) |
 
 ## API
@@ -142,7 +162,7 @@ Amounts are **integer paise**.
 | Who | Endpoints |
 |---|---|
 | Sign-in | `POST /v1/auth/challenge`, `POST /v1/recovery/start`, `POST /v1/recovery/status`, `POST /v1/auth/otp`, `POST /v1/auth/verify` (send `display_name` the first time to enrol and a stable `device_id`; the response says if the session is `restricted`), `POST /v1/auth/logout` |
-| Operator | `GET/POST /v1/admin/participants/{id}/certificates`, `POST /v1/admin/participants/{id}/certificates/{fp}/approve`, `DELETE /v1/admin/participants/{id}/certificates/{fp}`, `PUT /v1/admin/register/{kind}`, `GET /v1/admin/register`, `POST/GET /v1/admin/participants` (body: `name`, `kind`, `regulator_ref`, optional `capabilities`), `GET /v1/admin/participants/{id}`, `POST /v1/admin/participants/{id}/{approve,reject,suspend,reinstate,offboard}`, `PUT /v1/admin/participants/{id}/capabilities`, `GET /v1/admin/audit/verify`, `POST /v1/admin/sweep` |
+| Operator | `GET/POST /v1/admin/participants/{id}/certificates`, `POST /v1/admin/participants/{id}/certificates/{fp}/approve`, `DELETE /v1/admin/participants/{id}/certificates/{fp}`, `PUT /v1/admin/register/{kind}`, `GET /v1/admin/register`, `GET /v1/admin/register-feeds`, `PUT/DELETE /v1/admin/register-feeds/{kind}`, `POST /v1/admin/register-feeds/{kind}/{approve,refresh}`, `POST /v1/admin/register-feeds/{kind}/held/apply`, `DELETE /v1/admin/register-feeds/{kind}/held`, `POST/GET /v1/admin/participants` (body: `name`, `kind`, `regulator_ref`, optional `capabilities`), `GET /v1/admin/participants/{id}`, `POST /v1/admin/participants/{id}/{approve,reject,suspend,reinstate,offboard}`, `PUT /v1/admin/participants/{id}/capabilities`, `GET /v1/admin/audit/verify`, `POST /v1/admin/sweep` |
 | Bank / app | `POST /v1/signals/sim-change`, `POST /v1/signals/operator-events` (telecom), `POST /v1/kyc/recovery-vouch`, `POST /v1/checks`, `GET /v1/checks/{id}`, `POST /v1/checks/{id}/outcome`, `POST /v1/kyc/attestations`, `GET/DELETE /v1/kyc/attestations/{id}`, `GET /v1/participant/me`, `GET/POST /v1/participant/certificates`, `DELETE /v1/participant/certificates/{fp}`, `PUT /v1/participant/webhook`, `POST /v1/participant/rotate-key` |
 | Person | `GET /v1/me`, `GET /v1/me/devices`, `DELETE /v1/me/devices/{key_id}`, `GET/PUT /v1/me/alerts`, `POST /v1/me/alerts/push`, `DELETE /v1/me/alerts/push/{id}`, `GET /v1/me/recoveries`, `POST /v1/me/recoveries/{id}/cancel`, `GET /v1/me/security`, `POST /v1/me/security/{lost-phone,confirm-sim-change}`, `POST /v1/me/mobile/{change,verify}`, `GET /v1/me/identity`, `POST /v1/me/identity/attestations/{id}/{approve,reject}`, `DELETE /v1/me/identity/attestations/{id}`, `GET /v1/me/notifications`, `POST /v1/me/notifications/read`, `GET /v1/presets`, `GET/PATCH /v1/me/rules`, `POST /v1/me/rules/preset/{name}`, `POST /v1/me/kill-switch/{on,off}`, `GET/POST /v1/me/guardians`, `DELETE /v1/me/guardians/{id}`, `GET /v1/me/changes`, `GET /v1/me/payments`, `POST /v1/me/payments/{id}/cancel`, `GET /v1/me/audit` |
 | Guardian | `GET /v1/guardian/inbox`, `GET /v1/guardian/recoveries`, `POST /v1/guardian/recoveries/{id}/{approve,deny}`, `GET /v1/guardian/wards`, `POST /v1/guardian/invitations/{id}/{accept,decline}`, `POST /v1/guardian/guardianships/{id}/resign`, `POST /v1/guardian/payments/{id}/{approve,deny,cancel}`, `POST /v1/guardian/changes/{id}/{approve,veto}`, `GET /v1/guardian/wards/{pid}/{rules,payments,audit,security}`, `POST /v1/guardian/wards/{pid}/{lost-phone,confirm-sim-change}`, `POST /v1/guardian/wards/{pid}/kill-switch/{on,off}`, `POST /v1/guardian/wards/{pid}/trusted-payees` |
@@ -171,6 +191,9 @@ guardian_registry/
   channels.py   alert channel choice (SMS / WhatsApp) and push tokens
   kyc.py        bank-vouched identity: attestations, consent, senior flag
   devicekeys.py device-bound keys: challenges, signed sign-in, proven devices, attestation
+  attestation.py Android Key Attestation and Apple App Attest, verified locally against pinned roots
+  providers.py  Twilio / MSG91 SMS, WhatsApp Cloud API, FCM v1 and APNs push
+  registerfeed.py automatic refresh of the official registers, held refreshes, auto-suspension
   simswap.py    SIM-swap windows, device probation, restricted sessions, number change
   simfeed.py    mobile-operator feed: pushed events, number disconnection, live SIM-swap lookup
   recovery.py   account recovery: vouching by contacts or a bank, 24 h hold
@@ -180,17 +203,26 @@ guardian_registry/
   security.py   hashing, encryption, OTP, signatures, production checks
   ratelimit.py  sliding-window limiter
   api.py        FastAPI app (create_app factory) + background worker
-tests/          423 tests (9 of them need Postgres)
+tests/          485 tests (9 need Postgres, 1 runs in the macOS CI job)
 scripts/demo.py end-to-end story over real HTTP (also runs in CI)
 scripts/dev_server.py  fresh local server for trying the web app
+android/        Android app (Kotlin): Keystore / StrongBox key with attestation, FCM push
+ios/            iOS app (SwiftUI, XcodeGen project.yml): Secure Enclave key, App Attest, APNs push
 ```
 
 ## Still open
 
-- **RBI's final rules:** the paper is a proposal. Presets live in one file ([presets.py](guardian_registry/presets.py)), so the numbers can change when RBI publishes its final text. The age cut-off is `SENIOR_AGE` in [kyc.py](guardian_registry/kyc.py).
-- **Native apps:** the web app keeps its key in the browser, which can't be read out but isn't in secure hardware. Android and iOS apps (Keystore / Secure Enclave, Play Integrity / App Attest) would give the strongest device proof; the API is ready for them.
-- **Provider accounts:** the operator SIM feed, the live SIM-swap lookup, device-key attestation, SMS, WhatsApp and push are all built to standard shapes behind adapters, but none is connected to a real provider. That needs commercial agreements (mobile operators or an aggregator, an SMS gateway, a WhatsApp Business account, Firebase/APNs, Google Play Integrity / Apple App Attest) and a mobile app that keeps its key in secure hardware.
-- **Register freshness:** the official lists are loaded by operators. Nothing fetches RBI/NPCI/DoT lists automatically, since each publishes in its own format; reload them when they change.
+- **RBI's final rules:** RBI's revised directions on customer liability for digital fraud are final and take effect on 1 January 2027. The idea this registry implements, **a trusted person approving high-value payments for vulnerable customers, is still only in the April 2026 discussion paper**. The presets live in one file ([presets.py](guardian_registry/presets.py)) and the age cut-off is `SENIOR_AGE` in [kyc.py](guardian_registry/kyc.py), so both can follow the final text when it comes.
+- **Accounts and keys the code can't create:** every provider connection is built, but each needs an account:
+  - Twilio or MSG91, with DLT-registered templates;
+  - a WhatsApp Business account with an approved template;
+  - a Firebase project and an APNs key;
+  - an Apple developer team, for the App Attest and push entitlements;
+  - a Play Console signing key.
+
+  The Google and Apple attestation roots must be downloaded from their documentation and pinned. Operator SIM data still needs an agreement with the mobile operators or an aggregator.
+- **Store releases:** the apps build in CI, but they are unsigned and haven't been run on physical phones; the simulator and emulator have no secure hardware or attestation. Release signing, store listings and testing on a range of devices must come before a launch.
+- **Register sources:** the refresh reads CSV or JSON, but RBI, NPCI and DoT publish mostly as spreadsheets and PDFs. Someone has to keep a clean mirror of each list, ideally signed, for the feed to read.
 - **Social engineering of contacts:** the hour's wait, the 24 h hold and the 72 h aftercare window reduce the damage of a contact being fooled, but a determined, patient attacker can still talk someone into vouching.
 - **One person's writes are serial:** two checks for the *same* person still run one after another (that's what keeps their daily limit exact). Rule and guardian changes take the database-wide lock; they are rare, but a burst of them pauses payment checks briefly.
 - **Schema changes:** from v9 on, every migration must be plain SQL that runs on both SQLite and Postgres (`PORTABLE_FROM` in [db.py](guardian_registry/db.py)); Postgres applies them in place. A migration that needs a table rebuild would need its own Postgres step.

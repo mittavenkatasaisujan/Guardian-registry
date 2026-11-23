@@ -397,8 +397,34 @@ ALTER TABLE audit_log ADD COLUMN stream_seq INTEGER;
 CREATE UNIQUE INDEX ux_audit_stream ON audit_log(stream, stream_seq);
 """
 
+# v12: automatic refresh of the official registers (registerfeed.py)
+SCHEMA_V12 = """
+CREATE TABLE register_feeds (
+    kind            TEXT PRIMARY KEY,
+    url             TEXT NOT NULL,
+    format          TEXT NOT NULL,
+    ref_field       TEXT NOT NULL,
+    name_field      TEXT NOT NULL,
+    public_key      TEXT,
+    max_drop_pct    INTEGER NOT NULL,
+    auto_suspend    INTEGER NOT NULL,
+    status          TEXT NOT NULL,
+    configured_by   TEXT NOT NULL,
+    configured_at   TEXT NOT NULL,
+    approved_by     TEXT,
+    last_checked_at TEXT,
+    last_changed_at TEXT,
+    last_hash       TEXT,
+    last_error      TEXT,
+    held_json       TEXT,
+    held_reason     TEXT,
+    held_at         TEXT,
+    held_hash       TEXT
+);
+"""
+
 MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8, SCHEMA_V9,
-              SCHEMA_V10, SCHEMA_V11]
+              SCHEMA_V10, SCHEMA_V11, SCHEMA_V12]
 
 # Postgres-only follow-ups, run after the baseline or after the portable migration of the
 # same version. v11: audit rows get their global seq from a sequence (SQLite's INTEGER

@@ -26,6 +26,7 @@ from .db import Database
 from .errors import Conflict, Forbidden, Invalid, NotFound, TooMany, Unauthorized
 from .kyc import KycMixin
 from .certs import CertMixin
+from .registerfeed import RegisterFeedMixin
 from .channels import ChannelMixin
 from .devicekeys import DeviceKeyMixin, KeyAttestor
 from .participants import ParticipantMixin
@@ -66,7 +67,7 @@ _OUTCOME_TO_STATUS = {
 
 
 class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryMixin, ChannelMixin,
-               DeviceKeyMixin, CertMixin):
+               DeviceKeyMixin, CertMixin, RegisterFeedMixin):
     def __init__(self, db: Database | None = None, clock: Clock | None = None,
                  sim_lookup: SimLookup | None = None, key_attestor: KeyAttestor | None = None):
         self.db = db or Database()
@@ -245,9 +246,11 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
                       "window_start=excluded.window_start, sends=excluded.sends, last_sent_at=excluded.last_sent_at",
                       (mh, otp_hash(mh, code), iso(now + timedelta(minutes=OTP_TTL_MINUTES)),
                        window_start, sends + 1, iso(now)))
-        sms.send(normalize_mobile(mobile),
-                 f"Guardian Registry code: {code}. Valid {OTP_TTL_MINUTES} min. Never share it with anyone, "
-                 "not even a guardian or a bank.")
+        if hasattr(sms, "send_otp"):
+            sms.send_otp(normalize_mobile(mobile), code, OTP_TTL_MINUTES)
+        else:
+            sms.send(normalize_mobile(mobile), f"Guardian Registry code: {code}. Valid {OTP_TTL_MINUTES} min. "
+                     "Never share it with anyone, not even a guardian or a bank.")
         return code
 
     def _check_otp(self, mobile: str, code: str) -> str:
@@ -295,7 +298,8 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
                 device_hash, probation_until = self._register_device(c, uid, device_id)
                 proven = False
                 if key_id:
-                    proven, key_probation = self._register_key(c, uid, key_id, device_key, key_attestation, platform)
+                    proven, key_probation = self._register_key(c, uid, key_id, device_key, key_attestation, platform,
+                                                               challenge=challenge)
                     probation_until = None if proven else (key_probation or probation_until)
                 self._insert_session(c, uid, token, device_hash, probation_until, key_id)
                 self._audit(c, uid, "session.created", uid, via="otp", new_device_probation=probation_until is not None,
@@ -311,7 +315,8 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         uid, token = self.register_user(mobile, display_name, device_id)
         if key_id:
             with self.db.tx() as c:
-                self._register_key(c, uid, key_id, device_key, key_attestation, platform, new_account=True)
+                self._register_key(c, uid, key_id, device_key, key_attestation, platform, new_account=True,
+                                   challenge=challenge)
                 c.execute("UPDATE sessions SET device_key_id=? WHERE token_hash=?", (key_id, secret_hash(token)))
         return {"user_id": uid, "token": token, "new_user": True, "restricted": False, "restriction_reasons": [],
                 "device_proven": False}
@@ -950,6 +955,9 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         rec = self.sweep_recovery()
         if rec:
             out["recoveries_updated"] = rec
+        feeds = self.refresh_registers()
+        if feeds:
+            out["registers"] = feeds
         return out
 
     # ---------------------------------------------------------- notifications

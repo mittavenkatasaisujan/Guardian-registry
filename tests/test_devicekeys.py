@@ -152,7 +152,7 @@ class GoodAttestor(KeyAttestor):
     def __init__(self, ok=True):
         self.ok = ok
 
-    def verify(self, public_key_b64, attestation, platform):
+    def verify(self, public_key_b64, attestation, platform, challenge=""):
         return {"hardware_backed": self.ok, "app_genuine": self.ok}
 
 

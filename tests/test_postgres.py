@@ -100,13 +100,14 @@ class TestMultiNode:
         node_a, _ = two_nodes
         c = node_a.db.conn
         schema = c.execute("SELECT current_schema() AS s").fetchone()["s"]
-        # make this database look like one created by v0.9.0 (schema v8): drop what v9+ added
+        # make this database look like one created by v0.9.0 (schema v8): drop what v9+ added (v12: feeds)
         c.execute("DROP INDEX ux_audit_stream")
         c.execute("ALTER TABLE audit_log DROP COLUMN stream")
         c.execute("ALTER TABLE audit_log DROP COLUMN stream_seq")
         c.execute("ALTER TABLE audit_log ALTER COLUMN seq DROP DEFAULT")
         c.execute("DROP SEQUENCE audit_log_seq")
         c.execute("DROP TABLE participant_certs")
+        c.execute("DROP TABLE register_feeds")
         c.execute("DROP TABLE device_keys")
         c.execute("DROP TABLE auth_challenges")
         c.execute("ALTER TABLE sessions DROP COLUMN device_key_id")

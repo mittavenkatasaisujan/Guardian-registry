@@ -7,3 +7,13 @@ __pycache__/
 *.db-wal
 *.db-shm
 .claude/
+
+# native apps: build output and generated project files
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+ios/GuardianRegistry.xcodeproj/
+ios/GuardianRegistry/Info.plist
+ios/GuardianRegistry/GuardianRegistry.entitlements
+ios/build/

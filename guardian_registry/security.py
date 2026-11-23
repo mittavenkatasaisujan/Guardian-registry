@@ -37,8 +37,9 @@ def check_production_config() -> None:
         problems.append("GR_DATA_KEY must be set")
     if os.environ.get("GR_OTP_DEV_ECHO") == "1":
         problems.append("GR_OTP_DEV_ECHO must not be enabled")
-    if not os.environ.get("GR_SMS_URL"):
-        problems.append("GR_SMS_URL must be set (otherwise alerts and sign-in codes are only logged)")
+    if not (os.environ.get("GR_SMS_URL") or os.environ.get("GR_SMS_PROVIDER")):
+        problems.append("GR_SMS_PROVIDER or GR_SMS_URL must be set (otherwise alerts and sign-in codes are "
+                        "only logged)")
     if problems:
         raise RuntimeError("unsafe production config: " + "; ".join(problems))
 
