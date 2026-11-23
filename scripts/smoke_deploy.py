@@ -16,6 +16,8 @@ import time
 import uuid
 from pathlib import Path
 
+from urllib.parse import quote
+
 import httpx
 
 DEPLOY = Path(__file__).resolve().parent.parent / "deploy"
@@ -60,7 +62,7 @@ def main(base: str) -> int:
 
     r = plain.get("/v1/participant/me", headers=key)
     assert r.status_code in (401, 403), f"API key alone must be refused, got {r.status_code}"
-    forged = plain.get("/v1/participant/me", headers={**key, "X-Client-Cert": (certs / "bank.pem").read_text()})
+    forged = plain.get("/v1/participant/me", headers={**key, "X-Client-Cert": quote((certs / "bank.pem").read_text())})
     assert forged.status_code in (401, 403), "a client-sent X-Client-Cert header must be ignored"
     me = ok(bank_tls.get("/v1/participant/me", headers=key))
     assert me["mtls"], me
