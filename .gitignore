@@ -22,3 +22,8 @@ ios/build/
 deploy/secrets/
 deploy/certs/
 deploy/.env
+
+# client library builds
+sdk/java/build/
+sdk/java/.gradle/
+sdk/python/*.egg-info/
