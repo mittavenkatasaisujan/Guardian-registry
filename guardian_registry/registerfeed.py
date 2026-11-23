@@ -24,9 +24,7 @@ Formats: CSV with a header row, or JSON (a list of objects, or {"as_of": ..., "e
 from __future__ import annotations
 
 import base64
-import csv
 import hashlib
-import io
 import json
 import logging
 import os
@@ -36,13 +34,14 @@ import httpx
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
+from . import tables
 from .clock import iso
 from .errors import Conflict, Invalid, NotFound
 
 log = logging.getLogger("guardian_registry.registerfeed")
 
 MAX_FEED_BYTES = 20 * 1024 * 1024
-FORMATS = ("csv", "json")
+FORMATS = ("csv", "xlsx", "json")
 ACTOR = "system:register-feed"
 
 
@@ -54,30 +53,34 @@ class FeedError(Exception):
     pass
 
 
-def parse_feed(raw: bytes, fmt: str, ref_field: str, name_field: str) -> tuple[list[dict], str | None]:
-    """Returns (entities, as_of from the file if it has one)."""
+def parse_feed(raw: bytes, fmt: str, ref_field: str, name_field: str,
+               sheet: str | None = None) -> tuple[list[dict], str | None]:
+    """Returns (entities, as_of from the file if it has one). CSV and .xlsx go through
+    tables.py, which finds the header row and matches messy headers; JSON keys are exact."""
+    if fmt in ("csv", "xlsx"):
+        try:
+            return tables.records(tables.rows(raw, fmt, sheet), ref_field, name_field), None
+        except tables.TableError as e:
+            raise FeedError(str(e)) from None
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
         raise FeedError("list is not UTF-8") from None
     as_of = None
-    if fmt == "csv":
-        rows = list(csv.DictReader(io.StringIO(text)))
-    else:
-        try:
-            doc = json.loads(text)
-        except ValueError:
-            raise FeedError("list is not valid JSON") from None
-        if isinstance(doc, dict):
-            as_of = doc.get("as_of")
-            doc = doc.get("entities")
-        if not isinstance(doc, list):
-            raise FeedError("JSON list must be an array or {\"entities\": [...]}")
-        rows = doc
+    try:
+        doc = json.loads(text)
+    except ValueError:
+        raise FeedError("list is not valid JSON") from None
+    if isinstance(doc, dict):
+        as_of = doc.get("as_of")
+        doc = doc.get("entities")
+    if not isinstance(doc, list):
+        raise FeedError("JSON list must be an array or {\"entities\": [...]}")
+    rows = doc
     out, seen = [], set()
     for r in rows:
         if not isinstance(r, dict):
-            raise FeedError("every entry must be an object / CSV row")
+            raise FeedError("every entry must be an object")
         ref, name = str(r.get(ref_field) or "").strip(), str(r.get(name_field) or "").strip()
         if not ref and not name:
             continue  # blank line
@@ -98,7 +101,7 @@ class RegisterFeedMixin:
     # ------------------------------------------------------------- configuration
     def configure_feed(self, operator: str, kind: str, url: str, fmt: str = "csv", ref_field: str = "regulator_ref",
                        name_field: str = "name", public_key: str | None = None, max_drop_pct: int = 5,
-                       auto_suspend: bool = True) -> dict:
+                       auto_suspend: bool = True, sheet: str | None = None) -> dict:
         from .participants import PARTICIPANT_KINDS
         if kind not in PARTICIPANT_KINDS:
             raise Invalid(f"kind must be one of {list(PARTICIPANT_KINDS)}")
@@ -120,14 +123,15 @@ class RegisterFeedMixin:
         with self.db.tx() as c:
             c.execute(
                 "INSERT INTO register_feeds (kind, url, format, ref_field, name_field, public_key, max_drop_pct, "
-                "auto_suspend, status, configured_by, configured_at) VALUES (?,?,?,?,?,?,?,?,'pending',?,?) "
+                "auto_suspend, sheet, status, configured_by, configured_at) VALUES (?,?,?,?,?,?,?,?,?,'pending',?,?) "
                 "ON CONFLICT(kind) DO UPDATE SET url=excluded.url, format=excluded.format, "
                 "ref_field=excluded.ref_field, name_field=excluded.name_field, public_key=excluded.public_key, "
-                "max_drop_pct=excluded.max_drop_pct, auto_suspend=excluded.auto_suspend, status='pending', "
+                "max_drop_pct=excluded.max_drop_pct, auto_suspend=excluded.auto_suspend, sheet=excluded.sheet, "
+                "status='pending', "
                 "configured_by=excluded.configured_by, configured_at=excluded.configured_at, approved_by=NULL, "
                 "last_hash=NULL, held_json=NULL, held_reason=NULL, held_at=NULL",
                 (kind, url, fmt, ref_field, name_field, public_key or None, int(max_drop_pct),
-                 1 if auto_suspend else 0, operator, now))
+                 1 if auto_suspend else 0, (sheet or "").strip() or None, operator, now))
             self._audit(c, f"operator:{operator}", "register_feed.configured", None, kind=kind, url=url,
                         format=fmt, signed=bool(public_key), max_drop_pct=int(max_drop_pct),
                         auto_suspend=bool(auto_suspend))
@@ -162,7 +166,8 @@ class RegisterFeedMixin:
     def feed_view(self, kind: str) -> dict:
         r = self._feed_row(kind)
         held = json.loads(r["held_json"]) if r["held_json"] else None
-        return {"kind": r["kind"], "url": r["url"], "format": r["format"], "ref_field": r["ref_field"],
+        return {"kind": r["kind"], "url": r["url"], "format": r["format"], "sheet": r["sheet"],
+                "ref_field": r["ref_field"],
                 "name_field": r["name_field"], "signed": bool(r["public_key"]), "max_drop_pct": r["max_drop_pct"],
                 "auto_suspend": bool(r["auto_suspend"]), "status": r["status"],
                 "configured_by": r["configured_by"], "approved_by": r["approved_by"],
@@ -231,7 +236,7 @@ class RegisterFeedMixin:
             with self.db.tx(shared=True) as c:
                 c.execute("UPDATE register_feeds SET last_checked_at=?, last_error=NULL WHERE kind=?", (now, r["kind"]))
             return "unchanged"
-        entities, as_of = parse_feed(raw, r["format"], r["ref_field"], r["name_field"])
+        entities, as_of = parse_feed(raw, r["format"], r["ref_field"], r["name_field"], r["sheet"])
         current = {x["regulator_ref"] for x in self.db.all(
             "SELECT regulator_ref FROM regulated_entities WHERE kind=?", (r["kind"],))}
         new = {e["regulator_ref"] for e in entities}

@@ -140,9 +140,12 @@ class RegisterIn(BaseModel):
 
 class FeedIn(BaseModel):
     url: str = Field(min_length=8, max_length=500, description="https URL of the published list")
-    format: Literal["csv", "json"] = "csv"
-    ref_field: str = Field(default="regulator_ref", min_length=1, max_length=60)
-    name_field: str = Field(default="name", min_length=1, max_length=60)
+    format: Literal["csv", "xlsx", "json"] = "csv"
+    sheet: str | None = Field(default=None, max_length=100, description="xlsx: worksheet name (default: the first)")
+    ref_field: str = Field(default="regulator_ref", min_length=1, max_length=200,
+                           description="header of the licence-number column; alternatives with '|'")
+    name_field: str = Field(default="name", min_length=1, max_length=200,
+                            description="header of the name column; alternatives with '|'")
     public_key: str | None = Field(default=None, max_length=100,
                                    description="Ed25519 key (base64); the list must then be signed at <url>.sig")
     max_drop_pct: int = Field(default=5, ge=0, le=100)
@@ -497,7 +500,7 @@ def create_app(
         """Point a kind at a published list. A second operator must approve it; the worker
         then refreshes it every GR_REGISTER_REFRESH_HOURS."""
         return reg.configure_feed(op, kind, body.url, body.format, body.ref_field, body.name_field,
-                                  body.public_key, body.max_drop_pct, body.auto_suspend)
+                                  body.public_key, body.max_drop_pct, body.auto_suspend, body.sheet)
 
     @app.post("/v1/admin/register-feeds/{kind}/approve", tags=["ops"])
     def approve_feed(kind: str, op: Operator):

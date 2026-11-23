@@ -52,7 +52,7 @@ def test_parse_formats():
     assert ents == [{"regulator_ref": "A", "name": "Alpha"}, {"regulator_ref": "B", "name": "Beta"}]
     assert as_of == "2026-11-01"
     assert len(parse_feed(b"\xef\xbb\xbflicence,bank_name\nX,Y\n,\n", "csv", "licence", "bank_name")[0]) == 1
-    with pytest.raises(FeedError, match="missing"):
+    with pytest.raises(FeedError, match="row 2 has a reference but no name"):
         parse_feed(b"licence,bank_name\nX,\n", "csv", "licence", "bank_name")
 
 

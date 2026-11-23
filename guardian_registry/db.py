@@ -423,8 +423,13 @@ CREATE TABLE register_feeds (
 );
 """
 
+# v13: which worksheet of an .xlsx register to read
+SCHEMA_V13 = """
+ALTER TABLE register_feeds ADD COLUMN sheet TEXT;
+"""
+
 MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8, SCHEMA_V9,
-              SCHEMA_V10, SCHEMA_V11, SCHEMA_V12]
+              SCHEMA_V10, SCHEMA_V11, SCHEMA_V12, SCHEMA_V13]
 
 # Postgres-only follow-ups, run after the baseline or after the portable migration of the
 # same version. v11: audit rows get their global seq from a sequence (SQLite's INTEGER

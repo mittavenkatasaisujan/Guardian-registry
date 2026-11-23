@@ -14,7 +14,7 @@ android {
         minSdk = 28            // StrongBox and modern Key Attestation
         targetSdk = 35
         versionCode = 1
-        versionName = "0.14.0"
+        versionName = "0.15.0"
         buildConfigField("String", "FCM_PROJECT_ID", "\"${prop("grFcmProjectId")}\"")
         buildConfigField("String", "FCM_APP_ID", "\"${prop("grFcmAppId")}\"")
         buildConfigField("String", "FCM_API_KEY", "\"${prop("grFcmApiKey")}\"")
