@@ -278,13 +278,32 @@ print("stranger signs in with the old number -> new_user:", stranger["new_user"]
 print("Ravi, on his signed-in phone, still guards:",
       [w["principal_name"] for w in call("GET", "/v1/guardian/wards", headers=G) if w["status"] == "active"])
 
-step("Amma signs out of every device")
-c.post("/v1/auth/logout", json={"everywhere": True}, headers=A)
-print("old token now ->", c.get("/v1/me", headers=A).status_code)
-
 step("Audit trail (Ravi reads Amma's, as her guardian)")
 trail = call("GET", f"/v1/guardian/wards/{amma['user_id']}/audit", headers=G)
 print(len(trail), "entries for Amma, e.g.:", [e["action"] for e in trail[-6:]])
-print("chain verification:", call("GET", "/v1/admin/audit/verify", headers={"X-Admin-Token": ADMIN}))
+
+step("RECOVERY: Ravi also loses his phone, so nothing is signed in; he recovers on a new number")
+c.post("/v1/auth/logout", json={"everywhere": True}, headers=G)
+print("Ravi's old phone ->", c.get("/v1/me", headers=G).status_code)
+new_code = call("POST", "/v1/auth/otp", 202, json={"mobile": mobile(5)})["dev_code"]
+rec = call("POST", "/v1/recovery/start", 202, json={"old_mobile": mobile(2), "new_mobile": mobile(5),
+                                                    "code": new_code})
+code2 = call("POST", "/v1/auth/otp", 202, json={"mobile": mobile(6)})["dev_code"]
+fake = call("POST", "/v1/recovery/start", 202, json={"old_mobile": mobile(9), "new_mobile": mobile(6),
+                                                     "code": code2})
+print("recovery started -> status", rec["status"],
+      "| same answer for a number that matches nothing:", sorted(rec) == sorted(fake))
+ask = call("GET", "/v1/guardian/recoveries", headers=A)[0]
+print(f"Amma is asked to vouch for {ask['person_name']} moving to {ask['new_number']}")
+held = call("POST", f"/v1/guardian/recoveries/{ask['recovery_id']}/approve", headers=A)
+print("Amma vouches (after calling Ravi herself) ->", held["status"], "until", held["effective_at"][:16],
+      "(24 h for anyone to stop it)")
+print("Ravi checks progress:", call("POST", "/v1/recovery/status", json={"recovery_token": rec["recovery_token"]})["status"])
+
+print("\nchain verification:", call("GET", "/v1/admin/audit/verify", headers={"X-Admin-Token": ADMIN}))
+
+step("Amma signs out of every device")
+c.post("/v1/auth/logout", json={"everywhere": True}, headers=A)
+print("old token now ->", c.get("/v1/me", headers=A).status_code)
 
 print("\nDEMO OK")

@@ -257,7 +257,41 @@ CREATE TABLE sim_lookups (
 );
 """
 
-MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6]
+# v7: account recovery for people whose number was disconnected and who have no phone
+# still signed in. prev_mobile_hash lets them name their old number to find the account.
+SCHEMA_V7 = """
+ALTER TABLE users ADD COLUMN prev_mobile_hash TEXT;
+CREATE INDEX ix_users_prev_mobile ON users(prev_mobile_hash);
+
+CREATE TABLE recoveries (
+    id                TEXT PRIMARY KEY,
+    token_hash        TEXT NOT NULL UNIQUE,
+    user_id           TEXT REFERENCES users(id),   -- NULL when nothing matched (answer looks the same)
+    new_mobile_hash   TEXT NOT NULL,
+    new_mobile_enc    TEXT NOT NULL,
+    new_mobile_masked TEXT NOT NULL,
+    needed            INTEGER NOT NULL,            -- contact vouches required
+    status            TEXT NOT NULL,               -- pending|held|completed|denied|cancelled|expired
+    created_at        TEXT NOT NULL,
+    expires_at        TEXT NOT NULL,
+    effective_at      TEXT,
+    bank_vouched_by   TEXT,
+    decided_at        TEXT,
+    ended_by          TEXT
+);
+CREATE INDEX ix_recoveries_user ON recoveries(user_id, status);
+CREATE INDEX ix_recoveries_new ON recoveries(new_mobile_hash, status);
+
+CREATE TABLE recovery_vouches (
+    recovery_id TEXT NOT NULL REFERENCES recoveries(id),
+    voucher_id  TEXT NOT NULL REFERENCES users(id),
+    vote        TEXT NOT NULL,                     -- approve | deny
+    at          TEXT NOT NULL,
+    PRIMARY KEY (recovery_id, voucher_id)
+);
+"""
+
+MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7]
 
 
 class Database:

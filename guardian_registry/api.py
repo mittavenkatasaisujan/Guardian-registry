@@ -78,6 +78,21 @@ class NewMobileVerifyIn(BaseModel):
     code: str = Field(min_length=4, max_length=10)
 
 
+class RecoveryStartIn(BaseModel):
+    old_mobile: str = Field(description="the number that was disconnected")
+    new_mobile: str
+    code: str = Field(min_length=4, max_length=10, description="code sent to new_mobile by /v1/auth/otp")
+
+
+class RecoveryTokenIn(BaseModel):
+    recovery_token: str = Field(min_length=8, max_length=200)
+
+
+class BankRecoveryIn(BaseModel):
+    new_mobile: str
+    customer_ref: str = Field(min_length=1, max_length=100, description="the id you used when you attested before")
+
+
 class LogoutIn(BaseModel):
     everywhere: bool = False
 
@@ -399,6 +414,17 @@ def create_app(
         limited(otp_limiter, "verify:" + (request.client.host if request.client else "unknown"))
         return reg.verify_otp(body.mobile, body.code, body.display_name, body.device_id)
 
+    @app.post("/v1/recovery/start", status_code=202, tags=["sign-in"])
+    def recovery_start(body: RecoveryStartIn, request: Request):
+        """Lost your number and have no phone signed in? Prove the new number (get a code with
+        /v1/auth/otp first) and name the old one. Same answer whether or not an account matches."""
+        limited(otp_limiter, "recover:" + (request.client.host if request.client else "unknown"))
+        return reg.start_recovery(body.old_mobile, body.new_mobile, body.code)
+
+    @app.post("/v1/recovery/status", tags=["sign-in"])
+    def recovery_status(body: RecoveryTokenIn):
+        return reg.recovery_status(body.recovery_token)
+
     @app.post("/v1/auth/logout", status_code=204, tags=["sign-in"])
     def logout(body: LogoutIn, _: User, token: Annotated[str | None, Depends(bearer_token)]):
         reg.logout(token, everywhere=body.everywhere)
@@ -441,6 +467,12 @@ def create_app(
         Each event gets its own result; resending an event_id is a no-op."""
         limited(check_limiter, pid)
         return reg.ingest_operator_events(pid, [e.model_dump() for e in body.events])
+
+    @app.post("/v1/kyc/recovery-vouch", tags=["banks"])
+    def bank_recovery_vouch(body: BankRecoveryIn, pid: Participant):
+        """You have seen this customer (branch or video KYC) and they are recovering their
+        account to new_mobile. customer_ref must match the id you attested with before."""
+        return reg.bank_vouch_recovery(pid, body.new_mobile, body.customer_ref)
 
     @app.get("/v1/participant/me", tags=["banks"])
     def participant_me(pid: Participant):
@@ -489,6 +521,15 @@ def create_app(
     @app.post("/v1/me/mobile/verify", tags=["people"])
     def verify_mobile(body: NewMobileVerifyIn, uid: TrustedUser):
         return reg.confirm_mobile_change(uid, body.new_mobile, body.code)
+
+    @app.get("/v1/me/recoveries", tags=["people"])
+    def my_recoveries(uid: User):
+        return reg.my_recoveries(uid)
+
+    @app.post("/v1/me/recoveries/{recovery_id}/cancel", tags=["people"])
+    def cancel_recovery(recovery_id: str, uid: User):
+        """'That isn't me.' Works from any session, even a restricted one: stopping is protective."""
+        return reg.cancel_recovery(uid, recovery_id)
 
     @app.get("/v1/me/identity", tags=["people"])
     def my_identity(uid: User):
@@ -575,6 +616,19 @@ def create_app(
     @app.get("/v1/guardian/inbox", tags=["guardians"])
     def inbox(uid: User):
         return reg.inbox(uid)
+
+    @app.get("/v1/guardian/recoveries", tags=["guardians"])
+    def recoveries(uid: User):
+        """Recoveries you are asked to vouch for (you guard them, or they guard you)."""
+        return reg.recoveries_to_vouch(uid)
+
+    @app.post("/v1/guardian/recoveries/{recovery_id}/approve", tags=["guardians"])
+    def approve_recovery(recovery_id: str, uid: TrustedUser):
+        return reg.vouch_recovery(uid, recovery_id, True)
+
+    @app.post("/v1/guardian/recoveries/{recovery_id}/deny", tags=["guardians"])
+    def deny_recovery(recovery_id: str, uid: User):
+        return reg.vouch_recovery(uid, recovery_id, False)
 
     @app.get("/v1/guardian/wards", tags=["guardians"])
     def wards(uid: User):

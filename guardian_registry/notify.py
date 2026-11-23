@@ -42,6 +42,8 @@ URGENT_KINDS = {
     "kill_switch_off",
     "guardian_invited",
     "guardian_removal_proposed",
+    "recovery_requested",   # someone is recovering a contact's account
+    "recovery_held",
     "sim_changed",          # a guardian's ward (or the guardian) had a SIM change / lost phone
 }
 

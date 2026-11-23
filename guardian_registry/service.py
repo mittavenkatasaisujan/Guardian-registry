@@ -26,6 +26,7 @@ from .db import Database
 from .errors import Conflict, Forbidden, Invalid, NotFound, TooMany, Unauthorized
 from .kyc import KycMixin
 from .participants import ParticipantMixin
+from .recovery import RecoveryMixin
 from .simfeed import SimFeedMixin, SimLookup
 from .simswap import SimSwapMixin
 from .models import (
@@ -61,7 +62,7 @@ _OUTCOME_TO_STATUS = {
 }
 
 
-class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin):
+class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryMixin):
     def __init__(self, db: Database | None = None, clock: Clock | None = None,
                  sim_lookup: SimLookup | None = None):
         self.db = db or Database()
@@ -862,7 +863,8 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin):
                 approvals.append(self._check_view(r["id"]))
             changes.extend(self.changes_for(pid, only_pending=True))
         invites = [g for g in self.wards_of(guardian_id) if g["status"] == GuardianStatus.INVITED.value]
-        return {"held_payments": approvals, "pending_changes": changes, "invitations": invites}
+        return {"held_payments": approvals, "pending_changes": changes, "invitations": invites,
+                "recoveries": self.recoveries_to_vouch(guardian_id)}
 
     # -------------------------------------------------------------- presets
     def apply_preset(self, principal_id: str, name: str) -> dict:
@@ -892,6 +894,9 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin):
         kyc = self.sweep_kyc()
         if kyc:
             out["kyc_updated"] = kyc
+        rec = self.sweep_recovery()
+        if rec:
+            out["recoveries_updated"] = rec
         return out
 
     # ---------------------------------------------------------- notifications

@@ -219,8 +219,8 @@ class SimFeedMixin:
         u = c.execute("SELECT mobile_enc, display_name FROM users WHERE id=?", (uid,)).fetchone()
         masked = mask_mobile(decrypt_mobile(u["mobile_enc"])) if u["mobile_enc"] else "their number"
         now = self._now()
-        c.execute("UPDATE users SET mobile_hash=?, mobile_enc=NULL, number_status='disconnected', "
-                  "number_detached_at=? WHERE id=?", (f"detached:{uid}:{now}", now, uid))
+        c.execute("UPDATE users SET prev_mobile_hash=mobile_hash, mobile_hash=?, mobile_enc=NULL, "
+                  "number_status='disconnected', number_detached_at=? WHERE id=?", (f"detached:{uid}:{now}", now, uid))
         ended = c.execute("UPDATE kyc_attestations SET status='expired', decided_at=?, ended_by='number_disconnected' "
                           "WHERE user_id=? AND status IN ('pending_consent','active')", (now, uid)).rowcount
         c.execute("DELETE FROM sim_lookups WHERE user_id=?", (uid,))
@@ -228,7 +228,8 @@ class SimFeedMixin:
         name = u["display_name"]
         self._alert(c, [uid], "number_disconnected", "Your number was disconnected",
                     f"Your mobile operator says {masked} was disconnected. It is no longer linked to your account, so "
-                    "sign-in codes can't reach you. From this app, add your new number under Change number.", uid)
+                    "sign-in codes can't reach you. From this app, add your new number under Change number. "
+                    "No phone signed in? Recover your account from your new number.", uid)
         self._alert_guardians(c, uid, "number_disconnected", "Number disconnected",
                               f"{name}'s mobile number {masked} was disconnected by the operator and removed from "
                               f"their account. Their protection still applies. Help {name} add their new number.")
