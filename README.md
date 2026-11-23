@@ -12,6 +12,20 @@ its own version, a family with three bank accounts sets up three separate locks.
 
 ## What it does
 
+**Web app for people** at `/app/` (the server's home page redirects there). Sign in with an SMS code; the browser
+keeps a device key that can't be read out (WebCrypto, non-extractable P-256) and signs each sign-in. Three views:
+
+- **My protection:** a big *pause all payments* button, the rules in plain words with ready-made sets, guardians
+  and invitations, changes waiting out their 24 h, recent payments, a SIM-change warning, and *report lost phone*.
+- **I protect:** guardian requests to accept, payments to approve or deny (with *call them first* advice), protection
+  changes to stop, account-recovery requests to vouch for, and a *pause their payments* button per person.
+- **Alerts** and **Devices** (this device's key, others' status, remove one, sign out everywhere).
+
+Large text and buttons, light and dark themes, works on a phone. It is plain HTML/JS with no build step and no
+third-party code, served with a strict Content Security Policy (no inline script or style, no framing) and puts
+names and payees on the page as text only.
+
+
 | Feature | Behaviour |
 |---|---|
 | **Participant trust** | Every bank or app declares its **kind** (`bank`, `small_finance_bank`, `payments_bank`, `nbfc`, `ppi_issuer`, `tpap`, `telecom`) and its regulator reference. The kind is a ceiling on its **capabilities**: `checks`, `kyc_full`, `kyc_minimum`, `sim_signals`, `number_lifecycle`. A UPI app (`tpap`) can run checks but can **never vouch for identity**; a wallet gets minimum-KYC claims by default. **Onboarding is four-eyes:** one operator registers a participant as `pending` (it gets its key and can set its webhook), and a **different operator** must approve it before it can call checks, KYC or signals. Suspending a participant or removing a capability is instant. Reinstating it or adding a capability needs a second operator. While a participant is suspended, its KYC claims stop counting. **Offboarding** is permanent: keys and webhook are wiped, its KYC claims are revoked and customers are told; SIM-swap windows it opened stay open. Operator actions are audited under each operator's name. |
@@ -56,7 +70,15 @@ To run every test on Postgres instead, set `GR_TEST_DATABASE_URL` (each test get
 $env:GR_TEST_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/postgres"; .venv\Scripts\python -m pytest -q
 ```
 
-Development server. The OTP code is echoed in the response, and SMS go to the console:
+Try the web app on a fresh local database (codes are shown on screen, admin token `dev-admin`):
+
+```powershell
+.venv\Scripts\python scripts\dev_server.py 8010
+```
+
+then open http://127.0.0.1:8010/app/.
+
+Development server for the API and demo. The OTP code is echoed in the response, and SMS go to the console:
 
 ```powershell
 $env:GR_OPERATORS = "alice:demo-alice-token,bob:demo-bob-token"; $env:GR_DB = "demo.db"; $env:GR_OTP_DEV_ECHO = "1"; .venv\Scripts\uvicorn guardian_registry.api:create_app --factory --port 8000
@@ -138,6 +160,7 @@ To verify a webhook, compare the `X-GR-Signature` header with `"sha256=" + hex(H
 
 ```
 guardian_registry/
+  web/          the people-facing web app (index.html, app.js, app.css), served at /app
   models.py     domain types, Rules.is_loosening
   policy.py     pure rules engine (no I/O)
   service.py    registry: sign-in, consent, held changes, checks, approvals, sweeper
@@ -157,13 +180,15 @@ guardian_registry/
   security.py   hashing, encryption, OTP, signatures, production checks
   ratelimit.py  sliding-window limiter
   api.py        FastAPI app (create_app factory) + background worker
-tests/          408 tests (6 of them need Postgres)
+tests/          412 tests (6 of them need Postgres)
 scripts/demo.py end-to-end story over real HTTP (also runs in CI)
+scripts/dev_server.py  fresh local server for trying the web app
 ```
 
 ## Still open
 
 - **RBI's final rules:** the paper is a proposal. Presets live in one file ([presets.py](guardian_registry/presets.py)), so the numbers can change when RBI publishes its final text. The age cut-off is `SENIOR_AGE` in [kyc.py](guardian_registry/kyc.py).
+- **Native apps:** the web app keeps its key in the browser, which can't be read out but isn't in secure hardware. Android and iOS apps (Keystore / Secure Enclave, Play Integrity / App Attest) would give the strongest device proof; the API is ready for them.
 - **Provider accounts:** the operator SIM feed, the live SIM-swap lookup, device-key attestation, SMS, WhatsApp and push are all built to standard shapes behind adapters, but none is connected to a real provider. That needs commercial agreements (mobile operators or an aggregator, an SMS gateway, a WhatsApp Business account, Firebase/APNs, Google Play Integrity / Apple App Attest) and a mobile app that keeps its key in secure hardware.
 - **Register freshness:** the official lists are loaded by operators. Nothing fetches RBI/NPCI/DoT lists automatically, since each publishes in its own format; reload them when they change.
 - **Social engineering of contacts:** the hour's wait, the 24 h hold and the 72 h aftercare window reduce the damage of a contact being fooled, but a determined, patient attacker can still talk someone into vouching.

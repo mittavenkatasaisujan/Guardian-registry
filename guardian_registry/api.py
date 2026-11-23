@@ -15,6 +15,7 @@ Run:  uvicorn guardian_registry.api:create_app --factory --port 8000
 import logging
 import math
 import os
+from pathlib import Path
 import secrets
 import threading
 from contextlib import asynccontextmanager
@@ -22,7 +23,8 @@ from typing import Annotated, Literal
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import __version__
@@ -41,6 +43,10 @@ from .security import check_production_config, is_production
 from .service import OTP_TTL_MINUTES, Registry
 
 log = logging.getLogger("guardian_registry.api")
+
+WEB_DIR = Path(__file__).parent / "web"
+APP_CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; "
+           "manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 
 
 # ----------------------------------------------------------------- schemas
@@ -318,6 +324,20 @@ def create_app(
     app.state.registry = reg
     app.state.dispatcher = dispatcher
 
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        if request.url.path.startswith("/app"):
+            response.headers["Content-Security-Policy"] = APP_CSP
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+            response.headers.setdefault("Cache-Control", "no-cache")
+        else:
+            response.headers.setdefault("Cache-Control", "no-store")
+        return response
+
     @app.exception_handler(RegistryError)
     async def _registry_error(_: Request, exc: RegistryError):
         return JSONResponse(status_code=exc.status, content={"error": type(exc).__name__, "detail": str(exc)})
@@ -402,6 +422,14 @@ def create_app(
     TrustedUser = Annotated[str, Depends(trusted_user)]
     Session = Annotated[dict, Depends(session)]
     Operator = Annotated[str, Depends(operator)]
+
+    # ------------------------------------------------------------------ web app
+    if WEB_DIR.is_dir():
+        app.mount("/app", StaticFiles(directory=WEB_DIR, html=True), name="app")
+
+        @app.get("/", include_in_schema=False)
+        def home():
+            return RedirectResponse("/app/")
 
     # ------------------------------------------------------------------ ops
     @app.get("/healthz", tags=["ops"])

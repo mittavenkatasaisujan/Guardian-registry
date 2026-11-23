@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Guardian Registry</title>
+  <link rel="stylesheet" href="app.css">
+  <link rel="manifest" href="manifest.json">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="brand"><span class="shield" aria-hidden="true"></span>Guardian Registry</div>
+    <nav id="nav" hidden>
+      <a href="#me" data-tab="me">My protection</a>
+      <a href="#guardian" data-tab="guardian">I protect <span id="inbox-count" class="badge" hidden></span></a>
+      <a href="#alerts" data-tab="alerts">Alerts <span id="alert-count" class="badge" hidden></span></a>
+      <a href="#devices" data-tab="devices">Devices</a>
+    </nav>
+  </header>
+  <div id="banner" class="banner" role="status" hidden></div>
+  <main id="view" tabindex="-1"></main>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <noscript><p class="card">This app needs JavaScript.</p></noscript>
+</body>
+</html>

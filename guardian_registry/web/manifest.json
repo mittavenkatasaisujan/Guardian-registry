@@ -1,0 +1,9 @@
+{
+  "name": "Guardian Registry",
+  "short_name": "Guardian",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f6f4ef",
+  "theme_color": "#1f4e5f",
+  "description": "Protect payments for the people you care about, across every bank."
+}
