@@ -149,7 +149,8 @@ def test_http_flow(http):
     next_cert = {**key, "X-Client-Cert": quote(CERT_B)}
     assert c.delete(f"/v1/participant/certificates/{fp['fingerprint']}", headers=next_cert).status_code == 200
     assert check(c, with_cert).status_code == 401
-    assert [x["status"] for x in c.get("/v1/participant/certificates", headers=next_cert).json()] == ["removed", "active"]
+    listed = {x["fingerprint"]: x["status"] for x in c.get("/v1/participant/certificates", headers=next_cert).json()}
+    assert listed == {fp["fingerprint"]: "removed", new["fingerprint"]: "active"}
     assert new["status"] == "active"
 
 
