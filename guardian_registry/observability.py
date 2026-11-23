@@ -149,3 +149,51 @@ class RequestIdFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         record.request_id = request_id.get()
         return True
+
+
+class EdgeMiddleware:
+    """Plain ASGI middleware (no BaseHTTPMiddleware, whose call_next can stall responses on
+    some platforms): request ID, security headers and request metrics, in one place."""
+
+    def __init__(self, app, metrics: Metrics, app_csp: str, app_prefix: str = "/app"):
+        self.app, self.metrics, self.csp, self.prefix = app, metrics, app_csp, app_prefix
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        from starlette.datastructures import MutableHeaders
+        incoming = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
+        rid = clean_request_id(incoming.get("x-request-id"))
+        token = request_id.set(rid)
+        started = time.perf_counter()
+        path = scope.get("path", "")
+        status = 500
+
+        async def send_with_headers(message):
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+                h = MutableHeaders(scope=message)
+                h["X-Request-ID"] = rid
+                h.setdefault("X-Content-Type-Options", "nosniff")
+                h.setdefault("Referrer-Policy", "no-referrer")
+                if path.startswith(self.prefix):
+                    h["Content-Security-Policy"] = self.csp
+                    h["X-Frame-Options"] = "DENY"
+                    h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+                    h.setdefault("Cache-Control", "no-cache")
+                else:
+                    h.setdefault("Cache-Control", "no-store")
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_with_headers)
+        finally:
+            route = scope.get("route")
+            template = getattr(route, "path", None) or (self.prefix if path.startswith(self.prefix) else "unmatched")
+            if template != "/metrics":
+                self.metrics.inc("gr_http_requests_total", {"method": scope.get("method", ""), "route": template,
+                                                            "status": str(status)})
+                self.metrics.observe("gr_http_request_seconds", time.perf_counter() - started, {"route": template})
+            request_id.reset(token)

@@ -50,7 +50,8 @@ def main(base: str) -> int:
     p = ok(plain.post("/v1/admin/participants", headers=alice, json={"name": f"Smoke Bank {run}", "kind": "bank",
                                                                       "regulator_ref": ref}), 201)
     pid, key = p["participant_id"], {"X-Api-Key": p["api_key"]}
-    assert plain.post(f"/v1/admin/participants/{pid}/approve", headers=alice).status_code == 409, "four-eyes"
+    own = plain.post(f"/v1/admin/participants/{pid}/approve", headers=alice)
+    assert own.status_code == 403, f"four-eyes: Alice approving her own request gave {own.status_code}"
     ok(plain.post(f"/v1/admin/participants/{pid}/approve", headers=bob))
     pin = ok(plain.post(f"/v1/admin/participants/{pid}/certificates", headers=alice,
                         json={"certificate": (certs / "bank.pem").read_text()}), 201)

@@ -293,8 +293,7 @@ def create_app(
     otp_rate: str | None = None,
 ) -> FastAPI:
     check_production_config()
-    from .observability import JsonFormatter, RequestIdFilter, business_gauges, clean_request_id, new_metrics
-    from .observability import request_id as current_request_id
+    from .observability import JsonFormatter, RequestIdFilter, business_gauges, new_metrics
     pkg_log = logging.getLogger("guardian_registry")
     if not pkg_log.handlers:  # make dev SMS / worker messages visible next to uvicorn's own logs
         handler = logging.StreamHandler()
@@ -364,39 +363,8 @@ def create_app(
     app.state.dispatcher = dispatcher
     app.state.metrics = metrics
 
-    @app.middleware("http")
-    async def observe(request: Request, call_next):
-        rid = clean_request_id(request.headers.get("x-request-id"))
-        token = current_request_id.set(rid)
-        started = time.perf_counter()
-        status = 500
-        try:
-            response = await call_next(request)
-            status = response.status_code
-            response.headers["X-Request-ID"] = rid
-            return response
-        finally:
-            route = request.scope.get("route")
-            template = getattr(route, "path", None) or ("/app" if request.url.path.startswith("/app") else "unmatched")
-            if template != "/metrics":
-                metrics.inc("gr_http_requests_total", {"method": request.method, "route": template,
-                                                       "status": str(status)})
-                metrics.observe("gr_http_request_seconds", time.perf_counter() - started, {"route": template})
-            current_request_id.reset(token)
-
-    @app.middleware("http")
-    async def security_headers(request: Request, call_next):
-        response = await call_next(request)
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("Referrer-Policy", "no-referrer")
-        if request.url.path.startswith("/app"):
-            response.headers["Content-Security-Policy"] = APP_CSP
-            response.headers["X-Frame-Options"] = "DENY"
-            response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-            response.headers.setdefault("Cache-Control", "no-cache")
-        else:
-            response.headers.setdefault("Cache-Control", "no-store")
-        return response
+    from .observability import EdgeMiddleware
+    app.add_middleware(EdgeMiddleware, metrics=metrics, app_csp=APP_CSP)
 
     @app.exception_handler(RegistryError)
     async def _registry_error(_: Request, exc: RegistryError):
