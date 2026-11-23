@@ -147,7 +147,10 @@ jobs:
           xcodebuild test -project ios/GuardianRegistry.xcodeproj -scheme GuardianRegistry \
             -destination "id=$SIM" | tail -60
       - if: failure()
-        run: tail -100 server.log || true
+        run: |
+          pkill -USR1 -f dev_server.py || true   # dump every server thread's stack
+          sleep 2
+          tail -300 server.log || true
 
   android-e2e:
     runs-on: ubuntu-latest
