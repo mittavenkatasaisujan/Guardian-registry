@@ -12,9 +12,10 @@ struct Api {
     let base: URL
     var token: String?
 
-    /// "hi" when the phone's first language is Hindi, otherwise "en".
+    /// The phone's first language ("hi", "ta", ...). The registry uses it if that language is
+    /// enabled there, and English otherwise.
     static var language: String {
-        (Locale.preferredLanguages.first ?? "en").hasPrefix("hi") ? "hi" : "en"
+        String((Locale.preferredLanguages.first ?? "en").prefix(2)).lowercased()
     }
 
     static func isLocal(_ url: URL) -> Bool {

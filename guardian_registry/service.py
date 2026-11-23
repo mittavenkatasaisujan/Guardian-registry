@@ -249,10 +249,10 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
                       "window_start=excluded.window_start, sends=excluded.sends, last_sent_at=excluded.last_sent_at",
                       (mh, otp_hash(mh, code), iso(now + timedelta(minutes=OTP_TTL_MINUTES)),
                        window_start, sends + 1, iso(now)))
-        lang = language if language in messages.LANGUAGES else None
+        lang = messages.normalise(language)
         if not lang:
             u = self.db.one("SELECT language FROM users WHERE mobile_hash=?", (mh,))
-            lang = u["language"] if u and u["language"] in messages.LANGUAGES else "en"
+            lang = u["language"] if u and u["language"] in messages.enabled_languages() else "en"
         if hasattr(sms, "send_otp"):
             try:
                 sms.send_otp(normalize_mobile(mobile), code, OTP_TTL_MINUTES, lang)
@@ -347,8 +347,8 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
 
     def set_language(self, user_id: str, language: str) -> dict:
         """The language for this person's alerts, SMS and messages."""
-        if language not in messages.LANGUAGES:
-            raise Invalid(f"language must be one of {list(messages.LANGUAGES)}")
+        if language not in messages.enabled_languages():
+            raise Invalid(f"language must be one of {list(messages.enabled_languages())}")
         with self.db.tx(user_id) as c:
             c.execute("UPDATE users SET language=? WHERE id=?", (language, user_id))
         return self.profile(user_id)

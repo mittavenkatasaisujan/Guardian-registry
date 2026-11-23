@@ -24,7 +24,8 @@ class WireTest {
         assertFalse(b.has("display_name"))
         assertFalse(b.has("key_attestation"))
         assertEquals("android", b.getString("platform"))
-        assertEquals("en", Wire.language("ta"))
-        assertEquals("hi", Wire.language("hi"))
+        assertEquals("ta", Wire.language("ta"))
+        assertEquals("hi", Wire.language("hi-IN"))
+        assertEquals("en", Wire.language(""))
     }
 }

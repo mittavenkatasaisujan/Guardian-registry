@@ -15,10 +15,12 @@ has no Hindi here (or isn't listed in NOT_FOR_PEOPLE), so new text can't slip th
 
 from __future__ import annotations
 
+import json
+import os
 import re
 from functools import lru_cache
+from pathlib import Path
 
-LANGUAGES = ("en", "hi")
 
 # --------------------------------------------------------------------------- alerts
 ALERTS_HI = {
@@ -312,6 +314,46 @@ NOT_FOR_PEOPLE = {
 }
 
 
+# --------------------------------------------------------------------------- languages
+I18N_DIR = Path(__file__).parent / "i18n"
+_KINDS = {1: "server:alert", 2: "server:phrase", 3: "server:error", 4: "server:error-phrase"}
+
+
+@lru_cache(maxsize=1)
+def language_meta() -> dict:
+    return json.loads((I18N_DIR / "languages.json").read_text(encoding="utf-8"))
+
+
+def enabled_languages() -> tuple[str, ...]:
+    """English plus the languages switched on in i18n/languages.json, or exactly those in
+    GR_LANGUAGES (e.g. "en,hi,ta") when set. Draft languages stay off until reviewed."""
+    env = os.environ.get("GR_LANGUAGES")
+    meta = language_meta()
+    if env:
+        codes = [c.strip() for c in env.split(",") if c.strip() in meta]
+    else:
+        codes = [c for c, m in meta.items() if m.get("enabled")]
+    return tuple(dict.fromkeys(["en", *codes]))
+
+
+def _known(lang: str | None) -> bool:
+    return bool(lang) and lang in enabled_languages()
+
+
+@lru_cache(maxsize=None)
+def _catalog_table(lang: str, table_id: int) -> dict[str, str]:
+    """English -> translation for one server table, from i18n/catalog.json + i18n/<lang>.json."""
+    if lang == "hi":
+        return {1: ALERTS_HI, 2: FRAGMENTS_HI, 3: ERRORS_HI, 4: ERROR_FRAGMENTS_HI}[table_id]
+    path = I18N_DIR / f"{lang}.json"
+    if not path.exists():
+        return {}
+    catalog = json.loads((I18N_DIR / "catalog.json").read_text(encoding="utf-8"))
+    tr = json.loads(path.read_text(encoding="utf-8"))
+    kind = _KINDS[table_id]
+    return {e["en"]: tr[k] for k, e in catalog.items() if kind in e["where"] and k in tr}
+
+
 # --------------------------------------------------------------------------- engine
 def _regex(template: str) -> re.Pattern:
     parts = re.split(r"(\{\d+\})", template)
@@ -323,42 +365,42 @@ def _regex(template: str) -> re.Pattern:
 
 
 @lru_cache(maxsize=None)
-def _compiled(table_id: int) -> list[tuple[re.Pattern, str, int]]:
-    table = {1: ALERTS_HI, 2: FRAGMENTS_HI, 3: ERRORS_HI, 4: ERROR_FRAGMENTS_HI}[table_id]
-    rows = [(_regex(en), hi, len(re.sub(r"\{\d+\}", "", en))) for en, hi in table.items()]
+def _compiled(table_id: int, lang: str = "hi") -> list[tuple[re.Pattern, str, int]]:
+    table = _catalog_table(lang, table_id)
+    rows = [(_regex(en), tr, len(re.sub(r"\{\d+\}", "", en))) for en, tr in table.items()]
     rows.sort(key=lambda r: -r[2])  # most specific (most literal text) first
     return rows
 
 
-def _fill(rx: re.Pattern, hi: str, m: re.Match, fragments: int) -> str:
-    values = {k: _value(v, fragments) for k, v in m.groupdict().items()}
-    return re.sub(r"\{(\d+)\}", lambda x: values.get(f"g{x.group(1)}", x.group(0)), hi)
+def _fill(rx: re.Pattern, tr: str, m: re.Match, fragments: int, lang: str) -> str:
+    values = {k: _value(v, fragments, lang=lang) for k, v in m.groupdict().items()}
+    return re.sub(r"\{(\d+)\}", lambda x: values.get(f"g{x.group(1)}", x.group(0)), tr)
 
 
-def _value(v: str, fragments: int, depth: int = 0) -> str:
+def _value(v: str, fragments: int, depth: int = 0, lang: str = "hi") -> str:
     if depth > 3:
         return v
     if "; " in v:  # several reasons: translate each (before matching, or one template swallows all)
-        return "; ".join(_value(p, fragments, depth + 1) for p in v.split("; "))
-    for rx, hi, _ in _compiled(fragments):
+        return "; ".join(_value(p, fragments, depth + 1, lang) for p in v.split("; "))
+    for rx, tr, _ in _compiled(fragments, lang):
         m = rx.fullmatch(v)
         if m:
-            return _fill(rx, hi, m, fragments)
+            return _fill(rx, tr, m, fragments, lang)
     if ", " in v and v.count(", ") < 6:
         parts = v.split(", ")
-        out = [_value(p, fragments, depth + 1) for p in parts]
+        out = [_value(p, fragments, depth + 1, lang) for p in parts]
         if out != parts:
             return ", ".join(out)
     return v
 
 
 def _translate(text: str, lang: str, table: int, fragments: int) -> str:
-    if lang != "hi" or not text:
+    if not text or lang == "en" or not _known(lang):
         return text
-    for rx, hi, _ in _compiled(table):
+    for rx, tr, _ in _compiled(table, lang):
         m = rx.fullmatch(text)
         if m:
-            return _fill(rx, hi, m, fragments)
+            return _fill(rx, tr, m, fragments, lang)
     return text
 
 
@@ -371,9 +413,15 @@ def error(text: str, lang: str) -> str:
 
 
 def language_from_header(accept_language: str | None) -> str:
-    """'hi-IN,hi;q=0.9,en;q=0.8' -> 'hi'. Only languages we have; English otherwise."""
+    """'hi-IN,hi;q=0.9,en;q=0.8' -> 'hi'. Only enabled languages; English otherwise."""
     for part in (accept_language or "").split(","):
         code = part.split(";")[0].strip().lower()[:2]
-        if code in LANGUAGES:
+        if _known(code):
             return code
     return "en"
+
+
+def normalise(lang: str | None) -> str | None:
+    """A language code from an app ('ta-IN', 'TA') if it is enabled, else None."""
+    code = (lang or "").strip().lower()[:2]
+    return code if _known(code) else None

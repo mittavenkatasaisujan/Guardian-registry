@@ -6,7 +6,9 @@
 // messages arrive in the same language.
 
 const LANG_KEY = "gr.lang";
-const LANGS = { en: "English", hi: "हिंदी" };
+// More languages come from i18n-extra.js, generated from the translation catalog for the
+// languages switched on in guardian_registry/i18n/languages.json (scripts/i18n.py generate).
+const LANGS = { en: "English", hi: "हिंदी", ...(typeof EXTRA_LANGS === "object" ? EXTRA_LANGS : {}) };
 
 const STRINGS = {
   hi: {
@@ -105,11 +107,14 @@ const STRINGS = {
   },
 };
 
+if (typeof EXTRA_STRINGS === "object") Object.assign(STRINGS, EXTRA_STRINGS);
+
 function currentLang() {
   let saved = null;
   try { saved = localStorage.getItem(LANG_KEY); } catch (e) { /* storage blocked: use the browser's language */ }
   if (saved && LANGS[saved]) return saved;
-  return (navigator.language || "en").toLowerCase().startsWith("hi") ? "hi" : "en";
+  const browser = (navigator.language || "en").toLowerCase().slice(0, 2);
+  return LANGS[browser] ? browser : "en";
 }
 
 const LANG = currentLang();
@@ -137,11 +142,16 @@ async function setLang(lang) {
 document.addEventListener("DOMContentLoaded", () => {
   document.documentElement.lang = LANG;
   for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
-  const btn = document.getElementById("lang");
-  if (btn) {
-    const other = LANG === "hi" ? "en" : "hi";
-    btn.textContent = LANGS[other];
-    btn.setAttribute("lang", other);
-    btn.addEventListener("click", () => setLang(other));
+  const pick = document.getElementById("lang");
+  if (pick) {
+    for (const [code, name] of Object.entries(LANGS)) {
+      const o = document.createElement("option");
+      o.value = code;
+      o.textContent = name;
+      o.setAttribute("lang", code);
+      if (code === LANG) o.selected = true;
+      pick.append(o);
+    }
+    pick.addEventListener("change", () => setLang(pick.value));
   }
 });

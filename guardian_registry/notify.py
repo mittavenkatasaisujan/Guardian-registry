@@ -215,7 +215,7 @@ def enqueue_user(c: sqlite3.Connection, now: str, user_id: str, kind: str, title
 
 def user_language(c, user_id: str) -> str:
     r = c.execute("SELECT language FROM users WHERE id=?", (user_id,)).fetchone()
-    return (r["language"] if r and r["language"] in messages.LANGUAGES else "en")
+    return (r["language"] if r and r["language"] in messages.enabled_languages() else "en")
 
 
 def _urgent_channel(c: sqlite3.Connection, user_id: str) -> str:
@@ -313,7 +313,7 @@ class Dispatcher:
             return bool(delivered)
         if n["channel"] in ("sms", "whatsapp"):
             u = self.db.one("SELECT mobile_enc, language FROM users WHERE id=?", (n["recipient_id"],))
-            lang = u["language"] if u and u["language"] in messages.LANGUAGES else "en"
+            lang = u["language"] if u and u["language"] in messages.enabled_languages() else "en"
             if not u or not u["mobile_enc"]:
                 return False  # no number on file (enrolled before v2): in-app only
             swapped = self.db.one("SELECT 1 FROM sim_events WHERE user_id=? AND cleared_at IS NULL "

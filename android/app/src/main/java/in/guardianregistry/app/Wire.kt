@@ -10,8 +10,10 @@ import java.util.Locale
 object Wire {
     const val SIGNING_PREFIX = "guardian-registry/v1:"
 
-    /** "hi" when the phone is set to Hindi, otherwise "en": the languages the registry writes in. */
-    fun language(tag: String = java.util.Locale.getDefault().language): String = if (tag == "hi") "hi" else "en"
+    /** The phone's language ("hi", "ta", ...). The registry uses it if that language is enabled
+     *  there, and English otherwise. */
+    fun language(tag: String = java.util.Locale.getDefault().language): String =
+        tag.lowercase().take(2).ifBlank { "en" }
 
     fun b64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
 

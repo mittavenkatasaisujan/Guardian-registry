@@ -54,18 +54,19 @@ APP_CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'se
 # ----------------------------------------------------------------- schemas
 class OtpIn(BaseModel):
     mobile: str
-    language: Literal["en", "hi"] | None = Field(default=None, description="language of the code SMS")
+    language: str | None = Field(default=None, max_length=10, description="language of the code SMS (e.g. hi, ta)")
 
 
 class LanguageIn(BaseModel):
-    language: Literal["en", "hi"]
+    language: str = Field(min_length=2, max_length=10, description="one of GET /v1/languages")
 
 
 class VerifyIn(BaseModel):
     mobile: str
     code: str = Field(min_length=4, max_length=10)
     display_name: str | None = Field(default=None, max_length=80)
-    language: Literal["en", "hi"] | None = Field(default=None, description="language for this person's alerts and SMS")
+    language: str | None = Field(default=None, max_length=10,
+                                 description="the app's language (e.g. hi-IN); used for alerts and SMS if enabled")
     device_id: str | None = Field(default=None, max_length=200,
                                   description="stable app-install id; new devices start on probation")
     device_key: str | None = Field(default=None, max_length=400,
@@ -785,8 +786,9 @@ def create_app(
         limited(otp_limiter, "verify:" + client_ip(request))
         out = reg.verify_otp(body.mobile, body.code, body.display_name, body.device_id, body.device_key,
                              body.device_proof, body.challenge, body.key_attestation, body.platform)
-        if body.language:
-            reg.set_language(out["user_id"], body.language)
+        lang = messages.normalise(body.language)
+        if lang:  # an app in a language we don't have (yet) keeps English rather than failing sign-in
+            reg.set_language(out["user_id"], lang)
         return out
 
     @app.post("/v1/recovery/start", status_code=202, tags=["sign-in"])
@@ -910,7 +912,7 @@ def create_app(
     @app.put("/v1/me/language", tags=["people"])
     def set_language(body: LanguageIn, uid: User):
         """Language for your alerts, SMS and messages (English or Hindi)."""
-        return reg.set_language(uid, body.language)
+        return reg.set_language(uid, messages.normalise(body.language) or body.language)
 
     # ------------------------------------------------------- SIM-swap safety
     @app.get("/v1/me/security", tags=["people"])
@@ -1006,6 +1008,12 @@ def create_app(
         return PRESETS
 
     # --------------------------------------------------------- privacy (DPDP Act)
+    @app.get("/v1/languages", tags=["people"])
+    def languages():
+        """Languages for alerts, SMS and messages. Drafts appear only once reviewed and enabled."""
+        meta = messages.language_meta()
+        return [{"code": c, "name": meta[c]["name"]} for c in messages.enabled_languages()]
+
     @app.get("/v1/privacy/notice", tags=["people"])
     def privacy_notice():
         """What we collect, why, for how long, your rights and the grievance officer."""

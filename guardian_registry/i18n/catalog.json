@@ -1,0 +1,2420 @@
+{
+ "6ea0cb6669": {
+  "en": " and your date of birth (used only to tell banks if you are 70 or over)",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "1b3d1487a0": {
+  "en": " from %1$s",
+  "where": [
+   "android:from_person"
+  ]
+ },
+ "9447989081": {
+  "en": " · from %@",
+  "where": [
+   "ios"
+  ]
+ },
+ "cb98235867": {
+  "en": " · last used {time}",
+  "where": [
+   "web"
+  ]
+ },
+ "5f91e093ce": {
+  "en": "%1$s asked you to be their payment guardian.",
+  "where": [
+   "android:asked_guardian"
+  ]
+ },
+ "06605b49a9": {
+  "en": "%1$s to %2$s%3$s",
+  "where": [
+   "android:amount_to"
+  ]
+ },
+ "3b33e45d3f": {
+  "en": "%@ asked you to be their payment guardian.",
+  "where": [
+   "ios"
+  ]
+ },
+ "0c52ea2c40": {
+  "en": "6-digit code",
+  "where": [
+   "web",
+   "ios"
+  ]
+ },
+ "70db7764d5": {
+  "en": "a bank has reported fraud involving this payee",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "38524f7287": {
+  "en": "a large payment at night ({0}:00 to {1}:00)",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "7ba17f2432": {
+  "en": "A recovery to the number {0} was started. If this isn't you, cancel it here.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "aa0f6f2721": {
+  "en": "a request to loosen protection is waiting",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "03a7df45dc": {
+  "en": "A security incident may affect your data",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "bb54db510a": {
+  "en": "Accept",
+  "where": [
+   "web",
+   "android:accept",
+   "ios"
+  ]
+ },
+ "28bdffdb2a": {
+  "en": "Account deletion requested",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "7e82a75448": {
+  "en": "Account recovered",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "231b762a18": {
+  "en": "Account recovery request",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "c6dab9de78": {
+  "en": "Account recovery requests",
+  "where": [
+   "web"
+  ]
+ },
+ "f07e38d99a": {
+  "en": "Account recovery stopped",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "1f5f9cd5c3": {
+  "en": "Account recovery will complete",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "2bb6b986c5": {
+  "en": "active",
+  "where": [
+   "server:error-phrase",
+   "web"
+  ]
+ },
+ "c521251053": {
+  "en": "Added {time}",
+  "where": [
+   "web"
+  ]
+ },
+ "d0efe0b2c7": {
+  "en": "Alerts",
+  "where": [
+   "web",
+   "android:alerts",
+   "ios"
+  ]
+ },
+ "070a184af7": {
+  "en": "All marked as read.",
+  "where": [
+   "web"
+  ]
+ },
+ "d6c56f48e9": {
+  "en": "All payments are paused.",
+  "where": [
+   "web"
+  ]
+ },
+ "bf89901f3f": {
+  "en": "All payments from your account are paused.",
+  "where": [
+   "android:all_paused",
+   "ios"
+  ]
+ },
+ "c3de44d531": {
+  "en": "allowed",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "77c7b4909d": {
+  "en": "Allowed",
+  "where": [
+   "web"
+  ]
+ },
+ "33de17c9f5": {
+  "en": "amount must be positive",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "c622c384fc": {
+  "en": "amount {0} is at or above the approval threshold {1}",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "1a38ed24c3": {
+  "en": "amount {0} is over the per-payment limit {1}",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "414707e443": {
+  "en": "an erasure is already waiting; cancel it or wait",
+  "where": [
+   "server:error"
+  ]
+ },
+ "eab96e6dc0": {
+  "en": "Answer by {time}",
+  "where": [
+   "web"
+  ]
+ },
+ "c0b885fe69": {
+  "en": "applied",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "c0d30891ec": {
+  "en": "Applied.",
+  "where": [
+   "web"
+  ]
+ },
+ "cfea419c3b": {
+  "en": "Apply",
+  "where": [
+   "web"
+  ]
+ },
+ "4e83bb0161": {
+  "en": "approval_timeout_minutes must be between 1 and 1440",
+  "where": [
+   "server:error"
+  ]
+ },
+ "7b2c7f146a": {
+  "en": "Approve",
+  "where": [
+   "web",
+   "android:approve",
+   "ios"
+  ]
+ },
+ "b9face07f3": {
+  "en": "Approve now",
+  "where": [
+   "web"
+  ]
+ },
+ "58cd577f78": {
+  "en": "Approve payment?",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "7c18dbd992": {
+  "en": "Approve this payment?",
+  "where": [
+   "android:approve_q",
+   "ios"
+  ]
+ },
+ "c9560d94ee": {
+  "en": "approved",
+  "where": [
+   "server:phrase",
+   "server:error-phrase"
+  ]
+ },
+ "41b81eb8db": {
+  "en": "Approved",
+  "where": [
+   "web"
+  ]
+ },
+ "0baa5dc0b3": {
+  "en": "Approved.",
+  "where": [
+   "web",
+   "android:approved",
+   "ios"
+  ]
+ },
+ "b0a71b4ad6": {
+  "en": "at most {0} devices; remove one first",
+  "where": [
+   "server:error"
+  ]
+ },
+ "507203703a": {
+  "en": "at most {0} guardians (invited + active)",
+  "where": [
+   "server:error"
+  ]
+ },
+ "bddef2f003": {
+  "en": "attestation is already {0}",
+  "where": [
+   "server:error"
+  ]
+ },
+ "c9e54c932a": {
+  "en": "attestation not found",
+  "where": [
+   "server:error"
+  ]
+ },
+ "b52b36b726": {
+  "en": "Back",
+  "where": [
+   "android:back",
+   "ios"
+  ]
+ },
+ "d6e75f2e63": {
+  "en": "Bank verification ended",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "ddced7b52a": {
+  "en": "Bank verification expired",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "ac4804c3ba": {
+  "en": "Bank verification removed",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "4224df8458": {
+  "en": "Banks disagree on your date of birth",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "c34fd71591": {
+  "en": "banks have confirmed fraud involving this payee",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "22d2d0ad75": {
+  "en": "basic bank check",
+  "where": [
+   "web"
+  ]
+ },
+ "795b95fc7c": {
+  "en": "be careful with calls and messages that claim to be from us or your bank",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "df88b84d81": {
+  "en": "blocked",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "99613c74ce": {
+  "en": "Blocked",
+  "where": [
+   "web"
+  ]
+ },
+ "0f350cfc63": {
+  "en": "Blocked channels",
+  "where": [
+   "web"
+  ]
+ },
+ "d7cd8c8d84": {
+  "en": "Can't reach Guardian Registry. Check your connection.",
+  "where": [
+   "android:cant_reach"
+  ]
+ },
+ "8761d26fb8": {
+  "en": "cancelled",
+  "where": [
+   "server:phrase",
+   "server:error-phrase"
+  ]
+ },
+ "a1bf92eff4": {
+  "en": "Cancelled",
+  "where": [
+   "web"
+  ]
+ },
+ "d3e4142ff7": {
+  "en": "Cancelled.",
+  "where": [
+   "web",
+   "android:cancelled",
+   "ios"
+  ]
+ },
+ "f9c96f8ee5": {
+  "en": "change is already {0}",
+  "where": [
+   "server:error"
+  ]
+ },
+ "949f32dce6": {
+  "en": "change not found",
+  "where": [
+   "server:error"
+  ]
+ },
+ "93c080d0c1": {
+  "en": "Change on hold",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "98e2d21380": {
+  "en": "Change stopped",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "cf6c240cdf": {
+  "en": "Changes waiting",
+  "where": [
+   "web"
+  ]
+ },
+ "56821b2482": {
+  "en": "channel '{0}' is switched off",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "ee6ba7f0dd": {
+  "en": "check not found",
+  "where": [
+   "server:error"
+  ]
+ },
+ "6b1329812b": {
+  "en": "check your recent payments in the app",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "adac69379a": {
+  "en": "Code",
+  "where": [
+   "android:code"
+  ]
+ },
+ "b1cd7a5656": {
+  "en": "code expired or not requested",
+  "where": [
+   "server:error"
+  ]
+ },
+ "231e564db4": {
+  "en": "completed",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "f320e9fdce": {
+  "en": "Confirm your identity?",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "b3e2ce01be": {
+  "en": "cooling_off",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "4b6e8d8a29": {
+  "en": "cooling_off_minutes must be between 0 and 10080",
+  "where": [
+   "server:error"
+  ]
+ },
+ "aaf3744797": {
+  "en": "Create account",
+  "where": [
+   "web"
+  ]
+ },
+ "96a3901e3d": {
+  "en": "daily limit {0} would be exceeded ({1} left today)",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "b6a73b7fda": {
+  "en": "data about your phone",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "b59cf9ed55": {
+  "en": "Decline",
+  "where": [
+   "web",
+   "android:decline",
+   "ios"
+  ]
+ },
+ "4b376c0339": {
+  "en": "declined",
+  "where": [
+   "server:error-phrase",
+   "web"
+  ]
+ },
+ "21853edc92": {
+  "en": "declined your request",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "c8fee26f6e": {
+  "en": "Declined.",
+  "where": [
+   "web",
+   "android:declined",
+   "ios"
+  ]
+ },
+ "304e06a569": {
+  "en": "denied",
+  "where": [
+   "server:phrase",
+   "server:error-phrase"
+  ]
+ },
+ "63b16bd41e": {
+  "en": "Denied",
+  "where": [
+   "web"
+  ]
+ },
+ "eaf62a2737": {
+  "en": "Denied. The payment will not go through.",
+  "where": [
+   "web",
+   "android:denied",
+   "ios"
+  ]
+ },
+ "53577bb5df": {
+  "en": "Deny",
+  "where": [
+   "web",
+   "android:deny",
+   "ios"
+  ]
+ },
+ "6cfa82a8a3": {
+  "en": "Development mode code: {code}",
+  "where": [
+   "web"
+  ]
+ },
+ "d843c4053f": {
+  "en": "device challenge is unknown, used or expired; ask for a new one",
+  "where": [
+   "server:error"
+  ]
+ },
+ "be81540b73": {
+  "en": "device key not found",
+  "where": [
+   "server:error"
+  ]
+ },
+ "0c8ffe8ab3": {
+  "en": "device signature does not verify",
+  "where": [
+   "server:error"
+  ]
+ },
+ "99617b43ec": {
+  "en": "Device {id}",
+  "where": [
+   "web"
+  ]
+ },
+ "df485c8713": {
+  "en": "Devices",
+  "where": [
+   "web"
+  ]
+ },
+ "1b56714440": {
+  "en": "display_name is required",
+  "where": [
+   "server:error"
+  ]
+ },
+ "e838916bd1": {
+  "en": "Done. Every device is signed out.",
+  "where": [
+   "web",
+   "android:lost_done",
+   "ios"
+  ]
+ },
+ "c36848de06": {
+  "en": "Each phone or browser you sign in on has its own key. A new one can't approve payments for 24 hours.",
+  "where": [
+   "web"
+  ]
+ },
+ "ba92ed73c9": {
+  "en": "ended",
+  "where": [
+   "server:error-phrase",
+   "web"
+  ]
+ },
+ "705d8e0e5c": {
+  "en": "Enter the code",
+  "where": [
+   "web",
+   "android:enter_code",
+   "ios"
+  ]
+ },
+ "7f2f6a15cf": {
+  "en": "Error",
+  "where": [
+   "android:error"
+  ]
+ },
+ "5b373fc1bc": {
+  "en": "expect scam calls that use your name to sound genuine",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "45a6f9adb1": {
+  "en": "expired",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "a689a999a5": {
+  "en": "Expired",
+  "where": [
+   "web"
+  ]
+ },
+ "09fef5d8d9": {
+  "en": "Failed",
+  "where": [
+   "web"
+  ]
+ },
+ "e42dd0ebba": {
+  "en": "first payment of {0} to a new payee",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "004d51c2fb": {
+  "en": "For your safety this takes effect in {0} hours. Your guardians have been told.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "e57b10137e": {
+  "en": "from {name}",
+  "where": [
+   "web"
+  ]
+ },
+ "f9ac362d01": {
+  "en": "Goes through at {time} unless stopped",
+  "where": [
+   "web"
+  ]
+ },
+ "d2a33b17cb": {
+  "en": "Guardian accepted",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "c43819ba81": {
+  "en": "Guardian approves from",
+  "where": [
+   "web"
+  ]
+ },
+ "3cdede06c9": {
+  "en": "Guardian declined",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "a7d2c9e343": {
+  "en": "Guardian Registry",
+  "where": [
+   "ios"
+  ]
+ },
+ "f1949acc0d": {
+  "en": "Guardian Registry code: {0}. Valid {1} min. Never share it with anyone, not even a guardian or a bank.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "68c66100ea": {
+  "en": "Guardian request",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "c995784712": {
+  "en": "Guardian requests",
+  "where": [
+   "web",
+   "ios"
+  ]
+ },
+ "7f7b892dfb": {
+  "en": "Guardian stepped down",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "d350de82fd": {
+  "en": "guardianship is not active",
+  "where": [
+   "server:error"
+  ]
+ },
+ "aea8cb4b1f": {
+  "en": "guardianship not found",
+  "where": [
+   "server:error"
+  ]
+ },
+ "91186e3ead": {
+  "en": "had their SIM card changed",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "176f83e409": {
+  "en": "had their SIM card changed (found when we checked with their operator)",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "9a5e787aa2": {
+  "en": "had their SIM card changed (reported by their mobile operator)",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "547b2b4476": {
+  "en": "Happens {time} unless you stop it. Scammers often ask people to do this.",
+  "where": [
+   "web"
+  ]
+ },
+ "2c03439596": {
+  "en": "held",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "785fad24e2": {
+  "en": "Hello, %1$s",
+  "where": [
+   "android:hello"
+  ]
+ },
+ "1745b37a55": {
+  "en": "Hello, %@",
+  "where": [
+   "ios"
+  ]
+ },
+ "2ed0d6f7b1": {
+  "en": "Hello, {name}",
+  "where": [
+   "web"
+  ]
+ },
+ "40a593c8bc": {
+  "en": "Hold payments after a SIM change",
+  "where": [
+   "web"
+  ]
+ },
+ "f13c8cb877": {
+  "en": "Hold payments that look like a scam",
+  "where": [
+   "web"
+  ]
+ },
+ "f11213215e": {
+  "en": "I lost my phone",
+  "where": [
+   "android:lost_phone",
+   "ios"
+  ]
+ },
+ "f4934b2661": {
+  "en": "I protect",
+  "where": [
+   "web"
+  ]
+ },
+ "8d6cd2f4f0": {
+  "en": "I spoke to them: approve",
+  "where": [
+   "web"
+  ]
+ },
+ "293fa27616": {
+  "en": "Identity: {level}",
+  "where": [
+   "web"
+  ]
+ },
+ "8f34167415": {
+  "en": "If someone is pressuring you to pay, pause everything. You can switch back on later.",
+  "where": [
+   "web"
+  ]
+ },
+ "4babee70d2": {
+  "en": "If you changed your SIM yourself, confirm it from this phone. If you didn't, call your mobile operator now.",
+  "where": [
+   "web"
+  ]
+ },
+ "6d3ab7e193": {
+  "en": "ignore unexpected messages asking you to install apps or share codes",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "e51941a5e3": {
+  "en": "invitation is already {0}",
+  "where": [
+   "server:error"
+  ]
+ },
+ "e16e408cb3": {
+  "en": "invitation not found",
+  "where": [
+   "server:error"
+  ]
+ },
+ "6114db953c": {
+  "en": "Invitation sent. They need to accept it in their app.",
+  "where": [
+   "web"
+  ]
+ },
+ "b136609f06": {
+  "en": "Invite",
+  "where": [
+   "web"
+  ]
+ },
+ "1e45b0d4fc": {
+  "en": "Invite a guardian by mobile number",
+  "where": [
+   "web"
+  ]
+ },
+ "200b57390a": {
+  "en": "invited",
+  "where": [
+   "web"
+  ]
+ },
+ "37646536dd": {
+  "en": "is now your guardian",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "54fdd6100f": {
+  "en": "kill switch is on: all outgoing payments are paused",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "39eb17bf8b": {
+  "en": "language must be one of {0}",
+  "where": [
+   "server:error"
+  ]
+ },
+ "33ce417454": {
+  "en": "Loading…",
+  "where": [
+   "web"
+  ]
+ },
+ "01178b4ff4": {
+  "en": "Loosen payment limits",
+  "where": [
+   "web"
+  ]
+ },
+ "d08af46ac9": {
+  "en": "loosen their payment limits ({0})",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "7f1b7a9f7e": {
+  "en": "Lost your phone?",
+  "where": [
+   "web"
+  ]
+ },
+ "ace3670f56": {
+  "en": "Making rules stricter works at once. Loosening them waits 24 hours, and your guardians can stop it.",
+  "where": [
+   "web"
+  ]
+ },
+ "8958e22c23": {
+  "en": "Mark all read",
+  "where": [
+   "web"
+  ]
+ },
+ "e9da2d481e": {
+  "en": "missing, invalid or expired bearer token",
+  "where": [
+   "server:error"
+  ]
+ },
+ "8e5c12debb": {
+  "en": "Mobile number",
+  "where": [
+   "web",
+   "android:mobile_number",
+   "ios"
+  ]
+ },
+ "f1c3264029": {
+  "en": "Most per day (all banks)",
+  "where": [
+   "web"
+  ]
+ },
+ "cca76e4ecc": {
+  "en": "Most per payment",
+  "where": [
+   "web"
+  ]
+ },
+ "36613672cd": {
+  "en": "move their account to a new number ({0})",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "a70299fe22": {
+  "en": "Move to a new number",
+  "where": [
+   "web"
+  ]
+ },
+ "50e30ec963": {
+  "en": "moved their number to another mobile operator",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "7fd5b11927": {
+  "en": "much larger than this person's usual payments (largest in 90 days: {0})",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "4614cd57a8": {
+  "en": "My guardians",
+  "where": [
+   "web"
+  ]
+ },
+ "bd1f5f3fc6": {
+  "en": "My protection",
+  "where": [
+   "web",
+   "android:my_protection",
+   "ios"
+  ]
+ },
+ "6808394d5b": {
+  "en": "My rules",
+  "where": [
+   "web"
+  ]
+ },
+ "89c67bd02b": {
+  "en": "never confirm your date of birth to a caller",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "605481dd20": {
+  "en": "Never share this code, not even with a guardian or a bank.",
+  "where": [
+   "ios"
+  ]
+ },
+ "6403f2b7eb": {
+  "en": "New",
+  "where": [
+   "web"
+  ]
+ },
+ "7d47d31cf6": {
+  "en": "New device signed in",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "655a4d5e61": {
+  "en": "new device: restricted until {0}",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "816c52fd2b": {
+  "en": "No",
+  "where": [
+   "web",
+   "android:no"
+  ]
+ },
+ "4ba2d6851d": {
+  "en": "no active guardian to approve, so a cooling-off delay applies instead",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "e0658c65b0": {
+  "en": "No alerts yet.",
+  "where": [
+   "web"
+  ]
+ },
+ "b9d5d070e8": {
+  "en": "No alerts.",
+  "where": [
+   "android:no_alerts",
+   "ios"
+  ]
+ },
+ "4388169939": {
+  "en": "No bank will send money from your accounts until payments are switched back on.",
+  "where": [
+   "web"
+  ]
+ },
+ "b96bd391d6": {
+  "en": "No device keys yet.",
+  "where": [
+   "web"
+  ]
+ },
+ "3d32c060a7": {
+  "en": "no erasure is waiting",
+  "where": [
+   "server:error"
+  ]
+ },
+ "bb5ea9e899": {
+  "en": "No guardian approved {0} to {1}, so it was not sent.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "57d0b0297a": {
+  "en": "No guardians yet. A guardian can approve large payments and pause payments for you.",
+  "where": [
+   "web"
+  ]
+ },
+ "10850b9371": {
+  "en": "No limit",
+  "where": [
+   "web"
+  ]
+ },
+ "3894b08988": {
+  "en": "no open SIM-change window",
+  "where": [
+   "server:error"
+  ]
+ },
+ "ef37723e28": {
+  "en": "No payments checked yet.",
+  "where": [
+   "web"
+  ]
+ },
+ "6eef664840": {
+  "en": "None",
+  "where": [
+   "web"
+  ]
+ },
+ "ef4fbcd08a": {
+  "en": "not a valid Indian mobile number",
+  "where": [
+   "server:error"
+  ]
+ },
+ "73ba4e4af8": {
+  "en": "Not sure? Call them on a number you know before approving.",
+  "where": [
+   "web"
+  ]
+ },
+ "cc5796a4fc": {
+  "en": "Nothing is waiting for you.",
+  "where": [
+   "web",
+   "android:nothing_waiting",
+   "ios"
+  ]
+ },
+ "e3d7d49ff3": {
+  "en": "Number disconnected",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "7725fc0eb4": {
+  "en": "On hold",
+  "where": [
+   "web"
+  ]
+ },
+ "b07ce7d4f0": {
+  "en": "On {0} we found a security incident that may have exposed {1}. What you can do: {2}. Your protection rules and guardians are not affected. Questions: {3}.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "af3c652388": {
+  "en": "Only approve if you have spoken to them yourself, on a call YOU placed or in person. If in doubt, deny.",
+  "where": [
+   "web"
+  ]
+ },
+ "9d06ac0c24": {
+  "en": "Only bank-verified guardians approve",
+  "where": [
+   "web"
+  ]
+ },
+ "0c6d756ba8": {
+  "en": "only this person's guardians, or people they guard, can vouch",
+  "where": [
+   "server:error"
+  ]
+ },
+ "285529b227": {
+  "en": "Pause all my payments",
+  "where": [
+   "android:pause_all",
+   "ios"
+  ]
+ },
+ "5edad0b497": {
+  "en": "Pause all payments",
+  "where": [
+   "web"
+  ]
+ },
+ "47e27b7f7e": {
+  "en": "Pause all payments for {name}?",
+  "where": [
+   "web"
+  ]
+ },
+ "7895442aea": {
+  "en": "Pause every payment from your account until you resume?",
+  "where": [
+   "android:pause_q",
+   "ios"
+  ]
+ },
+ "6b8a5bddff": {
+  "en": "Pause payments",
+  "where": [
+   "ios"
+  ]
+ },
+ "eddc75e5d1": {
+  "en": "Pause their payments",
+  "where": [
+   "web"
+  ]
+ },
+ "58843cbcb4": {
+  "en": "Payment alerts",
+  "where": [
+   "android:alerts_channel"
+  ]
+ },
+ "68b6a83f1c": {
+  "en": "Payment blocked",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "f9768879ba": {
+  "en": "Payment can go ahead",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "51678e372c": {
+  "en": "payment is {0}; it can no longer be changed",
+  "where": [
+   "server:error"
+  ]
+ },
+ "7fb9695132": {
+  "en": "Payment not approved in time",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "a7a3fd688d": {
+  "en": "Payment on hold",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "c4e6cf6262": {
+  "en": "Payment {0}",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "4a01f35b8f": {
+  "en": "Payments are back on.",
+  "where": [
+   "web"
+  ]
+ },
+ "3167e8487d": {
+  "en": "Payments are on",
+  "where": [
+   "web"
+  ]
+ },
+ "578c0a53b4": {
+  "en": "Payments are paused",
+  "where": [
+   "web"
+  ]
+ },
+ "ac83d3cf4f": {
+  "en": "Payments from your account can need a family member's OK. Sign in with your mobile number.",
+  "where": [
+   "android:intro",
+   "ios"
+  ]
+ },
+ "dc86dcfcdb": {
+  "en": "Payments paused",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "40c26e323e": {
+  "en": "Payments paused for {name}.",
+  "where": [
+   "web"
+  ]
+ },
+ "0ec4b34826": {
+  "en": "Payments paused.",
+  "where": [
+   "android:paused",
+   "ios"
+  ]
+ },
+ "39e1ff2443": {
+  "en": "Payments resumed",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "72197b41f9": {
+  "en": "Payments waiting",
+  "where": [
+   "web",
+   "android:payments_waiting",
+   "ios"
+  ]
+ },
+ "e22586930a": {
+  "en": "pending",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "36485077a2": {
+  "en": "pending_approval",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "4d9a31558e": {
+  "en": "People I protect",
+  "where": [
+   "web"
+  ]
+ },
+ "aa4276e190": {
+  "en": "phone number only",
+  "where": [
+   "web"
+  ]
+ },
+ "06fd3e4358": {
+  "en": "platform must be one of {0}",
+  "where": [
+   "server:error"
+  ]
+ },
+ "bca788763d": {
+  "en": "Preset",
+  "where": [
+   "web"
+  ]
+ },
+ "24c5512fcc": {
+  "en": "probation",
+  "where": [
+   "web"
+  ]
+ },
+ "fc423e2f64": {
+  "en": "Protect payments for the people you care about",
+  "where": [
+   "web"
+  ]
+ },
+ "e19e1ae380": {
+  "en": "Protection change applied",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "dd037d280d": {
+  "en": "Protection change requested",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "c6909ca9a8": {
+  "en": "Protection changes waiting",
+  "where": [
+   "web"
+  ]
+ },
+ "1ac1ebfc22": {
+  "en": "Protection ending",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "73b5931384": {
+  "en": "push device not found",
+  "where": [
+   "server:error"
+  ]
+ },
+ "0f5ff0c65b": {
+  "en": "rate limit exceeded",
+  "where": [
+   "server:error"
+  ]
+ },
+ "acca8b854a": {
+  "en": "Recent payments",
+  "where": [
+   "web"
+  ]
+ },
+ "d572d0d339": {
+  "en": "recovered their account on a new number",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "e6441413de": {
+  "en": "recovery already has enough vouches",
+  "where": [
+   "server:error"
+  ]
+ },
+ "1d0a2949a4": {
+  "en": "recovery changed meanwhile; reload and try again",
+  "where": [
+   "server:error"
+  ]
+ },
+ "4f882f718d": {
+  "en": "recovery is already {0}",
+  "where": [
+   "server:error"
+  ]
+ },
+ "6c0fe77ba8": {
+  "en": "recovery not found",
+  "where": [
+   "server:error"
+  ]
+ },
+ "56e3badc4e": {
+  "en": "Refresh",
+  "where": [
+   "android:refresh"
+  ]
+ },
+ "1f087a5954": {
+  "en": "rejected",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "6cab07fc46": {
+  "en": "released",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "35d9bc5159": {
+  "en": "Released",
+  "where": [
+   "web"
+  ]
+ },
+ "e963907dac": {
+  "en": "Remove",
+  "where": [
+   "web"
+  ]
+ },
+ "71822f6649": {
+  "en": "remove a guardian",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "82a4fccaaa": {
+  "en": "Remove a guardian",
+  "where": [
+   "web"
+  ]
+ },
+ "f6be22a00c": {
+  "en": "Removed and signed out.",
+  "where": [
+   "web"
+  ]
+ },
+ "1db329926a": {
+  "en": "Report lost phone",
+  "where": [
+   "web"
+  ]
+ },
+ "aee62e9a80": {
+  "en": "reported a lost or stolen phone",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "84396fdd27": {
+  "en": "require_verified_guardian must be true or false",
+  "where": [
+   "server:error"
+  ]
+ },
+ "78d568504e": {
+  "en": "Resume payments",
+  "where": [
+   "android:resume",
+   "ios"
+  ]
+ },
+ "88ed6c3872": {
+  "en": "Resume requested.",
+  "where": [
+   "android:resume_requested",
+   "ios"
+  ]
+ },
+ "8375cdf275": {
+  "en": "revoked",
+  "where": [
+   "server:error-phrase",
+   "web"
+  ]
+ },
+ "87360926ff": {
+  "en": "scam_signals and sim_swap_hold must be true or false",
+  "where": [
+   "server:error"
+  ]
+ },
+ "f25ce1b8a3": {
+  "en": "Security",
+  "where": [
+   "android:security",
+   "ios"
+  ]
+ },
+ "313503fa95": {
+  "en": "Send code",
+  "where": [
+   "web",
+   "android:send_code",
+   "ios"
+  ]
+ },
+ "c68708f3ac": {
+  "en": "send device_key, challenge and device_proof together",
+  "where": [
+   "server:error"
+  ]
+ },
+ "5cb9d9c591": {
+  "en": "Sent to {mobile}. It works for 5 minutes.",
+  "where": [
+   "web"
+  ]
+ },
+ "7f98f39984": {
+  "en": "Set limits once and every bank checks them. Ask someone you trust to approve large payments.",
+  "where": [
+   "web"
+  ]
+ },
+ "ada2e9e96f": {
+  "en": "Sign in",
+  "where": [
+   "web",
+   "android:sign_in",
+   "ios"
+  ]
+ },
+ "dc1649a16c": {
+  "en": "Sign out",
+  "where": [
+   "web",
+   "android:sign_out",
+   "ios"
+  ]
+ },
+ "4b2d46fc22": {
+  "en": "Sign out every device and block approvals from this number for a while?",
+  "where": [
+   "android:lost_q",
+   "ios"
+  ]
+ },
+ "671a21ea29": {
+  "en": "Sign out everywhere",
+  "where": [
+   "web"
+  ]
+ },
+ "0b3fc7cf18": {
+  "en": "sign out everywhere in the app and sign in again",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "a6f129719b": {
+  "en": "Sign out here",
+  "where": [
+   "web"
+  ]
+ },
+ "8fbe77a9de": {
+  "en": "Sign out of every device and hold larger payments for 72 hours?",
+  "where": [
+   "web"
+  ]
+ },
+ "89a563ec63": {
+  "en": "signed in after a SIM change: restricted until {0} or until confirmed from a trusted device or by a guardian",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "4603ade58d": {
+  "en": "Signed in with limits: %1$s",
+  "where": [
+   "android:signed_in_limits"
+  ]
+ },
+ "e04c9ef11c": {
+  "en": "Signed in. This device is restricted for now; see the note at the top.",
+  "where": [
+   "web"
+  ]
+ },
+ "05d2a79ce8": {
+  "en": "Signed out.",
+  "where": [
+   "android:signed_out",
+   "ios"
+  ]
+ },
+ "9912e24c0d": {
+  "en": "Signed out: %1$s",
+  "where": [
+   "android:signed_out_reason"
+  ]
+ },
+ "a77ffe7704": {
+  "en": "Signed out: %@",
+  "where": [
+   "ios"
+  ]
+ },
+ "5f11f3f04b": {
+  "en": "SIM change alert",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "0e1b456903": {
+  "en": "SIM change confirmed",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "b594d334ea": {
+  "en": "SIM change detected",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "35bb097abc": {
+  "en": "Someone",
+  "where": [
+   "web",
+   "ios"
+  ]
+ },
+ "c996bcf162": {
+  "en": "Someone is recovering your account",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "6ac019c3d2": {
+  "en": "Someone is trying to recover {0}'s account on a new number {1}. Only approve if you have spoken to {2} yourself, on a call YOU placed or in person. If in doubt, deny.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "8d886c0ba6": {
+  "en": "Something went wrong",
+  "where": [
+   "web"
+  ]
+ },
+ "df098732df": {
+  "en": "Stop it",
+  "where": [
+   "web"
+  ]
+ },
+ "51a19c460e": {
+  "en": "Stop this payment",
+  "where": [
+   "web",
+   "android:stop_payment",
+   "ios"
+  ]
+ },
+ "8fcc7be383": {
+  "en": "Stopped.",
+  "where": [
+   "web"
+  ]
+ },
+ "79845f4030": {
+  "en": "Stricter parts apply now; looser parts wait 24 hours.",
+  "where": [
+   "web"
+  ]
+ },
+ "d298e87c3c": {
+  "en": "switch payments back on",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "581ee0e35f": {
+  "en": "Switch payments back on",
+  "where": [
+   "web"
+  ]
+ },
+ "c2cb609be4": {
+  "en": "Takes effect {time} unless a guardian stops it.",
+  "where": [
+   "web"
+  ]
+ },
+ "a054eb28f9": {
+  "en": "Thank you. Your vouch is recorded.",
+  "where": [
+   "web"
+  ]
+ },
+ "de52f27c7f": {
+  "en": "Thanks. Normal protection applies again.",
+  "where": [
+   "web"
+  ]
+ },
+ "2206fddf43": {
+  "en": "that new number is already enrolled; recover with a number that isn't",
+  "where": [
+   "server:error"
+  ]
+ },
+ "e4f0bbdabc": {
+  "en": "that number is already enrolled",
+  "where": [
+   "server:error"
+  ]
+ },
+ "53c16827a3": {
+  "en": "that person must enrol before they can be invited as a guardian",
+  "where": [
+   "server:error"
+  ]
+ },
+ "b73c55813f": {
+  "en": "the current notice is version {0}; read it and accept that version",
+  "where": [
+   "server:error"
+  ]
+ },
+ "6adbf79644": {
+  "en": "the guardian being removed cannot decide on their own removal",
+  "where": [
+   "server:error"
+  ]
+ },
+ "f43a649ce6": {
+  "en": "the new number was enrolled by someone else in the meantime",
+  "where": [
+   "server:error"
+  ]
+ },
+ "b3934a84b4": {
+  "en": "The requested change ({0}) for {1} is now in effect.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "6fe68ab36a": {
+  "en": "the SIM card for this number was changed recently, so this payment needs extra checks",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "c45afb92de": {
+  "en": "The waiting period for {0} to {1} is over.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "6068e40cd0": {
+  "en": "this change was already decided",
+  "where": [
+   "server:error"
+  ]
+ },
+ "fa5a6dd9d2": {
+  "en": "This device",
+  "where": [
+   "web"
+  ]
+ },
+ "7f82a38a6f": {
+  "en": "this device key was revoked; reinstall the app to create a new one",
+  "where": [
+   "server:error"
+  ]
+ },
+ "65828f3fdf": {
+  "en": "this mobile number is already enrolled",
+  "where": [
+   "server:error"
+  ]
+ },
+ "98a019167a": {
+  "en": "This number is new here. Add your name to create your account.",
+  "where": [
+   "web"
+  ]
+ },
+ "02284037a1": {
+  "en": "this number is not enrolled yet: send display_name to enrol",
+  "where": [
+   "server:error"
+  ]
+ },
+ "896ab037ef": {
+  "en": "this person is already invited or active as your guardian",
+  "where": [
+   "server:error"
+  ]
+ },
+ "c3881b4882": {
+  "en": "this person's rules require a bank-verified guardian to approve payments",
+  "where": [
+   "server:error"
+  ]
+ },
+ "6d5c0e202d": {
+  "en": "this sign-in can't do that yet: {0}",
+  "where": [
+   "server:error"
+  ]
+ },
+ "a011f25b8a": {
+  "en": "This sign-in is restricted for now: {reasons}. You can still pause payments, deny or stop payments, and make rules stricter.",
+  "where": [
+   "web"
+  ]
+ },
+ "4842d32f9d": {
+  "en": "This signs you out everywhere and holds larger payments for 72 hours.",
+  "where": [
+   "web"
+  ]
+ },
+ "e89dbcf61a": {
+  "en": "Time for guardian to answer",
+  "where": [
+   "web"
+  ]
+ },
+ "d844e8b8b2": {
+  "en": "To %@%@",
+  "where": [
+   "ios"
+  ]
+ },
+ "0626055867": {
+  "en": "To {payee}",
+  "where": [
+   "web"
+  ]
+ },
+ "237dba199e": {
+  "en": "too many codes requested; try again in {0} minutes",
+  "where": [
+   "server:error"
+  ]
+ },
+ "d1bd66145a": {
+  "en": "too many wrong codes; request a new one",
+  "where": [
+   "server:error"
+  ]
+ },
+ "ac946ad589": {
+  "en": "trusted",
+  "where": [
+   "web"
+  ]
+ },
+ "ce635edc08": {
+  "en": "Two banks reported different dates of birth, so we can't confirm your age. Ask one of them to correct their record.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "09838443ab": {
+  "en": "unknown channels: {0}",
+  "where": [
+   "server:error"
+  ]
+ },
+ "07d94bcb21": {
+  "en": "unknown preset; choose one of {0}",
+  "where": [
+   "server:error"
+  ]
+ },
+ "a0a3190c3b": {
+  "en": "Until {time}, larger payments are held and new sign-ins can't approve anything.",
+  "where": [
+   "web"
+  ]
+ },
+ "ff7c70d655": {
+  "en": "urgent_channel must be one of {0}",
+  "where": [
+   "server:error"
+  ]
+ },
+ "551b430a98": {
+  "en": "Use a ready-made set",
+  "where": [
+   "web"
+  ]
+ },
+ "fd7983c6a6": {
+  "en": "Use another number",
+  "where": [
+   "web"
+  ]
+ },
+ "c58248a161": {
+  "en": "use the kill-switch endpoints to turn payments on or off",
+  "where": [
+   "server:error"
+  ]
+ },
+ "bbcde85795": {
+  "en": "user not found",
+  "where": [
+   "server:error"
+  ]
+ },
+ "0de0217713": {
+  "en": "verified by a bank",
+  "where": [
+   "web"
+  ]
+ },
+ "2aa0db7f3c": {
+  "en": "vetoed",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "b77d58b73e": {
+  "en": "vouching opens at {0}. Use the time to call them yourself on a number you know; you can deny at any time",
+  "where": [
+   "server:error"
+  ]
+ },
+ "c67a699ca2": {
+  "en": "Wait on new payees from",
+  "where": [
+   "web"
+  ]
+ },
+ "1c18fc5d17": {
+  "en": "Wait time",
+  "where": [
+   "web"
+  ]
+ },
+ "99bbc923a4": {
+  "en": "wait {0} seconds before asking for another code",
+  "where": [
+   "server:error"
+  ]
+ },
+ "0a1ea5282f": {
+  "en": "Waiting for approval",
+  "where": [
+   "web"
+  ]
+ },
+ "263be8e8dd": {
+  "en": "Waiting for your guardian",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "5639fd65a6": {
+  "en": "We sent a 6-digit code to %1$s. Never share it, not even with a guardian or a bank.",
+  "where": [
+   "android:code_sent"
+  ]
+ },
+ "f325bd37aa": {
+  "en": "We were told your SIM card changed. If you did this, confirm it from your old phone or ask a guardian to confirm. If you didn't, contact your mobile operator now.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "1e034d182c": {
+  "en": "We'll send a 6-digit code to your mobile number.",
+  "where": [
+   "web"
+  ]
+ },
+ "2e435a106d": {
+  "en": "Welcome! Your account is set up.",
+  "where": [
+   "web"
+  ]
+ },
+ "02499f03f9": {
+  "en": "withdrawn",
+  "where": [
+   "server:error-phrase"
+  ]
+ },
+ "7a3066e404": {
+  "en": "wrong code",
+  "where": [
+   "server:error"
+  ]
+ },
+ "5397e0583f": {
+  "en": "Yes",
+  "where": [
+   "web",
+   "android:yes"
+  ]
+ },
+ "1e463fd3c6": {
+  "en": "Yes, I changed my SIM",
+  "where": [
+   "web"
+  ]
+ },
+ "1e82df9ea4": {
+  "en": "Yes, I lost my phone",
+  "where": [
+   "ios"
+  ]
+ },
+ "b9fb4f4416": {
+  "en": "You are being removed as guardian",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "1d6aaef48c": {
+  "en": "you are not an active guardian of this person",
+  "where": [
+   "server:error"
+  ]
+ },
+ "6e4b464b03": {
+  "en": "You can approve from {time}.",
+  "where": [
+   "web"
+  ]
+ },
+ "4abbce8c3b": {
+  "en": "you cannot be your own guardian",
+  "where": [
+   "server:error"
+  ]
+ },
+ "8c047ea2a2": {
+  "en": "You don't protect anyone yet. Someone has to invite you from their app.",
+  "where": [
+   "web"
+  ]
+ },
+ "8fd031f2ce": {
+  "en": "You now protect them.",
+  "where": [
+   "android:you_protect_them",
+   "ios"
+  ]
+ },
+ "e7ba43994f": {
+  "en": "You now protect {name}.",
+  "where": [
+   "web"
+  ]
+ },
+ "abc4430cc0": {
+  "en": "Your account is being recovered",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "09333fbd95": {
+  "en": "Your account moves to {0} at {1}. If this isn't you, cancel it now.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "eebc8a22a6": {
+  "en": "Your account now uses {0}. Sign in with it to continue.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "8e8b408af6": {
+  "en": "Your account was signed in on a new device. For 24 hours that device can't approve payments or loosen protection. If this wasn't you, report a lost phone.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "189fc3f1a8": {
+  "en": "Your bank's identity confirmation is more than a year old. Ask your bank to confirm it again.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "2a4c712bfc": {
+  "en": "your date of birth",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "44dd039bb6": {
+  "en": "Your Guardian Registry account will be deleted on {0}, and your guardians will stop protecting your payments. If you didn't ask for this, or someone told you to, cancel it in the app.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "53d144afa6": {
+  "en": "Your guardian's number changed",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "1703fcbdd5": {
+  "en": "Your guardian's SIM changed",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "70ac1b89f5": {
+  "en": "your mobile number",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "a5c3c23118": {
+  "en": "Your mobile operator says {0} was disconnected. It is no longer linked to your account, so sign-in codes can't reach you. From this app, add your new number under Change number. No phone signed in? Recover your account from your new number.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "ae3ed0ee2b": {
+  "en": "your name",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "ab42293e29": {
+  "en": "Your name",
+  "where": [
+   "web"
+  ]
+ },
+ "a1367ab8e0": {
+  "en": "Your name (first time only)",
+  "where": [
+   "android:your_name_first",
+   "ios"
+  ]
+ },
+ "96b62c13a3": {
+  "en": "Your number changed, so your bank needs to confirm your identity again.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "3d86ff431e": {
+  "en": "Your number was disconnected",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "75481bd250": {
+  "en": "your payment history",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "7099cde9ad": {
+  "en": "Your request is held for 24 hours. Your guardians can approve it sooner.",
+  "where": [
+   "web"
+  ]
+ },
+ "6f3745dbc6": {
+  "en": "your sign-in sessions",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "6d87b2b34d": {
+  "en": "Your SIM card was reported changed",
+  "where": [
+   "web"
+  ]
+ },
+ "3b8370bb24": {
+  "en": "{0} asked to delete their account on {1}. If someone may be pressuring them, call them now.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "3ffe1683c9": {
+  "en": "{0} asked to remove you as guardian. It takes effect in {1} hours. If this sounds like pressure from someone else, call them.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "1f127bae75": {
+  "en": "{0} asked to {1}. It takes effect in {2} hours unless you veto it. If they are on a call with a stranger, veto.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "b1222b04bb": {
+  "en": "{0} asked you to be their payment guardian. Accept or decline in the app.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "9365f6985e": {
+  "en": "{0} confirmed the SIM change for {1}. Normal protection applies again.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "d5c9c9d705": {
+  "en": "{0} confirmed who they are",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "8eab75890d": {
+  "en": "{0} did a full KYC check in person",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "1862929537": {
+  "en": "{0} has left Guardian Registry, so its confirmation of your identity no longer counts.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "d4d35d3f34": {
+  "en": "{0} is no longer your guardian.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "3564f4d1c0": {
+  "en": "{0} is paying {1} to {2}. It goes through in {3} min unless you or they cancel it. Reason: {4}.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "0cb8ecc00d": {
+  "en": "{0} must be a positive whole number of paise or null",
+  "where": [
+   "server:error"
+  ]
+ },
+ "15161e6a7f": {
+  "en": "{0} new payees in 24 hours",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "3ef7d988b1": {
+  "en": "{0} paused all outgoing payments for {1}.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "92e687e24c": {
+  "en": "{0} people who know {1} vouched",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "56b3869ed6": {
+  "en": "{0} stopped your requested change. Your protection stays as it was.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "3eb0402d6d": {
+  "en": "{0} switched payments back on for {1}.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "8adcf51b19": {
+  "en": "{0} to {1} needs a guardian's approval. They have been alerted.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "df0d745daf": {
+  "en": "{0} to {1} was blocked: {2}.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "c788787253": {
+  "en": "{0} to {1} will go through in {2} min. You can cancel it until then.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "19478393a0": {
+  "en": "{0} wants to confirm to Guardian Registry that you are their KYC-verified customer{1}. Approve only if you bank with them.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "d2ff7e1d43": {
+  "en": "{0} wants to pay {1} to {2}. Approve or deny within {3} min. Reason held: {4}.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "df77b5d5cb": {
+  "en": "{0} withdrew its identity confirmation.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "6eaa939607": {
+  "en": "{0} {1} {2} to {3}.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "82c2129eb4": {
+  "en": "{0} {1}.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "ee67443728": {
+  "en": "{0} {1}. For {2} h, new sign-ins can't approve or loosen anything and larger payments are held. Call {3} on another number. If it wasn't them, switch on the kill switch.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "12add33546": {
+  "en": "{0}'s account now uses {1}.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "a24faa301d": {
+  "en": "{0}'s mobile number was disconnected. They can still act from the phone they are signed in on, but can't sign in anywhere new until they add a new number.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "2007c2a43a": {
+  "en": "{0}'s mobile number {1} was disconnected by the operator and removed from their account. Their protection still applies. Help {2} add their new number.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "515ac8e259": {
+  "en": "{0}'s SIM card changed. Approvals from their new sign-ins are paused for {1} h.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "96710e81a3": {
+  "en": "{0}. {1}'s account moves to {2} at {3} unless someone stops it.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "a47d8efbcf": {
+  "en": "{m} min",
+  "where": [
+   "web"
+  ]
+ },
+ "d7f7cae45d": {
+  "en": "{name} asked you to be their payment guardian.",
+  "where": [
+   "web"
+  ]
+ },
+ "0a65a224c0": {
+  "en": "{name} wants to move their account to {number}.",
+  "where": [
+   "web"
+  ]
+ },
+ "92ddf0a8c3": {
+  "en": "{name} wants to: {what}",
+  "where": [
+   "web"
+  ]
+ }
+}

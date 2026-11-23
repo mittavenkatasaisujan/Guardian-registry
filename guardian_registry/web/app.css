@@ -217,7 +217,8 @@ ul.list > li:first-child { border-top: none; }
 .grow { flex: 1 1 220px; width: auto; }
 
 /* language switch in the header */
-.lang { margin-left: auto; background: transparent; border: 1px solid rgba(255, 255, 255, 0.6); color: inherit; padding: 4px 12px; min-height: 0; font-size: 0.95rem; }
+.lang { margin-left: auto; width: auto; background: transparent; border: 1px solid rgba(255, 255, 255, 0.6); color: inherit; padding: 4px 8px; min-height: 0; font-size: 0.95rem; }
+.lang option { color: #111; }
 .bar nav { order: 3; }
 
 /* operator console tables */

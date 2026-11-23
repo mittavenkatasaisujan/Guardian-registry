@@ -1,0 +1,8 @@
+{
+ "en": {"name": "English", "enabled": true, "status": "source"},
+ "hi": {"name": "हिंदी", "enabled": true, "status": "machine-drafted; native review pending"},
+ "ta": {"name": "தமிழ்", "enabled": false, "status": "draft: needs a native speaker's review before enabling"},
+ "te": {"name": "తెలుగు", "enabled": false, "status": "draft: needs a native speaker's review before enabling"},
+ "bn": {"name": "বাংলা", "enabled": false, "status": "draft: needs a native speaker's review before enabling"},
+ "mr": {"name": "मराठी", "enabled": false, "status": "draft: needs a native speaker's review before enabling"}
+}

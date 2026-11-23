@@ -15,7 +15,7 @@ from .conftest import AMMA, R
 
 PUBLIC = {
     ("GET", "/"), ("GET", "/healthz"), ("GET", "/readyz"), ("GET", "/metrics"), ("GET", "/v1/presets"),
-    ("GET", "/v1/privacy/notice"), ("POST", "/v1/auth/otp"), ("POST", "/v1/auth/challenge"),
+    ("GET", "/v1/privacy/notice"), ("GET", "/v1/languages"), ("POST", "/v1/auth/otp"), ("POST", "/v1/auth/challenge"),
     ("POST", "/v1/auth/verify"), ("POST", "/v1/recovery/start"), ("POST", "/v1/recovery/status"),
 }
 

@@ -7,13 +7,14 @@
   <title>Guardian Registry</title>
   <link rel="stylesheet" href="app.css">
   <link rel="manifest" href="manifest.json">
+  <script src="i18n-extra.js" defer></script>
   <script src="i18n.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
   <header class="bar">
     <div class="brand"><span class="shield" aria-hidden="true"></span>Guardian Registry</div>
-    <button id="lang" type="button" class="lang"></button>
+    <select id="lang" class="lang" aria-label="Language / भाषा"></select>
     <nav id="nav" hidden>
       <a href="#me" data-tab="me"><span data-i18n="My protection">My protection</span></a>
       <a href="#guardian" data-tab="guardian"><span data-i18n="I protect">I protect</span> <span id="inbox-count" class="badge" hidden></span></a>

@@ -561,10 +561,9 @@
       "LanguageIn": {
         "properties": {
           "language": {
-            "enum": [
-              "en",
-              "hi"
-            ],
+            "description": "one of GET /v1/languages",
+            "maxLength": 10,
+            "minLength": 2,
             "title": "Language",
             "type": "string"
           }
@@ -679,17 +678,14 @@
           "language": {
             "anyOf": [
               {
-                "enum": [
-                  "en",
-                  "hi"
-                ],
+                "maxLength": 10,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "language of the code SMS",
+            "description": "language of the code SMS (e.g. hi, ta)",
             "title": "Language"
           },
           "mobile": {
@@ -1274,17 +1270,14 @@
           "language": {
             "anyOf": [
               {
-                "enum": [
-                  "en",
-                  "hi"
-                ],
+                "maxLength": 10,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "language for this person's alerts and SMS",
+            "description": "the app's language (e.g. hi-IN); used for alerts and SMS if enabled",
             "title": "Language"
           },
           "mobile": {
@@ -1353,7 +1346,7 @@
   "info": {
     "description": "Cross-bank trusted-person and payment-protection registry.",
     "title": "Guardian Registry",
-    "version": "0.22.0"
+    "version": "0.23.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -6268,6 +6261,26 @@
         "summary": "Bank Recovery Vouch",
         "tags": [
           "banks"
+        ]
+      }
+    },
+    "/v1/languages": {
+      "get": {
+        "description": "Languages for alerts, SMS and messages. Drafts appear only once reviewed and enabled.",
+        "operationId": "languages_v1_languages_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Languages",
+        "tags": [
+          "people"
         ]
       }
     },
