@@ -1,7 +1,22 @@
-"""SQLite storage. One connection guarded by a lock; fine for a pilot-scale registry."""
+"""Storage: SQLite for a single node, Postgres for several.
+
+`Database(path)` opens SQLite (a file path, or ":memory:"). `Database("postgresql://...")`
+opens Postgres. Both use one connection guarded by a lock per process.
+
+Schema: the SQLite migrations below are the single source of truth. For Postgres the
+registry builds the same final schema from them (postgres_baseline) and records the
+version, so there is only one schema to maintain.
+
+Multi-node safety on Postgres: every write transaction first takes one database-wide
+advisory lock, so writes are serialized across ALL nodes exactly as SQLite serializes them
+within one. Daily limits, the audit hash chain and "one recovery at a time" stay correct
+without per-query locking. Reads don't take the lock. That caps write throughput at what
+one Postgres can do serially, which is far beyond a national pilot's needs.
+"""
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -327,19 +342,123 @@ CREATE INDEX ix_push_user ON push_tokens(user_id);
 MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8]
 
 
+PG_WRITE_LOCK = 7_240_001        # advisory lock id serializing writes across nodes
+PG_ROWID_TABLES = ("checks", "notifications")  # code orders by SQLite's rowid on these
+
+
+def _strip_comments(sql: str) -> str:
+    return re.sub(r"--[^\n]*", "", sql)
+
+
+def postgres_baseline() -> str:
+    """The final schema as Postgres DDL, derived by running every SQLite migration."""
+    mem = sqlite3.connect(":memory:")
+    for script in MIGRATIONS:
+        mem.executescript(script)
+    rows = mem.execute("SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL "
+                       "AND name NOT LIKE 'sqlite_%' ORDER BY rowid").fetchall()
+    mem.close()
+    tables = {name: _strip_comments(sql) for kind, name, sql in rows if kind == "table"}
+    indexes = [_strip_comments(sql) for kind, name, sql in rows if kind == "index"]
+    order, done = [], set()
+
+    def visit(name: str, path=()):  # referenced tables must exist first
+        if name in done:
+            return
+        if name in path:
+            raise RuntimeError(f"foreign-key cycle at {name}")
+        for ref in re.findall(r'REFERENCES\s+"?(\w+)', tables[name]):
+            if ref != name and ref in tables:
+                visit(ref, path + (name,))
+        done.add(name)
+        order.append(name)
+
+    for name in tables:
+        visit(name)
+    ddl = []
+    for name in order:
+        sql = tables[name].strip()
+        sql = re.sub(r"^CREATE TABLE\s+(IF NOT EXISTS\s+)?", "CREATE TABLE IF NOT EXISTS ", sql)
+        if name in PG_ROWID_TABLES:
+            sql = sql[: sql.rindex(")")].rstrip() + ",\n    rowid BIGSERIAL\n)"
+        ddl.append(sql + ";")
+    for sql in indexes:
+        sql = re.sub(r"^CREATE (UNIQUE )?INDEX\s+(IF NOT EXISTS\s+)?",
+                     lambda m: f"CREATE {m.group(1) or ''}INDEX IF NOT EXISTS ", sql.strip())
+        ddl.append(sql + ";")
+    return "\n".join(ddl)
+
+
+class PgConnection:
+    """Makes a psycopg connection look like the sqlite3 one the code uses: `?` placeholders,
+    rows readable by column name, execute / executemany / executescript."""
+
+    def __init__(self, url: str, schema: str | None = None):
+        import psycopg  # optional dependency: only needed for Postgres
+        from psycopg.rows import dict_row
+        self._pg = psycopg
+        self._c = psycopg.connect(url, autocommit=True, row_factory=dict_row)
+        if schema:
+            if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", schema):
+                raise ValueError("bad schema name")
+            self._c.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+            self._c.execute(f"SET search_path TO {schema}")
+
+    @staticmethod
+    def _sql(sql: str) -> str:
+        return sql.replace("?", "%s")
+
+    def execute(self, sql: str, params=()):
+        return self._c.execute(self._sql(sql), tuple(params) if params else None)
+
+    def executemany(self, sql: str, seq):
+        cur = self._c.cursor()
+        cur.executemany(self._sql(sql), [tuple(p) for p in seq])
+        return cur
+
+    def executescript(self, script: str) -> None:
+        self._c.execute(script)
+
+    def iterdump(self):
+        """Every row of every table as text, like sqlite3's iterdump (for privacy checks)."""
+        tables = self._c.execute("SELECT table_name FROM information_schema.tables "
+                                 "WHERE table_schema = current_schema() ORDER BY table_name").fetchall()
+        for t in tables:
+            for row in self._c.execute(f'SELECT * FROM "{t["table_name"]}"').fetchall():
+                yield f"{t['table_name']}: {row!r}"
+
+    def drop_schema(self) -> None:
+        schema = self._c.execute("SELECT current_schema() AS s").fetchone()["s"]
+        if schema and schema != "public":
+            self._c.execute(f"DROP SCHEMA {schema} CASCADE")
+
+    @property
+    def in_transaction(self) -> bool:
+        return self._c.info.transaction_status != self._pg.pq.TransactionStatus.IDLE
+
+    def close(self) -> None:
+        self._c.close()
+
+
 class Database:
-    def __init__(self, path: str = ":memory:"):
-        self.conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.execute("PRAGMA foreign_keys = ON")
-        if path != ":memory:":
-            self.conn.execute("PRAGMA journal_mode = WAL")
+    def __init__(self, path: str = ":memory:", schema: str | None = None):
+        self.backend = "postgres" if path.startswith(("postgres://", "postgresql://")) else "sqlite"
         self._lock = threading.RLock()
         self._depth = 0
+        if self.backend == "postgres":
+            self.conn = PgConnection(path, schema)
+        else:
+            self.conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
+            self.conn.row_factory = sqlite3.Row
+            self.conn.execute("PRAGMA foreign_keys = ON")
+            if path != ":memory:":
+                self.conn.execute("PRAGMA journal_mode = WAL")
         self.migrate()
 
     def migrate(self) -> int:
-        """Apply pending migrations in order. PRAGMA user_version records the schema version."""
+        """Apply pending migrations in order."""
+        if self.backend == "postgres":
+            return self._migrate_postgres()
         version = self.conn.execute("PRAGMA user_version").fetchone()[0]
         for target, script in enumerate(MIGRATIONS, start=1):
             if version >= target:
@@ -356,13 +475,31 @@ class Database:
             version = target
         return version
 
+    def _migrate_postgres(self) -> int:
+        """First start: create the full schema. Later versions need a Postgres step here."""
+        with self.tx() as c:  # the write lock also stops two nodes migrating at once
+            c.execute("CREATE TABLE IF NOT EXISTS gr_schema (version INTEGER NOT NULL)")
+            row = c.execute("SELECT version FROM gr_schema").fetchone()
+            if row is None:
+                c.executescript(postgres_baseline())
+                c.execute("INSERT INTO gr_schema (version) VALUES (?)", (len(MIGRATIONS),))
+                return len(MIGRATIONS)
+            if row["version"] != len(MIGRATIONS):
+                raise RuntimeError(f"Postgres schema is v{row['version']}, code expects v{len(MIGRATIONS)}: "
+                                   "add a Postgres migration step")
+            return row["version"]
+
     @contextmanager
     def tx(self):
         """Serialized, atomic unit of work. Nested calls join the outer transaction."""
         with self._lock:
             outer = self._depth == 0
             if outer:
-                self.conn.execute("BEGIN IMMEDIATE")
+                if self.backend == "postgres":
+                    self.conn.execute("BEGIN")
+                    self.conn.execute("SELECT pg_advisory_xact_lock(?)", (PG_WRITE_LOCK,))
+                else:
+                    self.conn.execute("BEGIN IMMEDIATE")
             self._depth += 1
             try:
                 yield self.conn
@@ -376,11 +513,11 @@ class Database:
                 if outer:
                     self.conn.execute("COMMIT")
 
-    def one(self, sql: str, params=()) -> sqlite3.Row | None:
+    def one(self, sql: str, params=()):
         with self._lock:
             return self.conn.execute(sql, params).fetchone()
 
-    def all(self, sql: str, params=()) -> list[sqlite3.Row]:
+    def all(self, sql: str, params=()):
         with self._lock:
             return self.conn.execute(sql, params).fetchall()
 

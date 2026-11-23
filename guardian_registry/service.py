@@ -233,8 +233,10 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
                     raise TooMany(f"too many codes requested; try again in {OTP_WINDOW_MINUTES} minutes")
         code = new_otp()
         with self.db.tx() as c:
-            c.execute("INSERT OR REPLACE INTO otps (mobile_hash, code_hash, expires_at, attempts, window_start, sends, "
-                      "last_sent_at) VALUES (?,?,?,0,?,?,?)",
+            c.execute("INSERT INTO otps (mobile_hash, code_hash, expires_at, attempts, window_start, sends, "
+                      "last_sent_at) VALUES (?,?,?,0,?,?,?) ON CONFLICT(mobile_hash) DO UPDATE SET "
+                      "code_hash=excluded.code_hash, expires_at=excluded.expires_at, attempts=0, "
+                      "window_start=excluded.window_start, sends=excluded.sends, last_sent_at=excluded.last_sent_at",
                       (mh, otp_hash(mh, code), iso(now + timedelta(minutes=OTP_TTL_MINUTES)),
                        window_start, sends + 1, iso(now)))
         sms.send(normalize_mobile(mobile),
@@ -546,7 +548,12 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             args += (ChangeStatus.PENDING.value,)
         return [self.change(r["id"]) for r in self.db.all(sql + " ORDER BY created_at", args)]
 
-    def _apply_change(self, c: sqlite3.Connection, r: sqlite3.Row, actor: str) -> None:
+    def _apply_change(self, c: sqlite3.Connection, r: sqlite3.Row, actor: str) -> bool:
+        """Apply a held change. Returns False if it was already decided (by another node or
+        thread) since `r` was read."""
+        now_status = c.execute("SELECT status FROM pending_changes WHERE id=?", (r["id"],)).fetchone()["status"]
+        if now_status != ChangeStatus.PENDING.value:
+            return False
         payload = json.loads(r["payload"])
         pid = r["principal_id"]
         kind = ChangeKind(r["kind"])
@@ -569,13 +576,14 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         self._alert(c, [pid, *self._active_guardian_ids(pid)], "change_applied", "Protection change applied",
                     f"The requested change ({kind.value.replace('_', ' ')}) for {self._name(pid)} is now in effect.",
                     pid, change_id=r["id"])
+        return True
 
     def _apply_due_changes(self, principal_id: str) -> None:
-        due = self.db.all("SELECT * FROM pending_changes WHERE principal_id=? AND status=? AND effective_at<=?",
-                          (principal_id, ChangeStatus.PENDING.value, self._now()))
-        if due:
+        sql = "SELECT * FROM pending_changes WHERE principal_id=? AND status=? AND effective_at<=?"
+        args = (principal_id, ChangeStatus.PENDING.value, self._now())
+        if self.db.one(sql, args):  # cheap check first: get_rules calls this on every read
             with self.db.tx() as c:
-                for r in due:
+                for r in c.execute(sql, args).fetchall():  # re-read under the write lock
                     self._apply_change(c, r, "system:delay_elapsed")
 
     def _guardian_change(self, guardian_id: str, cid: str) -> sqlite3.Row:
@@ -597,14 +605,17 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
     def approve_change(self, guardian_id: str, cid: str) -> dict:
         r = self._guardian_change(guardian_id, cid)
         with self.db.tx() as c:
-            self._apply_change(c, r, guardian_id)
+            if not self._apply_change(c, r, guardian_id):
+                raise Conflict("this change was already decided")
         return self.change(cid)
 
     def veto_change(self, guardian_id: str, cid: str) -> dict:
         r = self._guardian_change(guardian_id, cid)
         with self.db.tx() as c:
-            c.execute("UPDATE pending_changes SET status=?, decided_by=?, decided_at=? WHERE id=?",
-                      (ChangeStatus.VETOED.value, guardian_id, self._now(), cid))
+            if not c.execute("UPDATE pending_changes SET status=?, decided_by=?, decided_at=? WHERE id=? AND status=?",
+                             (ChangeStatus.VETOED.value, guardian_id, self._now(), cid,
+                              ChangeStatus.PENDING.value)).rowcount:
+                raise Conflict("this change was already decided")
             self._audit(c, guardian_id, "change.vetoed", r["principal_id"], change_id=cid)
             self._alert(c, [r["principal_id"]], "change_vetoed", "Change stopped",
                         f"{self._name(guardian_id)} stopped your requested change. Your protection stays as it was.",
@@ -619,7 +630,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         if not payee:
             raise Invalid("payee is required")
         with self.db.tx() as c:
-            c.execute("INSERT OR IGNORE INTO trusted_payees VALUES (?,?,?,?)",
+            c.execute("INSERT INTO trusted_payees VALUES (?,?,?,?) ON CONFLICT DO NOTHING",
                       (principal_id, payee, guardian_id, self._now()))
             self._audit(c, guardian_id, "payee.vouched", principal_id, payee=payee)
 
@@ -716,55 +727,69 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         now = self.clock.now()
         day = ist_day(now)
         with self.db.tx() as c:
-            self._refresh_principal(c, principal_id)
-            spend_statuses = [s.value for s in CheckStatus if s.counts_as_spend]
-            spent = c.execute(
-                "SELECT COALESCE(SUM(amount),0) s FROM checks WHERE principal_id=? AND day=? AND status IN (%s)"
-                % ",".join("?" * len(spend_statuses)),
-                (principal_id, day, *spend_statuses),
-            ).fetchone()["s"]
-            rules = self._rules_raw(principal_id)
-            decision = evaluate(
-                rules, Transaction(amount=amount, payee=payee, channel=channel),
-                spent_today=spent,
-                payee_known=self._payee_known(principal_id, payee),
-                sim_swap_recent=self.sim_swap_active(principal_id),
-                has_active_guardian=bool(self._approver_ids(principal_id)),
-            )
-            status = _OUTCOME_TO_STATUS[decision.outcome]
-            release_at = iso(now + timedelta(minutes=decision.delay_minutes)) if decision.outcome is Outcome.DELAY else None
-            expires_at = (iso(now + timedelta(minutes=decision.approval_timeout_minutes))
-                          if decision.outcome is Outcome.NEEDS_APPROVAL else None)
-            cid = new_id("chk")
-            c.execute(
-                "INSERT INTO checks (id, principal_id, participant_id, participant_txn_id, amount, payee, channel, "
-                "outcome, status, reasons, day, created_at, release_at, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (cid, principal_id, participant_id, participant_txn_id, amount, payee, channel,
-                 decision.outcome.value, status.value, json.dumps(decision.reasons, ensure_ascii=False),
-                 day, iso(now), release_at, expires_at),
-            )
-            self._audit(c, participant_id, "check.decided", principal_id, check_id=cid,
-                        amount=amount, payee=payee, channel=channel, outcome=decision.outcome.value)
-            who, amt = self._name(principal_id), rupees(amount)
-            why = "; ".join(decision.reasons)
-            if decision.outcome is Outcome.NEEDS_APPROVAL:
-                self._alert(c, self._approver_ids(principal_id), "approval_needed", "Approve payment?",
-                            f"{who} wants to pay {amt} to {payee}. Approve or deny within "
-                            f"{decision.approval_timeout_minutes} min. Reason held: {why}.", principal_id, check_id=cid)
-                self._alert(c, [principal_id], "payment_waiting", "Waiting for your guardian",
-                            f"{amt} to {payee} needs a guardian's approval. They have been alerted.", principal_id,
-                            check_id=cid)
-            elif decision.outcome is Outcome.DELAY:
-                self._alert_guardians(c, principal_id, "payment_held", "Payment on hold",
-                                      f"{who} is paying {amt} to {payee}. It goes through in {decision.delay_minutes} "
-                                      f"min unless you or they cancel it. Reason: {why}.", check_id=cid)
-                self._alert(c, [principal_id], "payment_waiting", "Payment on hold",
-                            f"{amt} to {payee} will go through in {decision.delay_minutes} min. You can cancel it "
-                            "until then.", principal_id, check_id=cid)
-            elif decision.outcome is Outcome.BLOCK:
-                self._alert(c, [principal_id], "payment_blocked", "Payment blocked",
-                            f"{amt} to {payee} was blocked: {why}.", principal_id, check_id=cid)
+            # the same retry may reach two nodes at once: re-check under the write lock
+            dup = c.execute("SELECT id FROM checks WHERE participant_id=? AND participant_txn_id=?",
+                            (participant_id, participant_txn_id)).fetchone()
+            if dup:
+                cid = None
+            else:
+                cid = self._decide_new_check(c, principal_id, participant_id, participant_txn_id,
+                                             amount, payee, channel, now, day)
+        if cid is None:
+            return self.check(participant_id, mobile, participant_txn_id, amount, payee, channel)
         return self._with_customer_facts(self._check_view(cid, for_participant=True), principal_id)
+
+    def _decide_new_check(self, c, principal_id: str, participant_id: str, participant_txn_id: str,
+                          amount: int, payee: str, channel: str, now, day: str) -> str:
+        self._refresh_principal(c, principal_id)
+        spend_statuses = [s.value for s in CheckStatus if s.counts_as_spend]
+        spent = c.execute(
+            "SELECT COALESCE(SUM(amount),0) s FROM checks WHERE principal_id=? AND day=? AND status IN (%s)"
+            % ",".join("?" * len(spend_statuses)),
+            (principal_id, day, *spend_statuses),
+        ).fetchone()["s"]
+        rules = self._rules_raw(principal_id)
+        decision = evaluate(
+            rules, Transaction(amount=amount, payee=payee, channel=channel),
+            spent_today=spent,
+            payee_known=self._payee_known(principal_id, payee),
+            sim_swap_recent=self.sim_swap_active(principal_id),
+            has_active_guardian=bool(self._approver_ids(principal_id)),
+        )
+        status = _OUTCOME_TO_STATUS[decision.outcome]
+        release_at = iso(now + timedelta(minutes=decision.delay_minutes)) if decision.outcome is Outcome.DELAY else None
+        expires_at = (iso(now + timedelta(minutes=decision.approval_timeout_minutes))
+                      if decision.outcome is Outcome.NEEDS_APPROVAL else None)
+        cid = new_id("chk")
+        c.execute(
+            "INSERT INTO checks (id, principal_id, participant_id, participant_txn_id, amount, payee, channel, "
+            "outcome, status, reasons, day, created_at, release_at, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (cid, principal_id, participant_id, participant_txn_id, amount, payee, channel,
+             decision.outcome.value, status.value, json.dumps(decision.reasons, ensure_ascii=False),
+             day, iso(now), release_at, expires_at),
+        )
+        self._audit(c, participant_id, "check.decided", principal_id, check_id=cid,
+                    amount=amount, payee=payee, channel=channel, outcome=decision.outcome.value)
+        who, amt = self._name(principal_id), rupees(amount)
+        why = "; ".join(decision.reasons)
+        if decision.outcome is Outcome.NEEDS_APPROVAL:
+            self._alert(c, self._approver_ids(principal_id), "approval_needed", "Approve payment?",
+                        f"{who} wants to pay {amt} to {payee}. Approve or deny within "
+                        f"{decision.approval_timeout_minutes} min. Reason held: {why}.", principal_id, check_id=cid)
+            self._alert(c, [principal_id], "payment_waiting", "Waiting for your guardian",
+                        f"{amt} to {payee} needs a guardian's approval. They have been alerted.", principal_id,
+                        check_id=cid)
+        elif decision.outcome is Outcome.DELAY:
+            self._alert_guardians(c, principal_id, "payment_held", "Payment on hold",
+                                  f"{who} is paying {amt} to {payee}. It goes through in {decision.delay_minutes} "
+                                  f"min unless you or they cancel it. Reason: {why}.", check_id=cid)
+            self._alert(c, [principal_id], "payment_waiting", "Payment on hold",
+                        f"{amt} to {payee} will go through in {decision.delay_minutes} min. You can cancel it "
+                        "until then.", principal_id, check_id=cid)
+        elif decision.outcome is Outcome.BLOCK:
+            self._alert(c, [principal_id], "payment_blocked", "Payment blocked",
+                        f"{amt} to {payee} was blocked: {why}.", principal_id, check_id=cid)
+        return cid
 
     def _with_customer_facts(self, view: dict, principal_id: str) -> dict:
         """What a bank may learn about its own customer: identity level and a yes/no senior

@@ -1,8 +1,35 @@
+import os
+import uuid
+
 import pytest
 
 from guardian_registry.clock import FixedClock
 from guardian_registry.db import Database
 from guardian_registry.service import Registry
+
+# Set GR_TEST_DATABASE_URL=postgresql://... to run every test on Postgres (each test gets
+# its own schema, dropped afterwards). Unset: in-memory SQLite.
+PG_URL = os.environ.get("GR_TEST_DATABASE_URL")
+_OPEN: list[Database] = []
+
+
+def new_db() -> Database:
+    db = Database(PG_URL, schema=f"t_{uuid.uuid4().hex[:16]}") if PG_URL else Database()
+    _OPEN.append(db)
+    return db
+
+
+@pytest.fixture(autouse=True)
+def _close_databases():
+    yield
+    while _OPEN:
+        db = _OPEN.pop()
+        try:
+            if db.backend == "postgres":
+                db.conn.drop_schema()
+            db.close()
+        except Exception:  # noqa: BLE001 - cleanup must not hide the real failure
+            pass
 
 R = 100  # paise per rupee
 
@@ -19,7 +46,7 @@ def clock():
 
 @pytest.fixture
 def reg(clock):
-    return Registry(Database(), clock)
+    return Registry(new_db(), clock)
 
 
 @pytest.fixture

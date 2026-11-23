@@ -18,7 +18,7 @@ from guardian_registry.simfeed import (
 )
 from guardian_registry.simswap import SIM_SWAP_WINDOW_HOURS
 
-from .conftest import AMMA, R, RAVI, STRANGER
+from .conftest import AMMA, R, RAVI, STRANGER, new_db
 
 NEW_NUMBER = "9876500077"
 
@@ -266,7 +266,7 @@ def http():
     clock = FixedClock()
     sms = LogSmsSender()
     fake = FakeLookup()
-    c = TestClient(create_app(Registry(Database(), clock), admin_token="adm", sms=sms, run_worker=False,
+    c = TestClient(create_app(Registry(new_db(), clock), admin_token="adm", sms=sms, run_worker=False,
                               sim_lookup=fake))
 
     def sign_in(mobile, name, device):

@@ -11,7 +11,7 @@ from guardian_registry.db import Database
 from guardian_registry.notify import LogSmsSender
 from guardian_registry.service import LOOSENING_DELAY_HOURS, OTP_RESEND_SECONDS, Registry
 
-from .conftest import AMMA, PRIYA, RAVI, R
+from .conftest import AMMA, PRIYA, R, RAVI, new_db
 
 ADMIN = "test-admin-token"
 
@@ -28,7 +28,7 @@ def sms():
 
 @pytest.fixture
 def client(clock, sms):
-    return TestClient(create_app(Registry(Database(), clock), admin_token=ADMIN, sms=sms, run_worker=False))
+    return TestClient(create_app(Registry(new_db(), clock), admin_token=ADMIN, sms=sms, run_worker=False))
 
 
 def sign_in(client, sms, mobile, name=None):
@@ -73,7 +73,7 @@ class TestAuth:
                            headers={"X-Admin-Token": "wrong"}).status_code == 401
 
     def test_admin_disabled_without_config(self, clock):
-        c = TestClient(create_app(Registry(Database(), clock), admin_token=""))
+        c = TestClient(create_app(Registry(new_db(), clock), admin_token=""))
         assert c.post("/v1/admin/participants", json={"name": "X"},
                       headers={"X-Admin-Token": ""}).status_code == 503
 
@@ -206,11 +206,11 @@ class TestSignIn:
 
     def test_dev_echo_only_when_enabled(self, clock, monkeypatch):
         monkeypatch.setenv("GR_OTP_DEV_ECHO", "1")
-        c = TestClient(create_app(Registry(Database(), clock), admin_token=ADMIN, sms=LogSmsSender(), run_worker=False))
+        c = TestClient(create_app(Registry(new_db(), clock), admin_token=ADMIN, sms=LogSmsSender(), run_worker=False))
         assert len(c.post("/v1/auth/otp", json={"mobile": AMMA}).json()["dev_code"]) == 6
 
     def test_ip_rate_limit(self, clock):
-        c = TestClient(create_app(Registry(Database(), clock), admin_token=ADMIN, sms=LogSmsSender(),
+        c = TestClient(create_app(Registry(new_db(), clock), admin_token=ADMIN, sms=LogSmsSender(),
                                   run_worker=False, otp_rate="2/60"))
         assert c.post("/v1/auth/otp", json={"mobile": "9000000011"}).status_code == 202
         assert c.post("/v1/auth/otp", json={"mobile": "9000000012"}).status_code == 202
@@ -258,7 +258,7 @@ class TestBankFeatures:
             "mobile": AMMA, "participant_txn_id": "new-key", "amount": 1000, "payee": "a@upi"}).status_code == 200
 
     def test_check_rate_limit(self, clock, sms):
-        c = TestClient(create_app(Registry(Database(), clock), admin_token=ADMIN, sms=sms,
+        c = TestClient(create_app(Registry(new_db(), clock), admin_token=ADMIN, sms=sms,
                                   run_worker=False, check_rate="3/60"))
         key = c.post("/v1/admin/participants", json={"name": "B", "regulator_ref": "RBI-TEST-1"}, headers={"X-Admin-Token": ADMIN}).json()["api_key"]
         codes = [c.post("/v1/checks", headers={"X-Api-Key": key}, json={
@@ -272,7 +272,7 @@ class TestWorker:
         """A cooling-off payment is released by the background worker on its own, without any read."""
         monkeypatch.setenv("GR_WORKER_INTERVAL", "0.05")
         clock = FixedClock()
-        reg = Registry(Database(), clock)
+        reg = Registry(new_db(), clock)
         sms = LogSmsSender()
         app = create_app(reg, admin_token=ADMIN, sms=sms, run_worker=True)
         with TestClient(app) as c:

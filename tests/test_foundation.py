@@ -5,6 +5,8 @@ from guardian_registry.db import Database
 from guardian_registry.models import Rules
 from guardian_registry.security import mobile_hash, normalize_mobile
 
+from .conftest import new_db
+
 
 class TestMobile:
     @pytest.mark.parametrize("raw", ["9876543210", "+91 98765 43210", "09876543210", "91-9876543210"])
@@ -70,7 +72,7 @@ class TestRulesLoosening:
 
 class TestDatabase:
     def test_schema_and_rollback(self):
-        db = Database()
+        db = new_db()
         with pytest.raises(RuntimeError):
             with db.tx() as c:
                 c.execute("INSERT INTO participants (id,name,key_hash,created_at) VALUES ('p1','Bank','h','t')")
@@ -78,7 +80,7 @@ class TestDatabase:
         assert db.one("SELECT COUNT(*) n FROM participants")["n"] == 0
 
     def test_nested_tx_commits_once(self):
-        db = Database()
+        db = new_db()
         with db.tx() as c:
             c.execute("INSERT INTO participants (id,name,key_hash,created_at) VALUES ('p1','Bank','h','t')")
             with db.tx() as c2:

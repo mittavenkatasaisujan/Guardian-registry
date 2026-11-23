@@ -11,7 +11,7 @@ from guardian_registry.kyc import KYC_CONSENT_DAYS, KYC_VALID_DAYS, age_on
 from guardian_registry.notify import Dispatcher, LogSmsSender
 from guardian_registry.service import LOOSENING_DELAY_HOURS, Registry
 
-from .conftest import AMMA, PRIYA, RAVI, R, STRANGER
+from .conftest import AMMA, PRIYA, R, RAVI, STRANGER, new_db
 
 OLD_DOB = "1952-03-10"     # 74 on 2026-11-23
 YOUNG_DOB = "1990-06-01"
@@ -233,7 +233,7 @@ class TestHttp:
     def test_full_flow_over_http(self, clock):
         import re
         sms = LogSmsSender()
-        client = TestClient(create_app(Registry(Database(), clock), admin_token="a", sms=sms, run_worker=False))
+        client = TestClient(create_app(Registry(new_db(), clock), admin_token="a", sms=sms, run_worker=False))
         client.post("/v1/auth/otp", json={"mobile": AMMA})
         code = re.search(r"code: (\d{6})", sms.sent[-1][1]).group(1)
         tok = client.post("/v1/auth/verify", json={"mobile": AMMA, "code": code, "display_name": "Amma"}).json()["token"]

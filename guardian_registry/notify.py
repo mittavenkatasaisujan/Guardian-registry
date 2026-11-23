@@ -36,6 +36,7 @@ from .security import decrypt_mobile, decrypt_text, mask_mobile, new_id, sign_we
 log = logging.getLogger("guardian_registry.notify")
 
 MAX_ATTEMPTS = 6
+LEASE_SECONDS = 60
 BACKOFF_SECONDS = [30, 120, 600, 1800, 3600]
 
 # Alert kinds that go out by SMS as well as in-app. Everything else is in-app only.
@@ -228,7 +229,15 @@ class Dispatcher:
         due = self.db.all(
             "SELECT * FROM notifications WHERE status='pending' AND next_attempt_at<=? "
             "ORDER BY created_at LIMIT ?", (now, limit))
+        lease = iso(self.clock.now() + timedelta(seconds=LEASE_SECONDS))
         for n in due:
+            # claim the row first, so two nodes' dispatchers never send the same alert twice;
+            # if this node dies mid-send the lease runs out and another node retries it
+            with self.db.tx() as c:
+                claimed = c.execute("UPDATE notifications SET next_attempt_at=? WHERE id=? AND status='pending' "
+                                    "AND next_attempt_at=?", (lease, n["id"], n["next_attempt_at"])).rowcount
+            if not claimed:
+                continue
             try:
                 delivered = self._deliver(n)
             except Exception as e:  # noqa: BLE001 - any delivery error is retried

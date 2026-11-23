@@ -40,3 +40,59 @@ jobs:
           python -m uvicorn guardian_registry.api:create_app --factory --port 8000 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/healthz && break; sleep 1; done
           python scripts/demo.py http://127.0.0.1:8000 ci-alice-token ci-bob-token
+
+  test-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Full test suite on Postgres (each test in its own schema)
+        env:
+          GR_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: python -m pytest -q
+
+  demo-postgres:
+    runs-on: ubuntu-latest
+    needs: test-postgres
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Two API nodes on one Postgres, shared rate limits; demo against node A
+        env:
+          GR_OPERATORS: "alice:ci-alice-token,bob:ci-bob-token"
+          GR_DB: postgresql://postgres:postgres@localhost:5432/postgres
+          GR_RATE_BACKEND: db
+          GR_OTP_DEV_ECHO: "1"
+          GR_WORKER_INTERVAL: "1"
+        run: |
+          python -m uvicorn guardian_registry.api:create_app --factory --port 8000 &
+          python -m uvicorn guardian_registry.api:create_app --factory --port 8001 &
+          for p in 8000 8001; do for i in $(seq 1 30); do curl -sf http://127.0.0.1:$p/healthz && break; sleep 1; done; done
+          python scripts/demo.py http://127.0.0.1:8000 ci-alice-token ci-bob-token
+          echo "node B sees the same audit chain:"
+          curl -sf -H "X-Admin-Token: ci-alice-token" http://127.0.0.1:8001/v1/admin/audit/verify | tee /tmp/b.json
+          python -c "import json; d=json.load(open('/tmp/b.json')); assert d['ok'] and d['entries'] > 40, d"

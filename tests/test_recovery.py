@@ -16,7 +16,7 @@ from guardian_registry.recovery import (
 )
 from guardian_registry.service import OTP_RESEND_SECONDS, Registry
 
-from .conftest import AMMA, PRIYA, R, RAVI
+from .conftest import AMMA, PRIYA, R, RAVI, new_db
 
 NEW = "9876500077"
 NEW2 = "9876500078"
@@ -293,7 +293,7 @@ class TestBankVouch:
 def test_http_flow():
     clock = FixedClock()
     sms = LogSmsSender()
-    c = TestClient(create_app(Registry(Database(), clock), admin_token="adm", sms=sms, run_worker=False))
+    c = TestClient(create_app(Registry(new_db(), clock), admin_token="adm", sms=sms, run_worker=False))
 
     def code_for(mobile):
         assert c.post("/v1/auth/otp", json={"mobile": mobile}).status_code == 202

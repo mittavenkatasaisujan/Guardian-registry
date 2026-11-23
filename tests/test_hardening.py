@@ -15,7 +15,7 @@ from guardian_registry.operator_auth import OidcVerifier, OperatorAuthError
 from guardian_registry.ratelimit import SharedRateLimiter, make_limiter, RateLimiter
 from guardian_registry.service import Registry
 
-from .conftest import AMMA, R, RAVI
+from .conftest import AMMA, R, RAVI, new_db
 
 BANKS = [{"regulator_ref": "RBI-SCB-001", "name": "State Bank"}, {"regulator_ref": "RBI-SCB-002", "name": "Other Bank"}]
 
@@ -97,7 +97,7 @@ class TestSso:
         assert verifier(require_hwk=False).verify(id_token(amr=("pwd",)))
 
     def test_api_four_eyes_with_sso(self, clock):
-        c = TestClient(create_app(Registry(Database(), clock), operators={}, operator_sso=verifier(),
+        c = TestClient(create_app(Registry(new_db(), clock), operators={}, operator_sso=verifier(),
                                   sms=LogSmsSender(), run_worker=False))
         alice = {"Authorization": f"Bearer {id_token()}"}
         bob = {"Authorization": f"Bearer {id_token('bob@bank-ops.in')}"}
@@ -113,7 +113,7 @@ class TestSso:
 # ------------------------------------------------------------------ shared limiter
 class TestSharedLimiter:
     def test_two_nodes_share_one_limit(self):
-        db = Database()
+        db = new_db()
         t = [1000.0]
         node_a = SharedRateLimiter(db, "otp", 3, 60, now=lambda: t[0])
         node_b = SharedRateLimiter(db, "otp", 3, 60, now=lambda: t[0])
@@ -125,13 +125,13 @@ class TestSharedLimiter:
         assert node_b.hit("ip1")[0] is True  # next window
 
     def test_make_limiter(self):
-        db = Database()
+        db = new_db()
         assert isinstance(make_limiter(db, "x", "5/60"), RateLimiter)
         assert isinstance(make_limiter(db, "x", "5/60", "db"), SharedRateLimiter)
 
     def test_api_uses_it(self, clock, monkeypatch):
         monkeypatch.setenv("GR_RATE_BACKEND", "db")
-        reg = Registry(Database(), clock)
+        reg = Registry(new_db(), clock)
         c = TestClient(create_app(reg, admin_token="a", sms=LogSmsSender(), run_worker=False, otp_rate="2/60"))
         codes = [c.post("/v1/auth/otp", json={"mobile": m}).status_code for m in (AMMA, RAVI, "9876500055")]
         assert codes == [202, 202, 429]
@@ -184,7 +184,7 @@ class TestChannels:
 
     def test_tokens_encrypted_and_dropped_on_lost_phone(self, reg, family):
         reg.add_push_token(family["ravi"], "fcm-token-AAAAAAAA", "android")
-        assert b"fcm-token" not in reg.db.conn.execute("SELECT token_enc FROM push_tokens").fetchone()[0].encode()
+        assert b"fcm-token" not in reg.db.one("SELECT token_enc FROM push_tokens")["token_enc"].encode()
         reg.report_lost_phone(family["ravi"], family["ravi"])
         assert reg.alert_settings(family["ravi"])["push_devices"] == []
 
@@ -207,7 +207,7 @@ class TestChannels:
     def test_api(self, clock):
         import re
         sms = LogSmsSender()
-        c = TestClient(create_app(Registry(Database(), clock), admin_token="a", sms=sms, run_worker=False))
+        c = TestClient(create_app(Registry(new_db(), clock), admin_token="a", sms=sms, run_worker=False))
         c.post("/v1/auth/otp", json={"mobile": AMMA})
         code = re.search(r"code: (\d{6})", sms.sent[-1][1]).group(1)
         tok = c.post("/v1/auth/verify", json={"mobile": AMMA, "code": code, "display_name": "Amma"}).json()["token"]
@@ -217,3 +217,53 @@ class TestChannels:
         assert out.status_code == 201
         dev = out.json()["push_devices"][0]["id"]
         assert c.delete(f"/v1/me/alerts/push/{dev}", headers=H).json()["push_devices"] == []
+
+
+# ------------------------------------------------------------------ several nodes / threads
+class TestNoDoubleProcessing:
+    def test_two_dispatchers_send_each_alert_once(self, reg, family, clock):
+        sms_a, sms_b = LogSmsSender(), LogSmsSender()
+        a = Dispatcher(reg.db, clock, sms=sms_a, whatsapp=None, push=None)
+        b = Dispatcher(reg.db, clock, sms=sms_b, whatsapp=None, push=None)
+        a.run_once(), b.run_once()
+        sms_a.sent.clear(), sms_b.sent.clear()
+        held_payment(reg, family)
+        import threading
+        ts = [threading.Thread(target=d.run_once) for d in (a, b, a, b)]
+        [t.start() for t in ts]
+        [t.join() for t in ts]
+        texts = [t for _, t in sms_a.sent + sms_b.sent if t.startswith("Approve payment?")]
+        assert len(texts) == 1
+
+    def test_claimed_alert_is_retried_after_lease(self, reg, family, clock):
+        from guardian_registry.notify import LEASE_SECONDS
+        held_payment(reg, family)
+        row = reg.db.one("SELECT id, next_attempt_at FROM notifications WHERE status='pending' LIMIT 1")
+        # a node claims it and dies before sending
+        from guardian_registry.clock import iso
+        from datetime import timedelta
+        reg.db.conn.execute("UPDATE notifications SET next_attempt_at=? WHERE id=?",
+                            (iso(clock.now() + timedelta(seconds=LEASE_SECONDS)), row["id"]))
+        sms = LogSmsSender()
+        d = Dispatcher(reg.db, clock, sms=sms, whatsapp=None, push=None)
+        d.run_once()
+        assert reg.db.one("SELECT status FROM notifications WHERE id=?", (row["id"],))["status"] == "pending"
+        clock.advance(seconds=LEASE_SECONDS + 1)
+        d.run_once()
+        assert reg.db.one("SELECT status FROM notifications WHERE id=?", (row["id"],))["status"] == "sent"
+
+    def test_veto_after_apply_and_apply_after_veto_conflict(self, reg, family, clock):
+        from guardian_registry.errors import Conflict
+        from guardian_registry.service import LOOSENING_DELAY_HOURS
+        g = reg.invite_guardian(family["amma"], "9876500003")
+        reg.respond_to_invite(family["priya"], g["id"], True)
+        ch = reg.update_rules(family["amma"], {"daily_limit": None})["held"]
+        cid = ch["change"]["id"]
+        reg.veto_change(family["ravi"], cid)
+        with pytest.raises(Conflict):
+            reg.approve_change(family["priya"], cid)
+        with pytest.raises(Conflict):
+            reg.veto_change(family["priya"], cid)
+        clock.advance(hours=LOOSENING_DELAY_HOURS + 1)
+        reg.sweep()
+        assert reg.get_rules(family["amma"]).daily_limit == 75_000 * R  # the veto stands

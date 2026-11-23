@@ -10,7 +10,7 @@ from guardian_registry.errors import Conflict, Forbidden, Invalid
 from guardian_registry.notify import LogSmsSender
 from guardian_registry.service import Registry
 
-from .conftest import AMMA, R, RAVI
+from .conftest import AMMA, R, RAVI, new_db
 
 
 def pending(reg, name="New Bank", kind="bank", ref="RBI-001", caps=None, op="alice"):
@@ -228,7 +228,7 @@ B = {"X-Admin-Token": OPS["bob"]}
 
 @pytest.fixture
 def client(clock):
-    return TestClient(create_app(Registry(Database(), clock), operators=OPS, sms=LogSmsSender(), run_worker=False))
+    return TestClient(create_app(Registry(new_db(), clock), operators=OPS, sms=LogSmsSender(), run_worker=False))
 
 
 def test_parse_operators():
@@ -243,7 +243,7 @@ def test_production_refuses_single_operator(monkeypatch, clock):
     monkeypatch.setenv("GR_ENV", "production")
     monkeypatch.setattr("guardian_registry.api.check_production_config", lambda: None)
     with pytest.raises(RuntimeError, match="at least two operators"):
-        create_app(Registry(Database(), clock), operators={"solo": "x" * 20}, run_worker=False)
+        create_app(Registry(new_db(), clock), operators={"solo": "x" * 20}, run_worker=False)
 
 
 class TestApi:
@@ -295,7 +295,7 @@ class TestApi:
         assert client.get(f"/v1/admin/participants/{pid}", headers=A).json()["status"] == "offboarded"
 
     def test_single_dev_operator_auto_approves(self, clock):
-        c = TestClient(create_app(Registry(Database(), clock), admin_token="dev", sms=LogSmsSender(),
+        c = TestClient(create_app(Registry(new_db(), clock), admin_token="dev", sms=LogSmsSender(),
                                   run_worker=False))
         body = c.post("/v1/admin/participants", headers={"X-Admin-Token": "dev"},
                       json={"name": "B", "regulator_ref": "RBI-1"}).json()

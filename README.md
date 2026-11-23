@@ -32,6 +32,7 @@ its own version, a family with three bank accounts sets up three separate locks.
 | Kill switch | The principal or any guardian can pause all payments at once. A guardian can switch payments back on at once; the principal's own request is held. |
 | **Alerts** | Every event queues alerts **in the same database transaction**, so an alert is never lost or sent for something that rolled back. Guardians get SMS for urgent events (approval needed, payment on hold, protection being loosened, kill switch, guardian removal) and an in-app feed for everything. Delivery retries with backoff. |
 | **WhatsApp and push** | Each person picks SMS (default) or **WhatsApp** for urgent alerts (`PUT /v1/me/alerts`); WhatsApp falls back to SMS if no provider is set. App installs register for **push** (`POST /v1/me/alerts/push`, tokens stored encrypted, at most 5). Push goes to the app, not the number, so it keeps flowing during a SIM-swap window when SMS and WhatsApp to that number stop. A lost-phone report or a recovery removes old push tokens. |
+| **Several servers (Postgres)** | Set `GR_DB=postgresql://...` and run as many API nodes as you like against one Postgres. The schema is built from the same migrations as SQLite. Every write transaction takes one database-wide lock, so daily limits, the audit hash chain and "one recovery at a time" stay exact across nodes. Background workers on every node **claim** each alert before sending (with a 60 s lease if a node dies), and every sweep re-checks state under the lock, so nothing is sent or applied twice. With `GR_RATE_BACKEND=db` rate limits are shared too. CI runs the full test suite on Postgres 16 and the demo against two live nodes. |
 | **Bank webhooks** | Banks register an `https://` URL and get a signed `check.updated` event when a held payment is approved, denied, released, expired or cancelled. No polling needed. |
 | Background worker | Every few seconds it releases finished cooling-offs, expires unanswered approvals, applies held changes whose delay is over, and delivers alerts. |
 | Bank API | Idempotent on `(participant, participant_txn_id)`. A failed payment frees the daily limit, and a completed one makes the payee "known". Customers who aren't enrolled pass through. Per-bank rate limit. **Key rotation** with a 24 h grace period. |
@@ -45,6 +46,12 @@ its own version, a family with three bank accounts sets up three separate locks.
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 .venv\Scripts\python -m pytest -q
+```
+
+To run every test on Postgres instead, set `GR_TEST_DATABASE_URL` (each test gets its own schema):
+
+```powershell
+$env:GR_TEST_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/postgres"; .venv\Scripts\python -m pytest -q
 ```
 
 Development server. The OTP code is echoed in the response, and SMS go to the console:
@@ -70,7 +77,7 @@ docker build -t guardian-registry .
 | Env var | Purpose |
 |---|---|
 | `GR_ENV` | `production` turns on the startup safety checks |
-| `GR_DB` | SQLite file path (default `guardian_registry.db`) |
+| `GR_DB` | SQLite file path (default `guardian_registry.db`), or `postgresql://user:pass@host/db` for Postgres |
 | `GR_OPERATORS` | Named operators for `/v1/admin/*`: `alice:<token>,bob:<token>`. **Production needs at least two** (four-eyes onboarding); tokens must be 16+ characters. |
 | `GR_OPERATOR_OIDC_ISSUER`, `GR_OPERATOR_OIDC_AUDIENCE`, `GR_OPERATOR_OIDC_ALLOWED`, `GR_OPERATOR_OIDC_JWKS_URL` | Operator SSO: issuer URL, the client ID tokens are issued for, comma-separated allowed emails, and the keys URL (default `<issuer>/.well-known/jwks.json`) |
 | `GR_OPERATOR_REQUIRE_HWK` | `1` requires a hardware-key sign-in (`amr` has `hwk`). Default `1` in production. |
@@ -127,11 +134,11 @@ guardian_registry/
   recovery.py   account recovery: vouching by contacts or a bank, 24 h hold
   presets.py    named rule bundles (RBI-proposal-shaped, not final rules)
   audit.py      hash-chained audit log + verify
-  db.py         SQLite schema with versioned migrations
+  db.py         SQLite / Postgres storage, versioned migrations, Postgres schema derived from them
   security.py   hashing, encryption, OTP, signatures, production checks
   ratelimit.py  sliding-window limiter
   api.py        FastAPI app (create_app factory) + background worker
-tests/          372 tests
+tests/          381 tests (5 of them need Postgres)
 scripts/demo.py end-to-end story over real HTTP (also runs in CI)
 ```
 
@@ -142,4 +149,5 @@ scripts/demo.py end-to-end story over real HTTP (also runs in CI)
 - **Register freshness:** the official lists are loaded by operators. Nothing fetches RBI/NPCI/DoT lists automatically, since each publishes in its own format; reload them when they change.
 - **Social engineering of contacts:** the hour's wait, the 24 h hold and the 72 h aftercare window reduce the damage of a contact being fooled, but a determined, patient attacker can still talk someone into vouching.
 - **Device identity:** the device ID is chosen by the app, so it shows a device is new but doesn't prove one is the same. Platform attestation (Play Integrity, App Attest) would close that.
-- **Multi-node scale:** rate limits can now be shared through the database, but storage is still SQLite, which suits one node. Running several nodes needs Postgres and mTLS for banks.
+- **Write throughput and bank transport:** one database-wide write lock makes several nodes behave exactly like one, which is plenty for a pilot but caps writes at what one Postgres does serially; per-person locking would lift that. Banks authenticate with API keys over TLS; mutual TLS would be expected in production.
+- **Postgres migrations after v8:** Postgres gets its schema from the migrations on first start. A later schema change needs a matching Postgres step, and the server refuses to start until it has one.

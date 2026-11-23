@@ -250,11 +250,15 @@ class KycMixin:
         expired = self.db.all("SELECT id, user_id FROM kyc_attestations WHERE status='active' AND expires_at<=?", (now,))
         if lapsed or expired:
             with self.db.tx() as c:
-                for r in lapsed:
-                    c.execute("UPDATE kyc_attestations SET status='lapsed', decided_at=? WHERE id=?", (now, r["id"]))
+                for r in lapsed:  # conditional updates: another node may have swept these already
+                    if not c.execute("UPDATE kyc_attestations SET status='lapsed', decided_at=? "
+                                     "WHERE id=? AND status='pending_consent'", (now, r["id"])).rowcount:
+                        continue
                     self._kyc_webhook(c, r["id"])
                 for r in expired:
-                    c.execute("UPDATE kyc_attestations SET status='expired', decided_at=? WHERE id=?", (now, r["id"]))
+                    if not c.execute("UPDATE kyc_attestations SET status='expired', decided_at=? "
+                                     "WHERE id=? AND status='active'", (now, r["id"])).rowcount:
+                        continue
                     self._audit(c, "system", "kyc.expired", r["user_id"], attestation_id=r["id"])
                     self._alert(c, [r["user_id"]], "kyc_expired", "Bank verification expired",
                                 "Your bank's identity confirmation is more than a year old. Ask your bank to "

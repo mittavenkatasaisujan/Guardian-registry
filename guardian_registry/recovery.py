@@ -162,6 +162,8 @@ class RecoveryMixin:
                            "you can deny at any time")
         name, me = self._name(r["user_id"]), self._name(voucher_id)
         with self.db.tx() as c:
+            if c.execute("SELECT status FROM recoveries WHERE id=?", (rid,)).fetchone()["status"] != r["status"]:
+                raise Conflict("recovery changed meanwhile; reload and try again")
             c.execute("INSERT INTO recovery_vouches (recovery_id, voucher_id, vote, at) VALUES (?,?,?,?) "
                       "ON CONFLICT(recovery_id, voucher_id) DO UPDATE SET vote=excluded.vote, at=excluded.at",
                       (rid, voucher_id, "approve" if approve else "deny", self._now()))
@@ -310,10 +312,12 @@ class RecoveryMixin:
         if not (expired or due):
             return 0
         with self.db.tx() as c:
-            for r in expired:
-                c.execute("UPDATE recoveries SET status='expired', decided_at=? WHERE id=?", (now, r["id"]))
-                if r["user_id"]:
+            for r in expired:  # conditional: another node may have swept it already
+                if c.execute("UPDATE recoveries SET status='expired', decided_at=? WHERE id=? AND status='pending'",
+                             (now, r["id"])).rowcount and r["user_id"]:
                     self._audit(c, "system", "recovery.expired", r["user_id"], recovery_id=r["id"])
             for r in due:
-                self._complete_recovery(c, r)
+                fresh = c.execute("SELECT * FROM recoveries WHERE id=? AND status='held'", (r["id"],)).fetchone()
+                if fresh:
+                    self._complete_recovery(c, fresh)
         return len(expired) + len(due)

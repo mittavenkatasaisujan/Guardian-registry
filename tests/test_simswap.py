@@ -14,7 +14,7 @@ from guardian_registry.policy import SIM_SWAP_DELAY_MINUTES, SIM_SWAP_KNOWN_PAYE
 from guardian_registry.service import LOOSENING_DELAY_HOURS, OTP_RESEND_SECONDS, Registry
 from guardian_registry.simswap import NEW_DEVICE_PROBATION_HOURS, SIM_SWAP_WINDOW_HOURS
 
-from .conftest import AMMA, PRIYA, RAVI, R, STRANGER
+from .conftest import AMMA, PRIYA, R, RAVI, STRANGER, new_db
 
 NEW_NUMBER = "9876500077"
 
@@ -128,7 +128,7 @@ class TestSignals:
 @pytest.fixture
 def sms_family(clock):
     """Same family, but everyone signed in through OTP with a device id, so sessions are real."""
-    reg = Registry(Database(), clock)
+    reg = Registry(new_db(), clock)
     sms = LogSmsSender()
     tokens = {}
 
@@ -250,7 +250,7 @@ class TestMobileChange:
 def http():
     clock = FixedClock()
     sms = LogSmsSender()
-    c = TestClient(create_app(Registry(Database(), clock), admin_token="adm", sms=sms, run_worker=False))
+    c = TestClient(create_app(Registry(new_db(), clock), admin_token="adm", sms=sms, run_worker=False))
 
     def sign_in(mobile, name, device):
         c.post("/v1/auth/otp", json={"mobile": mobile})
