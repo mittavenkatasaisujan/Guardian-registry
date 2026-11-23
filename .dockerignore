@@ -1,8 +1,13 @@
 .venv
 .git
+.github
+.claude
 __pycache__
 *.db
 *.db-*
 .pytest_cache
 tests
 scripts
+android
+ios
+deploy

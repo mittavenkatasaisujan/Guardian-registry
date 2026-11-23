@@ -338,6 +338,10 @@ def create_app(
     dev_echo = os.environ.get("GR_OTP_DEV_ECHO") == "1" and not is_production()
     proxies = proxy_trust or ProxyTrust()
 
+    def client_ip(request: Request) -> str:
+        """Rate-limit key: the real client behind our trusted proxies (see ProxyTrust.client_ip)."""
+        return proxies.client_ip(request.client.host if request.client else None, request.headers)
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         worker = Worker(reg, dispatcher, worker_interval, metrics) if run_worker else None
@@ -646,7 +650,7 @@ def create_app(
     # ------------------------------------------------------------- sign-in
     @app.post("/v1/auth/otp", status_code=202, tags=["sign-in"])
     def request_otp(body: OtpIn, request: Request):
-        limited(otp_limiter, request.client.host if request.client else "unknown")
+        limited(otp_limiter, client_ip(request))
         code = reg.request_otp(body.mobile, sms)
         out = {"sent": True, "expires_in_seconds": OTP_TTL_MINUTES * 60}
         if dev_echo:
@@ -656,12 +660,12 @@ def create_app(
     @app.post("/v1/auth/challenge", tags=["sign-in"])
     def auth_challenge(request: Request):
         """One-time challenge for the app's device key to sign at sign-in (valid 5 minutes)."""
-        limited(otp_limiter, "challenge:" + (request.client.host if request.client else "unknown"))
+        limited(otp_limiter, "challenge:" + client_ip(request))
         return reg.new_challenge()
 
     @app.post("/v1/auth/verify", tags=["sign-in"])
     def verify_otp(body: VerifyIn, request: Request):
-        limited(otp_limiter, "verify:" + (request.client.host if request.client else "unknown"))
+        limited(otp_limiter, "verify:" + client_ip(request))
         return reg.verify_otp(body.mobile, body.code, body.display_name, body.device_id, body.device_key,
                               body.device_proof, body.challenge, body.key_attestation, body.platform)
 
@@ -669,7 +673,7 @@ def create_app(
     def recovery_start(body: RecoveryStartIn, request: Request):
         """Lost your number and have no phone signed in? Prove the new number (get a code with
         /v1/auth/otp first) and name the old one. Same answer whether or not an account matches."""
-        limited(otp_limiter, "recover:" + (request.client.host if request.client else "unknown"))
+        limited(otp_limiter, "recover:" + client_ip(request))
         return reg.start_recovery(body.old_mobile, body.new_mobile, body.code)
 
     @app.post("/v1/recovery/status", tags=["sign-in"])
@@ -778,7 +782,7 @@ def create_app(
 
     @app.post("/v1/me/mobile/change", status_code=202, tags=["people"])
     def change_mobile(body: NewMobileIn, uid: TrustedUser, request: Request):
-        limited(otp_limiter, request.client.host if request.client else "unknown")
+        limited(otp_limiter, client_ip(request))
         code = reg.request_mobile_change(uid, body.new_mobile, sms)
         out = {"sent": True, "expires_in_seconds": OTP_TTL_MINUTES * 60}
         if dev_echo:

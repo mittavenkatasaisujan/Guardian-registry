@@ -17,3 +17,8 @@ ios/GuardianRegistry.xcodeproj/
 ios/GuardianRegistry/Info.plist
 ios/GuardianRegistry/GuardianRegistry.entitlements
 ios/build/
+
+# deployment secrets and certificates (scripts/deploy_init.py)
+deploy/secrets/
+deploy/certs/
+deploy/.env

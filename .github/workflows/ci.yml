@@ -190,3 +190,72 @@ jobs:
         run: python scripts/check_attestation.py attestation-logcat.txt
       - if: failure()
         run: tail -100 server.log || true
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Trial secrets and certificates
+        run: python scripts/deploy_init.py --dev
+      - name: Postgres, two API nodes, nginx (TLS + client certificates) and backups
+        run: docker compose -f deploy/docker-compose.yml up -d --build --wait --wait-timeout 240
+      - name: Smoke test through nginx
+        run: python scripts/smoke_deploy.py https://localhost:8443
+      - name: Both API nodes served traffic
+        run: |
+          for n in api1 api2; do docker compose -f deploy/docker-compose.yml logs $n | grep -q "GET /healthz" || { echo "$n served nothing"; exit 1; }; done
+      - name: Back up, restore into a new database, verify the restored audit chain
+        run: |
+          set -e
+          C="docker compose -f deploy/docker-compose.yml"
+          $C exec -T backup /backup.sh
+          DUMP=$($C exec -T backup sh -c 'ls -1 /backups/*.dump | tail -1')
+          $C exec -T backup /restore.sh "$DUMP" guardian_restored
+          URL=$(sed 's#/guardian$#/guardian_restored#' deploy/secrets/db_url)
+          $C run --rm -T --no-deps -e GR_DB_FILE= -e GR_DB="$URL" api1 python -c "import os; from guardian_registry.db import Database; from guardian_registry.service import Registry; v=Registry(Database(os.environ['GR_DB'])).verify_audit(); print('restored audit:', v); assert v.ok and v.entries > 0"
+      - if: failure()
+        run: docker compose -f deploy/docker-compose.yml logs --tail 200
+
+  load-test:
+    runs-on: ubuntu-latest
+    needs: test-postgres
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Two nodes on Postgres; concurrent checks; daily limits must hold
+        env:
+          GR_OPERATORS: "alice:ci-alice-token,bob:ci-bob-token"
+          GR_DB: postgresql://postgres:postgres@localhost:5432/postgres
+          GR_RATE_BACKEND: db
+          GR_RATE_OTP: "100000/60"
+          GR_RATE_CHECKS: "10000000/60"
+          GR_OTP_DEV_ECHO: "1"
+        run: |
+          python -m uvicorn guardian_registry.api:create_app --factory --port 8000 > a.log 2>&1 &
+          python -m uvicorn guardian_registry.api:create_app --factory --port 8001 > b.log 2>&1 &
+          for p in 8000 8001; do for i in $(seq 1 30); do curl -sf http://127.0.0.1:$p/healthz && break; sleep 1; done; done
+          python scripts/loadtest.py http://127.0.0.1:8000 http://127.0.0.1:8001 --admin alice:ci-alice-token,bob:ci-bob-token \
+            --people 200 --checks 4000 --concurrency 64 --json loadtest.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: loadtest
+          path: loadtest.json

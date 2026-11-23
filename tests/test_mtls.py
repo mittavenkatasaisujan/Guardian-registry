@@ -164,3 +164,14 @@ def test_header_from_untrusted_hop_is_ignored(clock):
            json={"certificate": CERT_A})  # single dev operator: active at once
     # the caller is not the trusted proxy, so its own X-Client-Cert header counts for nothing
     assert check(c, {**key, "X-Client-Cert": quote(CERT_A)}).status_code == 401
+
+
+class TestClientIp:
+    def test_forwarded_for_only_from_trusted_proxies(self):
+        from guardian_registry.certs import ProxyTrust
+        t = ProxyTrust("10.0.0.5,172.28.0.0/24")
+        h = {"x-forwarded-for": "6.6.6.6, 49.36.1.2, 172.28.0.3"}
+        assert t.client_ip("10.0.0.5", h) == "49.36.1.2"      # rightmost hop that isn't ours
+        assert t.client_ip("49.36.9.9", h) == "49.36.9.9"     # direct client: header ignored
+        assert t.client_ip("10.0.0.5", {}) == "10.0.0.5"
+        assert t.client_ip(None, h) == "unknown"

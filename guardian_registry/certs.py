@@ -88,6 +88,21 @@ class ProxyTrust:
             return False
         return any(ip in n for n in self.nets)
 
+    def client_ip(self, peer: str | None, headers) -> str:
+        """The real client address for rate limits. Behind a trusted proxy, walk
+        X-Forwarded-For from the right, skipping our own proxies; the first address that
+        isn't one of ours is the client. A client can prepend anything it likes to the
+        header, but it can't change what our proxy appended, so this can't be spoofed."""
+        if not peer:
+            return "unknown"
+        if not self.trusted(peer):
+            return peer
+        hops = [h.strip() for h in (headers.get("x-forwarded-for") or "").split(",") if h.strip()]
+        for hop in reversed(hops):
+            if not self.trusted(hop):
+                return hop
+        return peer
+
     def certificate(self, host: str | None, headers) -> str | None:
         """The forwarded certificate, or None if absent or from an untrusted hop."""
         value = headers.get(self.header)
