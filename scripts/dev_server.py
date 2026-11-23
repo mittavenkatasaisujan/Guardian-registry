@@ -22,4 +22,5 @@ os.environ.setdefault("GR_WORKER_INTERVAL", "2")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import uvicorn  # noqa: E402
 
-uvicorn.run("guardian_registry.api:create_app", factory=True, host="127.0.0.1", port=port)
+# keep idle connections longer than clients do, so a reused connection is never closed mid-request
+uvicorn.run("guardian_registry.api:create_app", factory=True, host="127.0.0.1", port=port, timeout_keep_alive=75)

@@ -57,7 +57,11 @@ def _cert(subject_cn, key, issuer_cert, issuer_key, *, ca=False, server_names=()
          .issuer_name(issuer_cert.subject if issuer_cert else name).public_key(key.public_key())
          .serial_number(x509.random_serial_number()).not_valid_before(now - timedelta(minutes=5))
          .not_valid_after(now + timedelta(days=days))
-         .add_extension(x509.BasicConstraints(ca=ca, path_length=0 if ca else None), critical=True))
+         .add_extension(x509.BasicConstraints(ca=ca, path_length=0 if ca else None), critical=True)
+         .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
+         # strict verifiers (Python 3.13+, browsers) require the issuer's key id
+         .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(
+             (issuer_key or key).public_key()), critical=False))
     if ca:
         b = b.add_extension(x509.KeyUsage(digital_signature=True, key_cert_sign=True, crl_sign=True,
                                           content_commitment=False, key_encipherment=False,
