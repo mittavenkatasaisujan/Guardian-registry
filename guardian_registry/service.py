@@ -20,7 +20,7 @@ import json
 import sqlite3
 from datetime import datetime, timedelta
 
-from . import audit, notify
+from . import audit, messages, notify
 from .clock import Clock, iso, ist_day
 from .db import Database
 from .errors import Conflict, Forbidden, Invalid, NotFound, TooMany, Unauthorized
@@ -220,7 +220,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             self._audit(c, uid, "session.revoked", uid, everywhere=everywhere)
 
     # ---------------------------------------------------------------------- OTP
-    def request_otp(self, mobile: str, sms: "notify.SmsSender") -> str:
+    def request_otp(self, mobile: str, sms: "notify.SmsSender", language: str | None = None) -> str:
         """Send a one-time code to prove the person holds this number. Behaves the same whether
         or not the number is enrolled, so it can't be used to probe who is registered.
         Returns the code (the API echoes it only when GR_OTP_DEV_ECHO=1 outside production)."""
@@ -247,8 +247,15 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
                       "window_start=excluded.window_start, sends=excluded.sends, last_sent_at=excluded.last_sent_at",
                       (mh, otp_hash(mh, code), iso(now + timedelta(minutes=OTP_TTL_MINUTES)),
                        window_start, sends + 1, iso(now)))
+        lang = language if language in messages.LANGUAGES else None
+        if not lang:
+            u = self.db.one("SELECT language FROM users WHERE mobile_hash=?", (mh,))
+            lang = u["language"] if u and u["language"] in messages.LANGUAGES else "en"
         if hasattr(sms, "send_otp"):
-            sms.send_otp(normalize_mobile(mobile), code, OTP_TTL_MINUTES)
+            try:
+                sms.send_otp(normalize_mobile(mobile), code, OTP_TTL_MINUTES, lang)
+            except TypeError:  # a sender written before languages
+                sms.send_otp(normalize_mobile(mobile), code, OTP_TTL_MINUTES)
         else:
             sms.send(normalize_mobile(mobile), f"Guardian Registry code: {code}. Valid {OTP_TTL_MINUTES} min. "
                      "Never share it with anyone, not even a guardian or a bank.")
@@ -333,7 +340,16 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
     def profile(self, user_id: str) -> dict:
         u = self._user(user_id)
         return {"id": u["id"], "display_name": u["display_name"], "enrolled_at": u["created_at"],
-                "identity_level": self.identity_level(user_id), "number_status": u["number_status"]}
+                "identity_level": self.identity_level(user_id), "number_status": u["number_status"],
+                "language": u["language"] or "en"}
+
+    def set_language(self, user_id: str, language: str) -> dict:
+        """The language for this person's alerts, SMS and messages."""
+        if language not in messages.LANGUAGES:
+            raise Invalid(f"language must be one of {list(messages.LANGUAGES)}")
+        with self.db.tx(user_id) as c:
+            c.execute("UPDATE users SET language=? WHERE id=?", (language, user_id))
+        return self.profile(user_id)
 
     # ---------------------------------------------------------------- guardians
     def invite_guardian(self, principal_id: str, guardian_mobile: str) -> dict:
@@ -389,7 +405,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             self._audit(c, guardian_id, "guardian.accepted" if accept else "guardian.declined",
                         r["principal_id"], guardianship_id=gid)
             self._alert(c, [r["principal_id"]], "guardian_accepted" if accept else "guardian_declined",
-                        "Guardian " + ("accepted" if accept else "declined"),
+                        "Guardian accepted" if accept else "Guardian declined",
                         f"{self._name(guardian_id)} {'is now your guardian' if accept else 'declined your request'}.",
                         r["principal_id"], guardianship_id=gid)
         return self.guardianship(gid)

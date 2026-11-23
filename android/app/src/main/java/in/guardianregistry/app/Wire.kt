@@ -10,6 +10,9 @@ import java.util.Locale
 object Wire {
     const val SIGNING_PREFIX = "guardian-registry/v1:"
 
+    /** "hi" when the phone is set to Hindi, otherwise "en": the languages the registry writes in. */
+    fun language(tag: String = java.util.Locale.getDefault().language): String = if (tag == "hi") "hi" else "en"
+
     fun b64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
 
     fun signingInput(challenge: String): ByteArray = (SIGNING_PREFIX + challenge).toByteArray(Charsets.UTF_8)
@@ -33,6 +36,7 @@ object Wire {
         put("device_proof", proof)
         if (attestation != null) put("key_attestation", attestation)
         put("platform", "android")
+        put("language", language())
     }
 
     /** Amounts are in paise. */

@@ -46,7 +46,7 @@ final class AppModel: ObservableObject {
     // ------------------------------------------------------------ sign-in
     func sendCode() {
         run {
-            let out = try await Api(base: Api.configuredBase).call("POST", "/v1/auth/otp", ["mobile": self.mobile])
+            let out = try await Api(base: Api.configuredBase).call("POST", "/v1/auth/otp", ["mobile": self.mobile, "language": Api.language])
             UserDefaults.standard.set(self.mobile, forKey: "mobile")
             if let dev = (out as? [String: Any])?["dev_code"] as? String { self.code = dev }
             self.screen = .code
@@ -71,6 +71,7 @@ final class AppModel: ObservableObject {
             }
             var body: [String: Any] = [
                 "mobile": self.mobile, "code": self.code, "device_id": self.deviceId, "platform": "ios",
+                "language": Api.language,
                 "device_key": try DeviceKey.spki(key).base64EncodedString(), "challenge": challenge,
                 "device_proof": try DeviceKey.sign(key, challenge: challenge).base64EncodedString(),
             ]

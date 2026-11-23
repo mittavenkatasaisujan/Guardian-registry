@@ -29,7 +29,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import __version__
+from . import __version__, messages
 from .db import Database
 from .errors import RegistryError
 from .models import CHANNELS
@@ -54,12 +54,18 @@ APP_CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'se
 # ----------------------------------------------------------------- schemas
 class OtpIn(BaseModel):
     mobile: str
+    language: Literal["en", "hi"] | None = Field(default=None, description="language of the code SMS")
+
+
+class LanguageIn(BaseModel):
+    language: Literal["en", "hi"]
 
 
 class VerifyIn(BaseModel):
     mobile: str
     code: str = Field(min_length=4, max_length=10)
     display_name: str | None = Field(default=None, max_length=80)
+    language: Literal["en", "hi"] | None = Field(default=None, description="language for this person's alerts and SMS")
     device_id: str | None = Field(default=None, max_length=200,
                                   description="stable app-install id; new devices start on probation")
     device_key: str | None = Field(default=None, max_length=400,
@@ -367,12 +373,17 @@ def create_app(
     app.add_middleware(EdgeMiddleware, metrics=metrics, app_csp=APP_CSP)
 
     @app.exception_handler(RegistryError)
-    async def _registry_error(_: Request, exc: RegistryError):
-        return JSONResponse(status_code=exc.status, content={"error": type(exc).__name__, "detail": str(exc)})
+    async def _registry_error(request: Request, exc: RegistryError):
+        lang = messages.language_from_header(request.headers.get("accept-language"))
+        return JSONResponse(status_code=exc.status, content={"error": type(exc).__name__,
+                                                             "detail": messages.error(str(exc), lang)})
 
     @app.exception_handler(HTTPException)
-    async def _http_error(_: Request, exc: HTTPException):
-        body = exc.detail if isinstance(exc.detail, dict) else {"detail": exc.detail}
+    async def _http_error(request: Request, exc: HTTPException):
+        lang = messages.language_from_header(request.headers.get("accept-language"))
+        body = dict(exc.detail) if isinstance(exc.detail, dict) else {"detail": exc.detail}
+        if isinstance(body.get("detail"), str):
+            body["detail"] = messages.error(body["detail"], lang)
         return JSONResponse(status_code=exc.status_code, content=body, headers=getattr(exc, "headers", None))
 
     def limited(limiter, key: str) -> None:
@@ -623,7 +634,7 @@ def create_app(
     @app.post("/v1/auth/otp", status_code=202, tags=["sign-in"])
     def request_otp(body: OtpIn, request: Request):
         limited(otp_limiter, client_ip(request))
-        code = reg.request_otp(body.mobile, sms)
+        code = reg.request_otp(body.mobile, sms, body.language)
         out = {"sent": True, "expires_in_seconds": OTP_TTL_MINUTES * 60}
         if dev_echo:
             out["dev_code"] = code  # development only; refused in production
@@ -638,8 +649,11 @@ def create_app(
     @app.post("/v1/auth/verify", tags=["sign-in"])
     def verify_otp(body: VerifyIn, request: Request):
         limited(otp_limiter, "verify:" + client_ip(request))
-        return reg.verify_otp(body.mobile, body.code, body.display_name, body.device_id, body.device_key,
-                              body.device_proof, body.challenge, body.key_attestation, body.platform)
+        out = reg.verify_otp(body.mobile, body.code, body.display_name, body.device_id, body.device_key,
+                             body.device_proof, body.challenge, body.key_attestation, body.platform)
+        if body.language:
+            reg.set_language(out["user_id"], body.language)
+        return out
 
     @app.post("/v1/recovery/start", status_code=202, tags=["sign-in"])
     def recovery_start(body: RecoveryStartIn, request: Request):
@@ -736,6 +750,11 @@ def create_app(
     @app.get("/v1/me", tags=["people"])
     def me(uid: User):
         return reg.profile(uid)
+
+    @app.put("/v1/me/language", tags=["people"])
+    def set_language(body: LanguageIn, uid: User):
+        """Language for your alerts, SMS and messages (English or Hindi)."""
+        return reg.set_language(uid, body.language)
 
     # ------------------------------------------------------- SIM-swap safety
     @app.get("/v1/me/security", tags=["people"])

@@ -111,6 +111,7 @@ class TestMultiNode:
         c.execute("DROP TABLE consents")  # v14
         c.execute("DROP TABLE erasure_requests")
         c.execute("ALTER TABLE users DROP COLUMN erased_at")
+        c.execute("ALTER TABLE users DROP COLUMN language")  # v15
         c.execute("DROP TABLE device_keys")
         c.execute("DROP TABLE auth_challenges")
         c.execute("ALTER TABLE sessions DROP COLUMN device_key_id")

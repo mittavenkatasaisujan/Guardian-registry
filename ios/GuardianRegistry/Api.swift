@@ -12,6 +12,11 @@ struct Api {
     let base: URL
     var token: String?
 
+    /// "hi" when the phone's first language is Hindi, otherwise "en".
+    static var language: String {
+        (Locale.preferredLanguages.first ?? "en").hasPrefix("hi") ? "hi" : "en"
+    }
+
     static var configuredBase: URL {
         let s = Bundle.main.object(forInfoDictionaryKey: "GRApiBase") as? String ?? ""
         return URL(string: s.isEmpty ? "https://registry.example.in" : s)!
@@ -23,6 +28,7 @@ struct Api {
         req.httpMethod = method
         req.timeoutInterval = 15
         req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue(Api.language, forHTTPHeaderField: "Accept-Language")  // server errors in the phone's language
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")

@@ -80,7 +80,7 @@ class MainActivity : Activity() {
         val mobile = input(getString(R.string.mobile_number), InputType.TYPE_CLASS_PHONE, store.mobile)
         button(getString(R.string.send_code)) {
             val m = mobile.text.toString().trim()
-            bg({ Api(BuildConfig.API_BASE, null).post("/v1/auth/otp", JSONObject().put("mobile", m)) as JSONObject }) {
+            bg({ Api(BuildConfig.API_BASE, null).post("/v1/auth/otp", JSONObject().put("mobile", m).put("language", Wire.language())) as JSONObject }) {
                 store.mobile = m
                 showCode(m, it.optString("dev_code").ifBlank { null })
             }

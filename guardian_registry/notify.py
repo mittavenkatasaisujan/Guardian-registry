@@ -29,6 +29,7 @@ from datetime import timedelta
 
 import httpx
 
+from . import messages
 from .clock import Clock, iso
 from .db import Database
 from .security import decrypt_mobile, decrypt_text, mask_mobile, new_id, sign_webhook
@@ -59,10 +60,13 @@ class SmsSender:
     def send(self, to: str, text: str) -> None:  # pragma: no cover - interface
         raise NotImplementedError
 
-    def send_otp(self, to: str, code: str, minutes: int) -> None:
+    def send_otp(self, to: str, code: str, minutes: int, language: str = "en") -> None:
         """Template-based providers (DLT in India) override this to send a template id."""
-        self.send(to, f"Guardian Registry code: {code}. Valid {minutes} min. Never share it with anyone, "
-                      "not even a guardian or a bank.")
+        self.send(to, messages.alert(f"Guardian Registry code: {code}. Valid {minutes} min. Never share it with "
+                                     "anyone, not even a guardian or a bank.", language))
+
+    def send_alert_in(self, to: str, title: str, body: str, language: str) -> None:
+        self.send_alert(to, title, body)
 
     def send_alert(self, to: str, title: str, body: str) -> None:
         self.send(to, f"{title}: {body}")
@@ -95,6 +99,9 @@ class HttpSmsSender(SmsSender):
 class WhatsAppSender:
     def send(self, to: str, title: str, body: str) -> None:  # pragma: no cover - interface
         raise NotImplementedError
+
+    def send_in(self, to: str, title: str, body: str, language: str) -> None:
+        self.send(to, title, body)
 
 
 @dataclass
@@ -182,8 +189,12 @@ def sms_sender_from_env() -> SmsSender:
 # ------------------------------------------------------------------ outbox
 def enqueue_user(c: sqlite3.Connection, now: str, user_id: str, kind: str, title: str, body: str,
                  principal_id: str | None = None, payload: dict | None = None) -> None:
-    """Queue an in-app entry; for urgent kinds also SMS or WhatsApp (the person's choice) and push."""
+    """Queue an in-app entry; for urgent kinds also SMS or WhatsApp (the person's choice) and push.
+    The text is written in the recipient's language (messages.py)."""
     data = json.dumps(payload or {}, ensure_ascii=False)
+    lang = user_language(c, user_id)
+    if lang != "en":
+        title, body = messages.alert(title, lang), messages.alert(body, lang)
     c.execute(
         "INSERT INTO notifications (id, recipient_type, recipient_id, principal_id, kind, channel, title, body, "
         "payload, status, next_attempt_at, created_at, sent_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -199,6 +210,11 @@ def enqueue_user(c: sqlite3.Connection, now: str, user_id: str, kind: str, title
                 "INSERT INTO notifications (id, recipient_type, recipient_id, principal_id, kind, channel, title, "
                 "body, payload, status, next_attempt_at, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (new_id("ntf"), "user", user_id, principal_id, kind, "push", title, body, data, "pending", now, now))
+
+
+def user_language(c, user_id: str) -> str:
+    r = c.execute("SELECT language FROM users WHERE id=?", (user_id,)).fetchone()
+    return (r["language"] if r and r["language"] in messages.LANGUAGES else "en")
 
 
 def _urgent_channel(c: sqlite3.Connection, user_id: str) -> str:
@@ -295,7 +311,8 @@ class Dispatcher:
                 raise RuntimeError("; ".join(errors)[:500])
             return bool(delivered)
         if n["channel"] in ("sms", "whatsapp"):
-            u = self.db.one("SELECT mobile_enc FROM users WHERE id=?", (n["recipient_id"],))
+            u = self.db.one("SELECT mobile_enc, language FROM users WHERE id=?", (n["recipient_id"],))
+            lang = u["language"] if u and u["language"] in messages.LANGUAGES else "en"
             if not u or not u["mobile_enc"]:
                 return False  # no number on file (enrolled before v2): in-app only
             swapped = self.db.one("SELECT 1 FROM sim_events WHERE user_id=? AND cleared_at IS NULL "
@@ -304,10 +321,17 @@ class Dispatcher:
                 return False  # the number may be in an attacker's hands: in-app only until cleared
             to = decrypt_mobile(u["mobile_enc"])
             if n["channel"] == "whatsapp" and self.whatsapp is not None:
-                self.whatsapp.send(to, n["title"], n["body"])
+                send_in = getattr(self.whatsapp, "send_in", None)
+                if send_in:
+                    send_in(to, n["title"], n["body"], lang)
+                else:
+                    self.whatsapp.send(to, n["title"], n["body"])
             else:  # SMS, or WhatsApp chosen but no provider configured
+                send_alert_in = getattr(self.sms, "send_alert_in", None)
                 send_alert = getattr(self.sms, "send_alert", None)
-                if send_alert:
+                if send_alert_in:
+                    send_alert_in(to, n["title"], n["body"], lang)
+                elif send_alert:
                     send_alert(to, n["title"], n["body"])
                 else:
                     self.sms.send(to, f"{n['title']}: {n['body']}")

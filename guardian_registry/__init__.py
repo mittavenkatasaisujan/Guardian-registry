@@ -1,4 +1,4 @@
 """Guardian Registry: a consent-based, cross-bank registry of trusted people and
 payment-protection rules that banks and UPI apps query before moving money."""
 
-__version__ = "0.17.0"
+__version__ = "0.18.0"

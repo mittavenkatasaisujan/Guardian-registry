@@ -2,8 +2,8 @@
 // Interface languages. The English text is the key; a missing translation falls back to
 // English, so nothing ever shows a raw key. Placeholders: {name}.
 // The language is a per-browser preference (localStorage), chosen with the header button
-// and defaulting to the browser's language. Alerts and error messages written by the server
-// are still English (see README: Still open).
+// and defaulting to the browser's language. The server is told too, so alerts, SMS and error
+// messages arrive in the same language.
 
 const LANG_KEY = "gr.lang";
 const LANGS = { en: "English", hi: "हिंदी" };
@@ -120,8 +120,16 @@ function t(text, vars) {
   return out;
 }
 
-function setLang(lang) {
+async function setLang(lang) {
   try { localStorage.setItem(LANG_KEY, lang); } catch (e) { /* fine: this visit only */ }
+  let token = null;
+  try { token = localStorage.getItem("gr.token"); } catch (e) { /* not signed in */ }
+  if (token) {  // alerts and SMS follow the language you chose here
+    try {
+      await fetch("/v1/me/language", { method: "PUT", body: JSON.stringify({ language: lang }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } });
+    } catch (e) { /* the screen still switches; alerts follow on the next sign-in */ }
+  }
   location.reload();
 }
 

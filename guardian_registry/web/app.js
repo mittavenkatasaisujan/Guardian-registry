@@ -72,7 +72,7 @@ class ApiError extends Error {
 }
 
 async function api(method, path, body) {
-  const headers = { "Content-Type": "application/json" };
+  const headers = { "Content-Type": "application/json", "Accept-Language": LANG };  // errors in your language
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) headers.Authorization = `Bearer ${token}`;
   const r = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -222,7 +222,7 @@ function signInView() {
         btn.disabled = true;
         try {
           state.mobile = e.target.mobile.value.trim();
-          const out = await api("POST", "/v1/auth/otp", { mobile: state.mobile });
+          const out = await api("POST", "/v1/auth/otp", { mobile: state.mobile, language: LANG });
           step2(out.dev_code);
         } catch (err) {
           toast(err.message, 7000);
@@ -251,7 +251,7 @@ function signInView() {
           const proof = await DeviceKey.prove();
           const out = await api("POST", "/v1/auth/verify", {
             mobile: state.mobile, code: f.code.value.trim(),
-            display_name: f.name && f.name.value.trim() ? f.name.value.trim() : null, ...proof,
+            display_name: f.name && f.name.value.trim() ? f.name.value.trim() : null, language: LANG, ...proof,
           });
           localStorage.setItem(TOKEN_KEY, out.token);
           if (out.new_user) toast(t("Welcome! Your account is set up."));

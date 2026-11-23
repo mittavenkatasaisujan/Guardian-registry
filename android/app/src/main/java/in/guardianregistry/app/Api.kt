@@ -25,6 +25,7 @@ class Api(private val base: String, var token: String?) {
             conn.connectTimeout = 10_000
             conn.readTimeout = 15_000
             conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("Accept-Language", Wire.language())  // server errors in the phone's language
             token?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
             if (body != null) {
                 conn.doOutput = true

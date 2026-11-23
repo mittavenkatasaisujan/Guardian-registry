@@ -78,8 +78,12 @@ class Msg91Sms(SmsSender):
 
     URL = "https://control.msg91.com/api/v5/flow"
 
-    def __init__(self, authkey: str, otp_template: str, alert_template: str, client: httpx.Client | None = None):
+    def __init__(self, authkey: str, otp_template: str, alert_template: str, client: httpx.Client | None = None,
+                 templates_hi: tuple[str, str] | None = None):
+        """templates_hi: (OTP, alert) DLT template ids registered in Hindi; without them Hindi
+        speakers get the English templates (the alert title variable is still in Hindi)."""
         self.authkey, self.otp_template, self.alert_template = authkey, otp_template, alert_template
+        self.templates_hi = templates_hi
         self.client = client or httpx.Client(timeout=10)
 
     def _flow(self, template: str, to: str, variables: dict) -> None:
@@ -94,25 +98,40 @@ class Msg91Sms(SmsSender):
     def send(self, to: str, text: str) -> None:
         self._flow(self.alert_template, to, {"title": text[:30]})
 
-    def send_otp(self, to: str, code: str, minutes: int) -> None:
-        self._flow(self.otp_template, to, {"otp": code})
+    def send_otp(self, to: str, code: str, minutes: int, language: str = "en") -> None:
+        tpl = self.templates_hi[0] if language == "hi" and self.templates_hi else self.otp_template
+        self._flow(tpl, to, {"otp": code})
 
     def send_alert(self, to: str, title: str, body: str) -> None:
         self._flow(self.alert_template, to, {"title": title[:30]})
+
+    def send_alert_in(self, to: str, title: str, body: str, language: str) -> None:
+        tpl = self.templates_hi[1] if language == "hi" and self.templates_hi else self.alert_template
+        self._flow(tpl, to, {"title": title[:30]})
 
 
 # ------------------------------------------------------------------ WhatsApp
 class MetaWhatsApp(WhatsAppSender):
     def __init__(self, phone_number_id: str, access_token: str, template: str = "guardian_alert",
-                 language: str = "en", api_version: str = "v21.0", client: httpx.Client | None = None):
+                 language: str = "en", api_version: str = "v21.0", client: httpx.Client | None = None,
+                 approved_languages: tuple[str, ...] = ("en",)):
+        """approved_languages: the template languages Meta approved (GR_WHATSAPP_TEMPLATE_LANGUAGES).
+        A person's language is used when it is one of them; otherwise `language`."""
         self.url = f"https://graph.facebook.com/{api_version}/{phone_number_id}/messages"
         self.token, self.template, self.language = access_token, template, language
+        self.approved = tuple(approved_languages)
         self.client = client or httpx.Client(timeout=10)
 
+    def send_in(self, to: str, title: str, body: str, language: str) -> None:
+        self._send(to, title, body, language if language in self.approved else self.language)
+
     def send(self, to: str, title: str, body: str) -> None:
+        self._send(to, title, body, self.language)
+
+    def _send(self, to: str, title: str, body: str, language: str) -> None:
         payload = {
             "messaging_product": "whatsapp", "to": to.lstrip("+"), "type": "template",
-            "template": {"name": self.template, "language": {"code": self.language},
+            "template": {"name": self.template, "language": {"code": language},
                          "components": [{"type": "body", "parameters": [
                              {"type": "text", "text": title[:60]}, {"type": "text", "text": body[:900]}]}]},
         }
@@ -227,7 +246,9 @@ def sms_from_env() -> SmsSender | None:
     if p == "twilio":
         return TwilioSms(_need("GR_TWILIO_ACCOUNT_SID"), _need("GR_TWILIO_AUTH_TOKEN"), _need("GR_TWILIO_FROM"))
     if p == "msg91":
-        return Msg91Sms(_need("GR_MSG91_AUTHKEY"), _need("GR_MSG91_OTP_TEMPLATE"), _need("GR_MSG91_ALERT_TEMPLATE"))
+        hi = (os.environ.get("GR_MSG91_OTP_TEMPLATE_HI"), os.environ.get("GR_MSG91_ALERT_TEMPLATE_HI"))
+        return Msg91Sms(_need("GR_MSG91_AUTHKEY"), _need("GR_MSG91_OTP_TEMPLATE"), _need("GR_MSG91_ALERT_TEMPLATE"),
+                        templates_hi=hi if all(hi) else None)
     raise RuntimeError("GR_SMS_PROVIDER must be twilio or msg91")
 
 
@@ -238,7 +259,9 @@ def whatsapp_from_env() -> WhatsAppSender | None:
     if p == "meta":
         return MetaWhatsApp(_need("GR_WHATSAPP_PHONE_NUMBER_ID"), _need("GR_WHATSAPP_ACCESS_TOKEN"),
                             os.environ.get("GR_WHATSAPP_TEMPLATE", "guardian_alert"),
-                            os.environ.get("GR_WHATSAPP_LANGUAGE", "en"))
+                            os.environ.get("GR_WHATSAPP_LANGUAGE", "en"),
+                            approved_languages=tuple(x.strip() for x in os.environ.get(
+                                "GR_WHATSAPP_TEMPLATE_LANGUAGES", "en").split(",") if x.strip()))
     raise RuntimeError("GR_WHATSAPP_PROVIDER must be meta")
 
 
