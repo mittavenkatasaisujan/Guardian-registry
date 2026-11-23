@@ -1,3 +1,4 @@
 -r requirements-runtime.txt
 pytest==8.3.4
 openpyxl==3.1.5  # tests only: writes real .xlsx files for the stdlib reader to parse
+pdfplumber==0.11.11  # tools only: scripts/pdf_to_table.py
