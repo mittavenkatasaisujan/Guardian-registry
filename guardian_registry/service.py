@@ -80,6 +80,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
 
     def _audit(self, c: sqlite3.Connection, actor: str, action: str,
                principal_id: str | None, **data) -> None:
+        self.db.require_scope(audit.stream_for(principal_id))
         audit.append(c, self._now(), actor, action, principal_id, data)
 
     def _user(self, user_id: str) -> sqlite3.Row:
@@ -748,7 +749,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         self._apply_due_changes(principal_id)
         now = self.clock.now()
         day = ist_day(now)
-        with self.db.tx() as c:
+        with self.db.tx(principal_id) as c:  # per-person: other people's checks run in parallel
             # the same retry may reach two nodes at once: re-check under the write lock
             dup = c.execute("SELECT id FROM checks WHERE participant_id=? AND participant_txn_id=?",
                             (participant_id, participant_txn_id)).fetchone()
@@ -824,7 +825,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         r = self.db.one("SELECT * FROM checks WHERE id=?", (cid,))
         if not r:
             raise NotFound("check not found")
-        with self.db.tx() as c:
+        with self.db.tx(r["principal_id"]) as c:
             if self._refresh(c, r):
                 r = c.execute("SELECT * FROM checks WHERE id=?", (cid,)).fetchone()
         return r
@@ -837,17 +838,18 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         return self._with_customer_facts(self._check_view(cid, for_participant=True), r["principal_id"])
 
     def report_outcome(self, participant_id: str, cid: str, completed: bool) -> dict:
-        self._require_participant(participant_id, allow_suspended=True)
         """Bank tells the registry whether the money actually moved. A failed payment stops
         counting toward the daily limit; a completed one makes the payee 'known'."""
-        r = self._load_check(cid)
-        if r["participant_id"] != participant_id:
+        self._require_participant(participant_id, allow_suspended=True)
+        owner = self.db.one("SELECT principal_id, participant_id FROM checks WHERE id=?", (cid,))
+        if not owner or owner["participant_id"] != participant_id:
             raise NotFound("check not found")
-        if r["completed_at"] is not None:
-            raise Conflict("outcome already reported as completed")
-        if not CheckStatus(r["status"]).is_final_go:
-            raise Conflict(f"payment was not cleared to execute (status: {r['status']})")
-        with self.db.tx() as c:
+        with self.db.tx(owner["principal_id"]) as c:
+            r = self._load_check(cid)  # re-read under the lock: two outcome reports can't both apply
+            if r["completed_at"] is not None:
+                raise Conflict("outcome already reported as completed")
+            if not CheckStatus(r["status"]).is_final_go:
+                raise Conflict(f"payment was not cleared to execute (status: {r['status']})")
             if completed:
                 c.execute("UPDATE checks SET completed_at=? WHERE id=?", (self._now(), cid))
             else:
@@ -858,7 +860,10 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
 
     def _decide_check(self, actor_id: str, cid: str, new_status: CheckStatus,
                       allowed_from: set[CheckStatus], allow_principal: bool) -> dict:
-        with self.db.tx() as c:  # read, refresh and write under one lock: no approve-vs-expiry race
+        owner = self.db.one("SELECT principal_id FROM checks WHERE id=?", (cid,))
+        if not owner:
+            raise NotFound("check not found")
+        with self.db.tx(owner["principal_id"]) as c:  # read, refresh and write under one lock
             r = self._load_check(cid)
             pid = r["principal_id"]
             if not (allow_principal and actor_id == pid):
@@ -892,7 +897,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
 
     def history(self, actor_id: str, principal_id: str, limit: int = 50) -> list[dict]:
         self._require_principal_or_guardian(principal_id, actor_id)
-        with self.db.tx() as c:
+        with self.db.tx(principal_id) as c:
             self._refresh_principal(c, principal_id)
         rows = self.db.all("SELECT id FROM checks WHERE principal_id=? ORDER BY created_at DESC, rowid DESC LIMIT ?",
                            (principal_id, limit))
@@ -904,7 +909,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         approvals, changes = [], []
         for pid in wards:
             self._apply_due_changes(pid)
-            with self.db.tx() as c:
+            with self.db.tx(pid) as c:
                 self._refresh_principal(c, pid)
             for r in self.db.all("SELECT id FROM checks WHERE principal_id=? AND status IN (?,?) ORDER BY created_at",
                                  (pid, CheckStatus.PENDING_APPROVAL.value, CheckStatus.COOLING_OFF.value)):
@@ -934,7 +939,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             "SELECT DISTINCT principal_id FROM pending_changes WHERE status=? AND effective_at<=?",
             (ChangeStatus.PENDING.value, now))}
         for pid in principals:
-            with self.db.tx() as c:
+            with self.db.tx(pid) as c:  # per-person: the worker doesn't block other people's checks
                 self._refresh_principal(c, pid)
         for pid in changes:
             self._apply_due_changes(pid)
@@ -975,5 +980,5 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
                 for r in self.db.all("SELECT * FROM audit_log WHERE principal_id=? ORDER BY seq", (principal_id,))]
 
     def verify_audit(self) -> audit.VerifyResult:
-        with self.db.tx() as c:
+        with self.db.tx() as c:  # global: a consistent snapshot of every stream
             return audit.verify(c)

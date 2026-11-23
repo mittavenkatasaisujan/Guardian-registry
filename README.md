@@ -48,12 +48,12 @@ names and payees on the page as text only.
 | Kill switch | The principal or any guardian can pause all payments at once. A guardian can switch payments back on at once; the principal's own request is held. |
 | **Alerts** | Every event queues alerts **in the same database transaction**, so an alert is never lost or sent for something that rolled back. Guardians get SMS for urgent events (approval needed, payment on hold, protection being loosened, kill switch, guardian removal) and an in-app feed for everything. Delivery retries with backoff. |
 | **WhatsApp and push** | Each person picks SMS (default) or **WhatsApp** for urgent alerts (`PUT /v1/me/alerts`); WhatsApp falls back to SMS if no provider is set. App installs register for **push** (`POST /v1/me/alerts/push`, tokens stored encrypted, at most 5). Push goes to the app, not the number, so it keeps flowing during a SIM-swap window when SMS and WhatsApp to that number stop. A lost-phone report or a recovery removes old push tokens. |
-| **Several servers (Postgres)** | Set `GR_DB=postgresql://...` and run as many API nodes as you like against one Postgres. The schema is built from the same migrations as SQLite. Every write transaction takes one database-wide lock, so daily limits, the audit hash chain and "one recovery at a time" stay exact across nodes. Background workers on every node **claim** each alert before sending (with a 60 s lease if a node dies), and every sweep re-checks state under the lock, so nothing is sent or applied twice. With `GR_RATE_BACKEND=db` rate limits are shared too. CI runs the full test suite on Postgres 16 and the demo against two live nodes. |
+| **Several servers (Postgres)** | Set `GR_DB=postgresql://...` and run as many API nodes as you like against one Postgres. The schema is built from the same migrations as SQLite. **Per-person locking:** payment checks, approvals, outcome reports and the worker's per-person sweep lock only that person, so checks for different people run **in parallel** on every node while each person's daily limit stays exact. Rare operations (rules, guardians, onboarding, recovery, KYC) take a database-wide lock and run alone. A transaction may only write audit entries for the people it locked and can't widen its lock when nested; both are checked on SQLite too, so the test suite catches a scope mistake. Workers on every node **claim** each alert before sending (60 s lease), and every sweep re-checks state under its lock, so nothing is sent or applied twice. With `GR_RATE_BACKEND=db` rate limits are shared too. CI runs the full suite on Postgres 16 (including real parallel-lock tests) and the demo against two live nodes. |
 | **Bank webhooks** | Banks register an `https://` URL and get a signed `check.updated` event when a held payment is approved, denied, released, expired or cancelled. No polling needed. |
 | Background worker | Every few seconds it releases finished cooling-offs, expires unanswered approvals, applies held changes whose delay is over, and delivers alerts. |
 | Bank API | Idempotent on `(participant, participant_txn_id)`. A failed payment frees the daily limit, and a completed one makes the payee "known". Customers who aren't enrolled pass through. Per-bank rate limit. **Key rotation** with a 24 h grace period. |
 | Privacy | Mobile numbers are stored as an HMAC hash (for lookups) and an encrypted copy (only for sending SMS). Never in plain text. Keys, tokens and OTP codes are stored only as hashes. Banks never see principal IDs. Logs mask numbers. |
-| Audit | Every change writes a SHA-256 **hash-chained** audit entry in the same transaction. `verify` detects any edited, deleted or reordered row. |
+| Audit | Every change writes a SHA-256 **hash-chained** audit entry in the same transaction: one chain per person plus a `system` chain, so writes for different people never contend. `verify` walks every chain and detects any edited, deleted, reordered or moved row; its `head` is one hash over all chains. Entries written before per-person chains stay verifiable as the original chain. |
 | Safe production start | With `GR_ENV=production` the server refuses to start on dev secrets, with no SMS gateway, or with the OTP dev echo on. |
 
 ## Run it
@@ -175,12 +175,12 @@ guardian_registry/
   simfeed.py    mobile-operator feed: pushed events, number disconnection, live SIM-swap lookup
   recovery.py   account recovery: vouching by contacts or a bank, 24 h hold
   presets.py    named rule bundles (RBI-proposal-shaped, not final rules)
-  audit.py      hash-chained audit log + verify
+  audit.py      hash-chained audit log (one chain per person) + verify
   db.py         SQLite / Postgres storage, versioned migrations, Postgres schema derived from them
   security.py   hashing, encryption, OTP, signatures, production checks
   ratelimit.py  sliding-window limiter
   api.py        FastAPI app (create_app factory) + background worker
-tests/          412 tests (6 of them need Postgres)
+tests/          423 tests (9 of them need Postgres)
 scripts/demo.py end-to-end story over real HTTP (also runs in CI)
 scripts/dev_server.py  fresh local server for trying the web app
 ```
@@ -192,5 +192,5 @@ scripts/dev_server.py  fresh local server for trying the web app
 - **Provider accounts:** the operator SIM feed, the live SIM-swap lookup, device-key attestation, SMS, WhatsApp and push are all built to standard shapes behind adapters, but none is connected to a real provider. That needs commercial agreements (mobile operators or an aggregator, an SMS gateway, a WhatsApp Business account, Firebase/APNs, Google Play Integrity / Apple App Attest) and a mobile app that keeps its key in secure hardware.
 - **Register freshness:** the official lists are loaded by operators. Nothing fetches RBI/NPCI/DoT lists automatically, since each publishes in its own format; reload them when they change.
 - **Social engineering of contacts:** the hour's wait, the 24 h hold and the 72 h aftercare window reduce the damage of a contact being fooled, but a determined, patient attacker can still talk someone into vouching.
-- **Write throughput:** one database-wide write lock makes several nodes behave exactly like one, which is plenty for a pilot but caps writes at what one Postgres does serially; per-person locking would lift that.
+- **One person's writes are serial:** two checks for the *same* person still run one after another (that's what keeps their daily limit exact). Rule and guardian changes take the database-wide lock; they are rare, but a burst of them pauses payment checks briefly.
 - **Schema changes:** from v9 on, every migration must be plain SQL that runs on both SQLite and Postgres (`PORTABLE_FROM` in [db.py](guardian_registry/db.py)); Postgres applies them in place. A migration that needs a table rebuild would need its own Postgres step.

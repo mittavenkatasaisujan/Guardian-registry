@@ -5,6 +5,7 @@ import uuid
 
 import pytest
 
+from guardian_registry import audit as audit_mod
 from guardian_registry.db import MIGRATIONS, Database, postgres_baseline
 from guardian_registry.service import Registry
 
@@ -100,6 +101,11 @@ class TestMultiNode:
         c = node_a.db.conn
         schema = c.execute("SELECT current_schema() AS s").fetchone()["s"]
         # make this database look like one created by v0.9.0 (schema v8): drop what v9+ added
+        c.execute("DROP INDEX ux_audit_stream")
+        c.execute("ALTER TABLE audit_log DROP COLUMN stream")
+        c.execute("ALTER TABLE audit_log DROP COLUMN stream_seq")
+        c.execute("ALTER TABLE audit_log ALTER COLUMN seq DROP DEFAULT")
+        c.execute("DROP SEQUENCE audit_log_seq")
         c.execute("DROP TABLE participant_certs")
         c.execute("DROP TABLE device_keys")
         c.execute("DROP TABLE auth_challenges")
@@ -109,6 +115,9 @@ class TestMultiNode:
         assert upgraded.one("SELECT version FROM gr_schema")["version"] == len(MIGRATIONS)
         assert upgraded.one("SELECT COUNT(*) n FROM device_keys")["n"] == 0
         upgraded.one("SELECT device_key_id FROM sessions LIMIT 1")
+        with upgraded.tx() as tx:  # v11 + its Postgres extra: streams and an auto seq
+            audit_mod.append(tx, "t", "x", "a", None, {})
+        assert upgraded.one("SELECT stream, stream_seq, seq FROM audit_log")["stream"] == "system"
         upgraded.close()
 
     def test_privacy_dump_works(self, two_nodes):

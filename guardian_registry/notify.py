@@ -233,7 +233,7 @@ class Dispatcher:
         for n in due:
             # claim the row first, so two nodes' dispatchers never send the same alert twice;
             # if this node dies mid-send the lease runs out and another node retries it
-            with self.db.tx() as c:
+            with self.db.tx(shared=True) as c:  # row-level claim: no person's state involved
                 claimed = c.execute("UPDATE notifications SET next_attempt_at=? WHERE id=? AND status='pending' "
                                     "AND next_attempt_at=?", (lease, n["id"], n["next_attempt_at"])).rowcount
             if not claimed:
@@ -243,7 +243,7 @@ class Dispatcher:
             except Exception as e:  # noqa: BLE001 - any delivery error is retried
                 self._retry(n, str(e)[:500], stats)
                 continue
-            with self.db.tx() as c:
+            with self.db.tx(shared=True) as c:
                 c.execute("UPDATE notifications SET status=?, attempts=attempts+1, sent_at=?, last_error=NULL WHERE id=?",
                           ("sent" if delivered else "skipped", iso(self.clock.now()), n["id"]))
             if delivered:
@@ -294,7 +294,7 @@ class Dispatcher:
 
     def _retry(self, n: sqlite3.Row, error: str, stats: DispatchStats) -> None:
         attempts = n["attempts"] + 1
-        with self.db.tx() as c:
+        with self.db.tx(shared=True) as c:
             if attempts >= MAX_ATTEMPTS:
                 c.execute("UPDATE notifications SET status='failed', attempts=?, last_error=? WHERE id=?",
                           (attempts, error, n["id"]))

@@ -7,11 +7,20 @@ Schema: the SQLite migrations below are the single source of truth. For Postgres
 registry builds the same final schema from them (postgres_baseline) and records the
 version, so there is only one schema to maintain.
 
-Multi-node safety on Postgres: every write transaction first takes one database-wide
-advisory lock, so writes are serialized across ALL nodes exactly as SQLite serializes them
-within one. Daily limits, the audit hash chain and "one recovery at a time" stay correct
-without per-query locking. Reads don't take the lock. That caps write throughput at what
-one Postgres can do serially, which is far beyond a national pilot's needs.
+Multi-node safety on Postgres: lock scopes.
+  * `tx()` (no keys) is a GLOBAL write: it takes the database-wide advisory lock exclusively,
+    so it runs alone, exactly as SQLite serializes writes. Rare operations use it: rules,
+    guardians, onboarding, recovery, KYC, sweeps of held changes.
+  * `tx(person_id)` is a PER-PERSON write: it takes the database-wide lock SHARED plus an
+    exclusive lock for that person. Payment checks, approvals, outcomes and the per-person
+    sweep use it, so checks for different people run in parallel on every node, while each
+    person's daily limit stays exact. A global write still waits for all of them.
+  * `tx(shared=True)` takes only the shared lock: for row-level work that touches no
+    person's state (claiming an alert to send).
+  The audit log keeps one hash chain per person (plus "system"), so per-person writes never
+  contend on it. A transaction may only write audit entries for the people it locked; a
+  nested tx may not widen the scope. Both are checked on SQLite too (ScopeError), so the
+  test suite catches a lock-scope mistake before it can race on Postgres.
 """
 
 from __future__ import annotations
@@ -379,8 +388,28 @@ CREATE TABLE participant_certs (
 CREATE INDEX ix_certs_fp ON participant_certs(fingerprint, status);
 """
 
+# v11 (portable): the audit log becomes one hash chain per person ("stream"), plus "system"
+# for entries about no one, so writes for different people don't contend on one chain.
+# Entries written before v11 keep stream NULL and stay verifiable as the original chain.
+SCHEMA_V11 = """
+ALTER TABLE audit_log ADD COLUMN stream TEXT;
+ALTER TABLE audit_log ADD COLUMN stream_seq INTEGER;
+CREATE UNIQUE INDEX ux_audit_stream ON audit_log(stream, stream_seq);
+"""
+
 MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8, SCHEMA_V9,
-              SCHEMA_V10]
+              SCHEMA_V10, SCHEMA_V11]
+
+# Postgres-only follow-ups, run after the baseline or after the portable migration of the
+# same version. v11: audit rows get their global seq from a sequence (SQLite's INTEGER
+# PRIMARY KEY does this by itself), since per-person writers can't share MAX(seq)+1.
+PG_EXTRAS = {
+    11: """
+CREATE SEQUENCE IF NOT EXISTS audit_log_seq;
+SELECT setval('audit_log_seq', COALESCE((SELECT MAX(seq) FROM audit_log), 0) + 1, false);
+ALTER TABLE audit_log ALTER COLUMN seq SET DEFAULT nextval('audit_log_seq');
+""",
+}
 
 
 # From this migration on (1-based), every script must be plain SQL that runs on SQLite AND
@@ -389,7 +418,8 @@ MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, 
 # postgres_baseline().
 PORTABLE_FROM = 9
 
-PG_WRITE_LOCK = 7_240_001        # advisory lock id serializing writes across nodes
+PG_WRITE_LOCK = 7_240_001        # advisory lock: exclusive = global write, shared = scoped write
+PG_PERSON_LOCK = 7_240_002       # advisory lock namespace for per-person writes
 PG_ROWID_TABLES = ("checks", "notifications")  # code orders by SQLite's rowid on these
 
 
@@ -487,11 +517,16 @@ class PgConnection:
         self._c.close()
 
 
+class ScopeError(RuntimeError):
+    """Code tried to write outside the lock scope of its transaction (a bug)."""
+
+
 class Database:
     def __init__(self, path: str = ":memory:", schema: str | None = None):
         self.backend = "postgres" if path.startswith(("postgres://", "postgresql://")) else "sqlite"
         self._lock = threading.RLock()
         self._depth = 0
+        self._scope: frozenset | None = None  # None = global; otherwise the locked person ids
         if self.backend == "postgres":
             self.conn = PgConnection(path, schema)
         else:
@@ -530,6 +565,8 @@ class Database:
             row = c.execute("SELECT version FROM gr_schema").fetchone()
             if row is None:
                 c.executescript(postgres_baseline())
+                for v in sorted(PG_EXTRAS):
+                    c.executescript(PG_EXTRAS[v])
                 c.execute("INSERT INTO gr_schema (version) VALUES (?)", (len(MIGRATIONS),))
                 return len(MIGRATIONS)
             version = row["version"]
@@ -539,32 +576,56 @@ class Database:
                 raise RuntimeError(f"Postgres schema v{version} predates portable migrations; rebuild it")
             for target in range(version + 1, len(MIGRATIONS) + 1):
                 c.executescript(_strip_comments(MIGRATIONS[target - 1]))
+                if target in PG_EXTRAS:
+                    c.executescript(PG_EXTRAS[target])
                 c.execute("UPDATE gr_schema SET version=?", (target,))
             return len(MIGRATIONS)
 
     @contextmanager
-    def tx(self):
-        """Serialized, atomic unit of work. Nested calls join the outer transaction."""
+    def tx(self, *keys: str, shared: bool = False):
+        """Atomic unit of work; see the module notes on lock scopes.
+
+        tx()            global write (runs alone)
+        tx(person, ...) per-person write (parallel with other people's)
+        tx(shared=True) neither: row-level work that touches no person's state
+        Nested calls join the outer transaction and may not widen its scope."""
+        scope = frozenset(k for k in keys if k) if (keys or shared) else None
         with self._lock:
             outer = self._depth == 0
             if outer:
                 if self.backend == "postgres":
                     self.conn.execute("BEGIN")
-                    self.conn.execute("SELECT pg_advisory_xact_lock(?)", (PG_WRITE_LOCK,))
+                    if scope is None:
+                        self.conn.execute("SELECT pg_advisory_xact_lock(?)", (PG_WRITE_LOCK,))
+                    else:
+                        self.conn.execute("SELECT pg_advisory_xact_lock_shared(?)", (PG_WRITE_LOCK,))
+                        for k in sorted(scope):  # fixed order: no deadlocks between multi-key txs
+                            self.conn.execute("SELECT pg_advisory_xact_lock(?, hashtext(?))", (PG_PERSON_LOCK, k))
                 else:
                     self.conn.execute("BEGIN IMMEDIATE")
+                self._scope = scope
+            elif self._scope is not None and (scope is None or not scope <= self._scope):
+                raise ScopeError(f"nested transaction widens the lock scope {sorted(self._scope)} -> "
+                                 f"{'GLOBAL' if scope is None else sorted(scope)}")
             self._depth += 1
             try:
                 yield self.conn
             except BaseException:
                 self._depth -= 1
                 if outer:
+                    self._scope = None
                     self.conn.execute("ROLLBACK")
                 raise
             else:
                 self._depth -= 1
                 if outer:
+                    self._scope = None
                     self.conn.execute("COMMIT")
+
+    def require_scope(self, key: str) -> None:
+        """Raise unless the current transaction may write state belonging to `key`."""
+        if self._depth and self._scope is not None and key not in self._scope:
+            raise ScopeError(f"writing {key!r} inside a transaction locked for {sorted(self._scope)}")
 
     def one(self, sql: str, params=()):
         with self._lock:
