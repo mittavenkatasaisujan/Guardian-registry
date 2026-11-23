@@ -14,7 +14,8 @@ android {
         minSdk = 28            // StrongBox and modern Key Attestation
         targetSdk = 35
         versionCode = 1
-        versionName = "0.15.0"
+        versionName = "0.16.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "FCM_PROJECT_ID", "\"${prop("grFcmProjectId")}\"")
         buildConfigField("String", "FCM_APP_ID", "\"${prop("grFcmAppId")}\"")
         buildConfigField("String", "FCM_API_KEY", "\"${prop("grFcmApiKey")}\"")
@@ -45,4 +46,6 @@ dependencies {
     implementation("com.google.firebase:firebase-messaging:24.1.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

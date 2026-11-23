@@ -7,7 +7,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.9"
-    MARKETING_VERSION: "0.15.0"
+    MARKETING_VERSION: "0.16.0"
     CURRENT_PROJECT_VERSION: "1"
     # Where the app talks to; override in your scheme or with xcodebuild GR_API_BASE=...
     GR_API_BASE: "https://registry.example.in"
@@ -29,7 +29,28 @@ targets:
         UILaunchScreen: {}
         UIBackgroundModes: [remote-notification]
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # plain http only to the local machine (a dev server in the simulator); everything else HTTPS
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: in.guardianregistry.app
         GENERATE_INFOPLIST_FILE: NO
+  GuardianRegistryTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [GuardianRegistryTests]
+    dependencies:
+      - target: GuardianRegistry
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: in.guardianregistry.app.tests
+schemes:
+  GuardianRegistry:
+    build:
+      targets:
+        GuardianRegistry: all
+        GuardianRegistryTests: [test]
+    test:
+      targets: [GuardianRegistryTests]
