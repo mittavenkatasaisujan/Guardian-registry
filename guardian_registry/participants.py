@@ -102,6 +102,8 @@ class ParticipantMixin:
             "created_at": r["created_at"], "created_by": r["created_by"],
             "webhook_url": r["webhook_url"], "pending_request": pending,
             "register_match": self._safe_match(r["kind"], r["regulator_ref"]),
+            "mtls": {"pinned_certificates": self.db.one(
+                "SELECT COUNT(*) n FROM participant_certs WHERE participant_id=? AND status='active'", (pid,))["n"]},
         }
 
     def _safe_match(self, kind: str, ref: str | None) -> dict | None:

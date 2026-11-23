@@ -361,7 +361,26 @@ CREATE TABLE auth_challenges (
 ALTER TABLE sessions ADD COLUMN device_key_id TEXT;
 """
 
-MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8, SCHEMA_V9]
+# v10 (portable): mutual TLS for participants. Client certificates are pinned by SHA-256
+# fingerprint; a pending row waits for a second operator.
+SCHEMA_V10 = """
+CREATE TABLE participant_certs (
+    participant_id TEXT NOT NULL REFERENCES participants(id),
+    fingerprint    TEXT NOT NULL,          -- SHA-256 of the certificate (DER), hex
+    subject        TEXT NOT NULL,
+    not_after      TEXT NOT NULL,
+    status         TEXT NOT NULL,          -- pending | active | removed
+    added_by       TEXT NOT NULL,
+    added_at       TEXT NOT NULL,
+    decided_by     TEXT,
+    decided_at     TEXT,
+    PRIMARY KEY (participant_id, fingerprint)
+);
+CREATE INDEX ix_certs_fp ON participant_certs(fingerprint, status);
+"""
+
+MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8, SCHEMA_V9,
+              SCHEMA_V10]
 
 
 # From this migration on (1-based), every script must be plain SQL that runs on SQLite AND

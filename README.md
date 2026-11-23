@@ -17,6 +17,7 @@ its own version, a family with three bank accounts sets up three separate locks.
 | **Participant trust** | Every bank or app declares its **kind** (`bank`, `small_finance_bank`, `payments_bank`, `nbfc`, `ppi_issuer`, `tpap`, `telecom`) and its regulator reference. The kind is a ceiling on its **capabilities**: `checks`, `kyc_full`, `kyc_minimum`, `sim_signals`, `number_lifecycle`. A UPI app (`tpap`) can run checks but can **never vouch for identity**; a wallet gets minimum-KYC claims by default. **Onboarding is four-eyes:** one operator registers a participant as `pending` (it gets its key and can set its webhook), and a **different operator** must approve it before it can call checks, KYC or signals. Suspending a participant or removing a capability is instant. Reinstating it or adding a capability needs a second operator. While a participant is suspended, its KYC claims stop counting. **Offboarding** is permanent: keys and webhook are wiped, its KYC claims are revoked and customers are told; SIM-swap windows it opened stay open. Operator actions are audited under each operator's name. |
 | **Official register** | Operators load each regulator's published list of entities (`PUT /v1/admin/register/{kind}`: RBI's banks, NBFCs and PPI issuers, NPCI's UPI apps, DoT's telecom licensees) with its source and date. Once a list for a kind is loaded, participants of that kind can only be registered, and approved or reinstated, with a reference on it. A participant shows which register entry it matched. In production a list is required (`GR_REQUIRE_ENTITY_REGISTER`). |
 | **Operator SSO** | Operators can sign in through the organisation's identity provider (OpenID Connect: Entra/Azure AD, Okta, Google, Keycloak) and send `Authorization: Bearer <ID token>`. The registry checks the signature against the provider's keys, issuer, audience, expiry, a verified email on the allow-list, and, on by default in production, that the sign-in used a **hardware security key** (`amr` contains `hwk`). The email is the operator's name for four-eyes checks and the audit log. |
+| **Mutual TLS for banks** | An API key alone stops being enough. TLS ends at the reverse proxy, which verifies the bank's certificate chain and forwards the certificate (header `X-Client-Cert`, accepted only from `GR_TRUSTED_PROXIES`). The registry pins each participant's certificates by SHA-256 fingerprint and checks their dates. Once a participant has a pin, every call needs a pinned certificate; `GR_REQUIRE_MTLS` (default on in production) requires it for all. A new pin from an operator waits for a **second operator**; a bank rotates its own certificate only in a call that already presents a pinned one; removing a pin is instant, and a bank can't remove the one it is calling with if it's the last. One certificate can belong to one participant only. |
 | Sign-in | SMS one-time code (6 digits, 5 min, single use, 5 wrong tries locks it, 30 s resend cooldown, 3 codes per 15 min, plus a per-IP limit). The response is the same whether or not a number is enrolled. Sessions last 30 days; you can sign out of one device or all of them. |
 | **Bank-vouched KYC** | A participant bank that has already KYC'd its customer sends a claim (KYC level `full` or `minimum`, KYC date, optional date of birth, its customer ID). **It counts only after the customer approves it in the app.** Unanswered claims lapse after 7 days. Approved ones expire after a year (re-confirm yearly), and the customer can withdraw or the bank revoke at any time. The customer ID is stored only as a keyed hash and the date of birth only encrypted. Banks get a yes/no **`senior`** flag (70+, per RBI's proposal) in every check response, never the date. If two banks disagree on the date of birth, `senior` becomes unknown and the customer is told. |
 | Verified guardians | Every guardian listing shows the guardian's identity level (`bank_verified`, `bank_min_kyc` or `otp`). The rule `require_verified_guardian` lets **only bank-verified guardians approve** payments. Any guardian can still deny or cancel, since that only protects. Turning the rule off is a loosening, so it's held for 24 h. |
@@ -67,6 +68,17 @@ API docs: http://127.0.0.1:8000/docs. The scripted scam-call story, which also r
 .venv\Scripts\python scripts\demo.py http://127.0.0.1:8000 demo-alice-token demo-bob-token
 ```
 
+Behind nginx, with banks presenting client certificates (the registry pins them; nginx checks the chain):
+
+```nginx
+ssl_client_certificate /etc/nginx/bank-cas.pem;   # CAs your banks' certificates chain to
+ssl_verify_client optional;                       # people's apps don't send one
+location /v1/ {
+    proxy_set_header X-Client-Cert $ssl_client_escaped_cert;
+    proxy_pass http://127.0.0.1:8000;
+}
+```
+
 Docker (set the production variables below):
 
 ```powershell
@@ -93,6 +105,8 @@ docker build -t guardian-registry .
 | `GR_SIM_LOOKUP_FAIL` | `open` (default) or `closed`: what to do when the lookup API is down |
 | `GR_KEY_ATTESTATION_URL`, `GR_KEY_ATTESTATION_TOKEN` | Device-key attestation adapter: POST `{"public_key", "attestation", "platform"}`, reply `{"hardware_backed", "app_genuine"}` (wraps Play Integrity / App Attest) |
 | `GR_REQUIRE_KEY_ATTESTATION` | `1` refuses new device keys without good platform evidence |
+| `GR_REQUIRE_MTLS` | `1` requires a pinned client certificate from every participant. Default `1` in production. |
+| `GR_TRUSTED_PROXIES`, `GR_CLIENT_CERT_HEADER` | Addresses (IPs / CIDRs) allowed to forward client certificates (default `127.0.0.1,::1`) and the header name (default `X-Client-Cert`, PEM, URL-escaped allowed) |
 | `GR_RATE_BACKEND` | `memory` (default, per process) or `db`: counters in the shared database, so several API nodes enforce one limit |
 | `GR_WHATSAPP_URL`, `GR_WHATSAPP_TOKEN` | WhatsApp adapter: POST `{"to", "template": "guardian_alert", "params": [title, body]}` |
 | `GR_PUSH_URL`, `GR_PUSH_TOKEN` | Push adapter (FCM / APNs): POST `{"token", "platform", "title", "body", "data"}` |
@@ -106,8 +120,8 @@ Amounts are **integer paise**.
 | Who | Endpoints |
 |---|---|
 | Sign-in | `POST /v1/auth/challenge`, `POST /v1/recovery/start`, `POST /v1/recovery/status`, `POST /v1/auth/otp`, `POST /v1/auth/verify` (send `display_name` the first time to enrol and a stable `device_id`; the response says if the session is `restricted`), `POST /v1/auth/logout` |
-| Operator | `PUT /v1/admin/register/{kind}`, `GET /v1/admin/register`, `POST/GET /v1/admin/participants` (body: `name`, `kind`, `regulator_ref`, optional `capabilities`), `GET /v1/admin/participants/{id}`, `POST /v1/admin/participants/{id}/{approve,reject,suspend,reinstate,offboard}`, `PUT /v1/admin/participants/{id}/capabilities`, `GET /v1/admin/audit/verify`, `POST /v1/admin/sweep` |
-| Bank / app | `POST /v1/signals/sim-change`, `POST /v1/signals/operator-events` (telecom), `POST /v1/kyc/recovery-vouch`, `POST /v1/checks`, `GET /v1/checks/{id}`, `POST /v1/checks/{id}/outcome`, `POST /v1/kyc/attestations`, `GET/DELETE /v1/kyc/attestations/{id}`, `GET /v1/participant/me`, `PUT /v1/participant/webhook`, `POST /v1/participant/rotate-key` |
+| Operator | `GET/POST /v1/admin/participants/{id}/certificates`, `POST /v1/admin/participants/{id}/certificates/{fp}/approve`, `DELETE /v1/admin/participants/{id}/certificates/{fp}`, `PUT /v1/admin/register/{kind}`, `GET /v1/admin/register`, `POST/GET /v1/admin/participants` (body: `name`, `kind`, `regulator_ref`, optional `capabilities`), `GET /v1/admin/participants/{id}`, `POST /v1/admin/participants/{id}/{approve,reject,suspend,reinstate,offboard}`, `PUT /v1/admin/participants/{id}/capabilities`, `GET /v1/admin/audit/verify`, `POST /v1/admin/sweep` |
+| Bank / app | `POST /v1/signals/sim-change`, `POST /v1/signals/operator-events` (telecom), `POST /v1/kyc/recovery-vouch`, `POST /v1/checks`, `GET /v1/checks/{id}`, `POST /v1/checks/{id}/outcome`, `POST /v1/kyc/attestations`, `GET/DELETE /v1/kyc/attestations/{id}`, `GET /v1/participant/me`, `GET/POST /v1/participant/certificates`, `DELETE /v1/participant/certificates/{fp}`, `PUT /v1/participant/webhook`, `POST /v1/participant/rotate-key` |
 | Person | `GET /v1/me`, `GET /v1/me/devices`, `DELETE /v1/me/devices/{key_id}`, `GET/PUT /v1/me/alerts`, `POST /v1/me/alerts/push`, `DELETE /v1/me/alerts/push/{id}`, `GET /v1/me/recoveries`, `POST /v1/me/recoveries/{id}/cancel`, `GET /v1/me/security`, `POST /v1/me/security/{lost-phone,confirm-sim-change}`, `POST /v1/me/mobile/{change,verify}`, `GET /v1/me/identity`, `POST /v1/me/identity/attestations/{id}/{approve,reject}`, `DELETE /v1/me/identity/attestations/{id}`, `GET /v1/me/notifications`, `POST /v1/me/notifications/read`, `GET /v1/presets`, `GET/PATCH /v1/me/rules`, `POST /v1/me/rules/preset/{name}`, `POST /v1/me/kill-switch/{on,off}`, `GET/POST /v1/me/guardians`, `DELETE /v1/me/guardians/{id}`, `GET /v1/me/changes`, `GET /v1/me/payments`, `POST /v1/me/payments/{id}/cancel`, `GET /v1/me/audit` |
 | Guardian | `GET /v1/guardian/inbox`, `GET /v1/guardian/recoveries`, `POST /v1/guardian/recoveries/{id}/{approve,deny}`, `GET /v1/guardian/wards`, `POST /v1/guardian/invitations/{id}/{accept,decline}`, `POST /v1/guardian/guardianships/{id}/resign`, `POST /v1/guardian/payments/{id}/{approve,deny,cancel}`, `POST /v1/guardian/changes/{id}/{approve,veto}`, `GET /v1/guardian/wards/{pid}/{rules,payments,audit,security}`, `POST /v1/guardian/wards/{pid}/{lost-phone,confirm-sim-change}`, `POST /v1/guardian/wards/{pid}/kill-switch/{on,off}`, `POST /v1/guardian/wards/{pid}/trusted-payees` |
 
@@ -128,6 +142,7 @@ guardian_registry/
   policy.py     pure rules engine (no I/O)
   service.py    registry: sign-in, consent, held changes, checks, approvals, sweeper
   notify.py     alert outbox, SMS senders, signed webhooks, retrying dispatcher
+  certs.py      mutual TLS: certificate pins, four-eyes pinning, rotation, proxy trust
   participants.py  participant kinds, capabilities, four-eyes onboarding, suspension, official register
   operator_auth.py operator SSO (OpenID Connect ID tokens, hardware-key check)
   channels.py   alert channel choice (SMS / WhatsApp) and push tokens
@@ -142,7 +157,7 @@ guardian_registry/
   security.py   hashing, encryption, OTP, signatures, production checks
   ratelimit.py  sliding-window limiter
   api.py        FastAPI app (create_app factory) + background worker
-tests/          397 tests (6 of them need Postgres)
+tests/          408 tests (6 of them need Postgres)
 scripts/demo.py end-to-end story over real HTTP (also runs in CI)
 ```
 
@@ -152,5 +167,5 @@ scripts/demo.py end-to-end story over real HTTP (also runs in CI)
 - **Provider accounts:** the operator SIM feed, the live SIM-swap lookup, device-key attestation, SMS, WhatsApp and push are all built to standard shapes behind adapters, but none is connected to a real provider. That needs commercial agreements (mobile operators or an aggregator, an SMS gateway, a WhatsApp Business account, Firebase/APNs, Google Play Integrity / Apple App Attest) and a mobile app that keeps its key in secure hardware.
 - **Register freshness:** the official lists are loaded by operators. Nothing fetches RBI/NPCI/DoT lists automatically, since each publishes in its own format; reload them when they change.
 - **Social engineering of contacts:** the hour's wait, the 24 h hold and the 72 h aftercare window reduce the damage of a contact being fooled, but a determined, patient attacker can still talk someone into vouching.
-- **Write throughput and bank transport:** one database-wide write lock makes several nodes behave exactly like one, which is plenty for a pilot but caps writes at what one Postgres does serially; per-person locking would lift that. Banks authenticate with API keys over TLS; mutual TLS would be expected in production.
+- **Write throughput:** one database-wide write lock makes several nodes behave exactly like one, which is plenty for a pilot but caps writes at what one Postgres does serially; per-person locking would lift that.
 - **Schema changes:** from v9 on, every migration must be plain SQL that runs on both SQLite and Postgres (`PORTABLE_FROM` in [db.py](guardian_registry/db.py)); Postgres applies them in place. A migration that needs a table rebuild would need its own Postgres step.

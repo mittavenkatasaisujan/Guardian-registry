@@ -25,6 +25,7 @@ from .clock import Clock, iso, ist_day
 from .db import Database
 from .errors import Conflict, Forbidden, Invalid, NotFound, TooMany, Unauthorized
 from .kyc import KycMixin
+from .certs import CertMixin
 from .channels import ChannelMixin
 from .devicekeys import DeviceKeyMixin, KeyAttestor
 from .participants import ParticipantMixin
@@ -65,7 +66,7 @@ _OUTCOME_TO_STATUS = {
 
 
 class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryMixin, ChannelMixin,
-               DeviceKeyMixin):
+               DeviceKeyMixin, CertMixin):
     def __init__(self, db: Database | None = None, clock: Clock | None = None,
                  sim_lookup: SimLookup | None = None, key_attestor: KeyAttestor | None = None):
         self.db = db or Database()

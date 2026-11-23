@@ -132,7 +132,7 @@ class TestSharedLimiter:
     def test_api_uses_it(self, clock, monkeypatch):
         monkeypatch.setenv("GR_RATE_BACKEND", "db")
         reg = Registry(new_db(), clock)
-        c = TestClient(create_app(reg, admin_token="a", sms=LogSmsSender(), run_worker=False, otp_rate="2/60"))
+        c = TestClient(create_app(reg, admin_token="a", sms=LogSmsSender(), run_worker=False, otp_rate="2/3600"))
         codes = [c.post("/v1/auth/otp", json={"mobile": m}).status_code for m in (AMMA, RAVI, "9876500055")]
         assert codes == [202, 202, 429]
         assert reg.db.one("SELECT COUNT(*) n FROM rate_counters")["n"] >= 1

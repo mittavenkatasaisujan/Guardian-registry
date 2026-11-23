@@ -31,6 +31,7 @@ from .errors import RegistryError
 from .models import CHANNELS
 from .notify import Dispatcher, PushSender, SmsSender, WhatsAppSender, sms_sender_from_env
 from .participants import CAPABILITIES, PARTICIPANT_KINDS
+from .certs import ProxyTrust
 from .devicekeys import KeyAttestor, key_attestor_from_env
 from .simfeed import SimLookup, sim_lookup_from_env
 from .presets import PRESETS
@@ -129,6 +130,10 @@ class RegisterIn(BaseModel):
     source: str = Field(min_length=3, max_length=300, description="where the list came from, e.g. its URL")
     as_of: str = Field(min_length=4, max_length=40, description="date of the published list")
     entities: list[EntityIn] = Field(min_length=1, max_length=20000)
+
+
+class CertIn(BaseModel):
+    certificate: str = Field(min_length=50, max_length=20000, description="PEM client certificate")
 
 
 class ReasonIn(BaseModel):
@@ -246,6 +251,7 @@ def create_app(
     operators: dict[str, str] | None = None,
     sim_lookup: SimLookup | None = None,
     key_attestor: KeyAttestor | None = None,
+    proxy_trust: ProxyTrust | None = None,
     operator_sso: OidcVerifier | None = None,
     sms: SmsSender | None = None,
     whatsapp: WhatsAppSender | None = None,
@@ -293,6 +299,7 @@ def create_app(
                                  rate_backend)
     otp_limiter = make_limiter(reg.db, "otp", otp_rate or os.environ.get("GR_RATE_OTP", "10/60"), rate_backend)
     dev_echo = os.environ.get("GR_OTP_DEV_ECHO") == "1" and not is_production()
+    proxies = proxy_trust or ProxyTrust()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -326,10 +333,15 @@ def create_app(
             raise HTTPException(429, "rate limit exceeded", headers={"Retry-After": str(math.ceil(retry) or 1)})
 
     # ------------------------------------------------------------- auth deps
-    def participant(x_api_key: Annotated[str | None, Header()] = None) -> str:
+    def participant(request: Request, x_api_key: Annotated[str | None, Header()] = None) -> str:
         pid = reg.participant_by_key(x_api_key) if x_api_key else None
         if not pid:
             raise HTTPException(401, "missing or invalid X-Api-Key")
+        forwarded = proxies.certificate(request.client.host if request.client else None, request.headers)
+        try:
+            request.state.client_cert = reg.check_client_cert(pid, forwarded)  # mutual TLS (certs.py)
+        except RegistryError as e:
+            raise HTTPException(401, str(e)) from None
         return pid
 
     def bearer_token(authorization: Annotated[str | None, Header()] = None) -> str | None:
@@ -406,6 +418,26 @@ def create_app(
         if single_operator:
             view = reg.approve_participant_request(op, pid, allow_self=True)
         return {**view, "api_key": key, "note": "store the key now; it is not shown again"}
+
+    @app.get("/v1/admin/participants/{participant_id}/certificates", tags=["ops"])
+    def admin_certs(participant_id: str, _: Operator):
+        return reg.participant_certs(participant_id)
+
+    @app.post("/v1/admin/participants/{participant_id}/certificates", status_code=201, tags=["ops"])
+    def admin_pin_cert(participant_id: str, body: CertIn, op: Operator):
+        """Pin a client certificate. Pending until a second operator approves."""
+        out = reg.request_cert_pin(op, participant_id, body.certificate)
+        if single_operator:
+            out = reg.approve_cert_pin(op, participant_id, out["fingerprint"], allow_self=True)
+        return out
+
+    @app.post("/v1/admin/participants/{participant_id}/certificates/{fingerprint}/approve", tags=["ops"])
+    def admin_approve_cert(participant_id: str, fingerprint: str, op: Operator):
+        return reg.approve_cert_pin(op, participant_id, fingerprint, allow_self=single_operator)
+
+    @app.delete("/v1/admin/participants/{participant_id}/certificates/{fingerprint}", tags=["ops"])
+    def admin_remove_cert(participant_id: str, fingerprint: str, op: Operator):
+        return reg.remove_cert_pin(f"operator:{op}", participant_id, fingerprint)
 
     @app.put("/v1/admin/register/{kind}", tags=["ops"])
     def load_register(kind: str, body: RegisterIn, op: Operator):
@@ -546,6 +578,19 @@ def create_app(
         account to new_mobile. customer_ref must match the id you attested with before."""
         return reg.bank_vouch_recovery(pid, body.new_mobile, body.customer_ref, assisted=body.assisted,
                                        verified_on=body.verified_on, date_of_birth=body.date_of_birth)
+
+    @app.get("/v1/participant/certificates", tags=["banks"])
+    def my_certs(pid: Participant):
+        return reg.participant_certs(pid)
+
+    @app.post("/v1/participant/certificates", status_code=201, tags=["banks"])
+    def rotate_cert(body: CertIn, pid: Participant, request: Request):
+        """Add your next certificate. Must be called over mutual TLS with a pinned one."""
+        return reg.rotate_cert(pid, request.state.client_cert, body.certificate)
+
+    @app.delete("/v1/participant/certificates/{fingerprint}", tags=["banks"])
+    def remove_my_cert(fingerprint: str, pid: Participant, request: Request):
+        return reg.remove_cert_pin(pid, pid, fingerprint, presented=request.state.client_cert)
 
     @app.get("/v1/participant/me", tags=["banks"])
     def participant_me(pid: Participant):

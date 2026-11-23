@@ -22,8 +22,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import base64
 
 import httpx
+from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
+
+from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import NameOID
 
 HOOK_PORT = 8799
 HOOK_SECRET = [""]
@@ -106,6 +111,25 @@ print("Alice approves her own request ->", r.status_code, r.json()["detail"])
 for label in keys:
     print(f"Bob approves {label} ->",
           call("POST", f"/v1/admin/participants/{keys[label][1]}/approve", headers=op2)["status"])
+
+step("MUTUAL TLS: Bank A's client certificate is pinned (Alice asks, Bob approves)")
+_k = ec.generate_private_key(ec.SECP256R1())
+_n = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f"bank-a-{run}.example")])
+_now = datetime.now(timezone.utc)
+bank_cert = (x509.CertificateBuilder().subject_name(_n).issuer_name(_n).public_key(_k.public_key())
+             .serial_number(x509.random_serial_number()).not_valid_before(_now - timedelta(days=1))
+             .not_valid_after(_now + timedelta(days=365)).sign(_k, hashes.SHA256())
+             ).public_bytes(serialization.Encoding.PEM).decode()
+pin = call("POST", f"/v1/admin/participants/{keys['Bank A'][1]}/certificates", 201, headers=op1,
+           json={"certificate": bank_cert})
+print("pin requested:", pin["fingerprint"][:16] + "...", pin["status"])
+print("Bob approves ->", call("POST", f"/v1/admin/participants/{keys['Bank A'][1]}/certificates/"
+                                      f"{pin['fingerprint']}/approve", headers=op2)["status"])
+r = c.get("/v1/participant/me", headers=sbi)
+print("Bank A's API key alone now ->", r.status_code, r.json()["detail"])
+sbi["X-Client-Cert"] = quote(bank_cert)  # what the TLS-terminating proxy forwards
+print("with the certificate (forwarded by the proxy on 127.0.0.1) ->",
+      call("GET", "/v1/participant/me", headers=sbi)["mtls"])
 
 step("Bank A registers a webhook (a real local HTTP receiver that checks signatures)")
 hook = call("PUT", "/v1/participant/webhook", headers=sbi, json={"url": f"http://127.0.0.1:{HOOK_PORT}/gr"})
