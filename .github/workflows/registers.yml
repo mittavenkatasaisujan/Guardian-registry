@@ -1,0 +1,59 @@
+name: Register mirrors
+
+# Monthly: rebuild the signed mirrors of the official lists (deploy/register-sources.json) and
+# publish them on the `register-mirrors` branch. A register feed then reads, for example,
+#   https://raw.githubusercontent.com/<owner>/<repo>/register-mirrors/nbfc.json
+# with format "json" and the mirror's public key (scripts/mirror_register.py keygen).
+#
+# Setup (once): add the repository secret MIRROR_SIGNING_KEY (the private key PEM from keygen)
+# and fill in the source URLs. Without the secret the job explains and stops.
+# A source that would lose more than 5% of its entities is HELD: the job fails, nothing is
+# published for it, and GitHub emails the failure, so a person looks before it goes out.
+
+on:
+  schedule:
+    - cron: "0 3 2 * *"      # 03:00 UTC on the 2nd of every month
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements-runtime.txt
+      - name: Signing key
+        env:
+          KEY: ${{ secrets.MIRROR_SIGNING_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::Add the repository secret MIRROR_SIGNING_KEY (scripts/mirror_register.py keygen) first."
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$KEY" > "$RUNNER_TEMP/mirror-key.pem"
+      - name: Fetch the last published mirrors
+        run: |
+          mkdir -p site
+          if git ls-remote --exit-code --heads origin register-mirrors >/dev/null; then
+            git fetch --depth 1 origin register-mirrors
+            git --work-tree=site checkout origin/register-mirrors -- . 2>/dev/null || true
+          fi
+      - name: Rebuild and sign
+        run: python scripts/mirror_all.py deploy/register-sources.json --key "$RUNNER_TEMP/mirror-key.pem" --out site
+      - name: Publish
+        run: |
+          cd site
+          git init -q
+          git checkout -q -b register-mirrors
+          git config user.name "register-mirror-bot"
+          git config user.email "register-mirror-bot@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Register mirrors $(date -u +%F)" || { echo "nothing to publish"; exit 0; }
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" register-mirrors

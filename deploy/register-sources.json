@@ -1,0 +1,17 @@
+{
+  "_help": "Official lists the monthly job mirrors (scripts/mirror_all.py). Fill in source_url with the regulator's current download link and check the column names against the file. Entries without a source_url are skipped. PDF-only lists can't be read: export them to a spreadsheet and point source_url at that copy.",
+  "sources": [
+    {"kind": "nbfc", "source_url": "", "format": "xlsx", "sheet": null,
+     "ref": "registration number|regn no|certificate of registration no", "name": "name of the nbfc|company name|name", "as_of": "auto"},
+    {"kind": "bank", "source_url": "", "format": "xlsx", "sheet": null,
+     "ref": "licence number|license no|bank code", "name": "name of the bank|bank name", "as_of": "auto"},
+    {"kind": "payments_bank", "source_url": "", "format": "xlsx", "sheet": null,
+     "ref": "licence number|license no", "name": "name of the bank|bank name", "as_of": "auto"},
+    {"kind": "ppi_issuer", "source_url": "", "format": "xlsx", "sheet": null,
+     "ref": "authorisation number|certificate number|coa no", "name": "name of the entity|name", "as_of": "auto"},
+    {"kind": "tpap", "source_url": "", "format": "csv", "sheet": null,
+     "ref": "tpap code|app code", "name": "tpap name|app name", "as_of": "auto"},
+    {"kind": "telecom", "source_url": "", "format": "xlsx", "sheet": null,
+     "ref": "licence number|license no", "name": "name of the licensee|company name", "as_of": "auto"}
+  ]
+}
