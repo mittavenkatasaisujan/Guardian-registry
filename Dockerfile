@@ -21,4 +21,4 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
 # Configuration comes from the environment, secrets preferably as files (GR_PEPPER_FILE=...).
 # Client addresses and certificates are taken from the proxy only if it is in GR_TRUSTED_PROXIES,
 # so uvicorn's own proxy-header handling stays off.
-CMD ["uvicorn", "guardian_registry.api:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", \n     "--timeout-keep-alive", "75"]
+CMD ["uvicorn", "guardian_registry.api:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--timeout-keep-alive", "75"]
