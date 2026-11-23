@@ -48,7 +48,7 @@ def bearer(t):
 def world(client, sms):
     amma = sign_in(client, sms, AMMA, "Amma")
     ravi = sign_in(client, sms, RAVI, "Ravi")
-    bank = client.post("/v1/admin/participants", json={"name": "Demo Bank"},
+    bank = client.post("/v1/admin/participants", json={"name": "Demo Bank", "regulator_ref": "RBI-TEST-1"},
                        headers={"X-Admin-Token": ADMIN}).json()
     g = client.post("/v1/me/guardians", json={"mobile": RAVI}, headers=bearer(amma["token"])).json()
     client.post(f"/v1/guardian/invitations/{g['id']}/accept", headers=bearer(ravi["token"]))
@@ -260,7 +260,7 @@ class TestBankFeatures:
     def test_check_rate_limit(self, clock, sms):
         c = TestClient(create_app(Registry(Database(), clock), admin_token=ADMIN, sms=sms,
                                   run_worker=False, check_rate="3/60"))
-        key = c.post("/v1/admin/participants", json={"name": "B"}, headers={"X-Admin-Token": ADMIN}).json()["api_key"]
+        key = c.post("/v1/admin/participants", json={"name": "B", "regulator_ref": "RBI-TEST-1"}, headers={"X-Admin-Token": ADMIN}).json()["api_key"]
         codes = [c.post("/v1/checks", headers={"X-Api-Key": key}, json={
             "mobile": "9000000001", "participant_txn_id": f"r{i}", "amount": 100, "payee": "a@upi"}).status_code
             for i in range(4)]
@@ -279,7 +279,7 @@ class TestWorker:
             amma = sign_in(c, sms, AMMA, "Amma")
             c.patch("/v1/me/rules", headers=bearer(amma["token"]),
                     json={"new_payee_delay_threshold": 100})  # tightening: applies now, 60-min wait
-            key = c.post("/v1/admin/participants", json={"name": "B"}, headers={"X-Admin-Token": ADMIN}).json()["api_key"]
+            key = c.post("/v1/admin/participants", json={"name": "B", "regulator_ref": "RBI-TEST-1"}, headers={"X-Admin-Token": ADMIN}).json()["api_key"]
             r = c.post("/v1/checks", headers={"X-Api-Key": key}, json={
                 "mobile": AMMA, "participant_txn_id": "w1", "amount": 500, "payee": "new@upi"}).json()
             assert r["status"] == "cooling_off"

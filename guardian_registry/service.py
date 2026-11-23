@@ -25,6 +25,7 @@ from .clock import Clock, iso, ist_day
 from .db import Database
 from .errors import Conflict, Forbidden, Invalid, NotFound, TooMany, Unauthorized
 from .kyc import KycMixin
+from .participants import ParticipantMixin
 from .simswap import SimSwapMixin
 from .models import (
     CHANNELS, ChangeKind, ChangeStatus, CheckStatus, GuardianStatus, Outcome, Rules, Transaction,
@@ -59,7 +60,7 @@ _OUTCOME_TO_STATUS = {
 }
 
 
-class Registry(KycMixin, SimSwapMixin):
+class Registry(ParticipantMixin, KycMixin, SimSwapMixin):
     def __init__(self, db: Database | None = None, clock: Clock | None = None):
         self.db = db or Database()
         self.clock = clock or Clock()
@@ -126,27 +127,13 @@ class Registry(KycMixin, SimSwapMixin):
                                    {"check": self._check_view(cid, for_participant=True)}, r["principal_id"])
 
     # ------------------------------------------------------------- participants
-    def register_participant(self, name: str) -> tuple[str, str]:
-        """A bank or payment app. Returns (participant_id, api_key); the key is shown once."""
-        name = name.strip()
-        if not name:
-            raise Invalid("name is required")
-        if self.db.one("SELECT 1 FROM participants WHERE name=?", (name,)):
-            raise Conflict("participant already registered")
-        pid, key = new_id("prt"), new_secret("grk")
-        with self.db.tx() as c:
-            c.execute("INSERT INTO participants (id, name, key_hash, created_at) VALUES (?,?,?,?)",
-                      (pid, name, secret_hash(key), self._now()))
-            self._audit(c, "admin", "participant.registered", None, participant_id=pid, name=name)
-        return pid, key
-
     def participant_by_key(self, key: str) -> str | None:
         h = secret_hash(key)
-        row = self.db.one("SELECT id FROM participants WHERE key_hash=?", (h,))
+        row = self.db.one("SELECT id FROM participants WHERE key_hash=? AND status!='offboarded'", (h,))
         if row:
             return row["id"]
-        row = self.db.one("SELECT id FROM participants WHERE prev_key_hash=? AND prev_key_expires_at>?",
-                          (h, self._now()))
+        row = self.db.one("SELECT id FROM participants WHERE prev_key_hash=? AND prev_key_expires_at>? "
+                          "AND status!='offboarded'", (h, self._now()))
         return row["id"] if row else None
 
     def rotate_participant_key(self, participant_id: str) -> dict:
@@ -691,6 +678,7 @@ class Registry(KycMixin, SimSwapMixin):
     def check(self, participant_id: str, mobile: str, participant_txn_id: str,
               amount: int, payee: str, channel: str = "upi") -> dict:
         """Called by a bank/app before moving money. Idempotent on (participant, participant_txn_id)."""
+        self._require_participant(participant_id, "checks")
         if not participant_txn_id.strip():
             raise Invalid("participant_txn_id is required")
         if channel not in CHANNELS:
@@ -789,12 +777,14 @@ class Registry(KycMixin, SimSwapMixin):
         return r
 
     def get_check(self, participant_id: str, cid: str) -> dict:
+        self._require_participant(participant_id, allow_suspended=True)
         r = self._load_check(cid)
         if r["participant_id"] != participant_id:
             raise NotFound("check not found")
         return self._with_customer_facts(self._check_view(cid, for_participant=True), r["principal_id"])
 
     def report_outcome(self, participant_id: str, cid: str, completed: bool) -> dict:
+        self._require_participant(participant_id, allow_suspended=True)
         """Bank tells the registry whether the money actually moved. A failed payment stops
         counting toward the daily limit; a completed one makes the payee 'known'."""
         r = self._load_check(cid)

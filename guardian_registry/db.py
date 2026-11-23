@@ -212,7 +212,26 @@ ALTER TABLE sessions ADD COLUMN device_hash TEXT;
 ALTER TABLE sessions ADD COLUMN probation_until TEXT;
 """
 
-MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4]
+# v5: participant trust. Each participant has a kind (bank, NBFC, UPI app...), a regulator
+# reference, a status and the capabilities it was granted. Loosening requests wait for a
+# second operator in the pending_* columns. Participants from before v5 stay active banks.
+SCHEMA_V5 = """
+ALTER TABLE participants ADD COLUMN kind TEXT NOT NULL DEFAULT 'bank';
+ALTER TABLE participants ADD COLUMN regulator_ref TEXT;
+ALTER TABLE participants ADD COLUMN status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE participants ADD COLUMN capabilities TEXT NOT NULL
+    DEFAULT '["checks", "kyc_full", "kyc_minimum", "sim_signals"]';
+ALTER TABLE participants ADD COLUMN status_reason TEXT;
+ALTER TABLE participants ADD COLUMN status_changed_at TEXT;
+ALTER TABLE participants ADD COLUMN created_by TEXT;
+ALTER TABLE participants ADD COLUMN pending_action TEXT;       -- activate | reinstate | grant
+ALTER TABLE participants ADD COLUMN pending_capabilities TEXT; -- JSON list, for grant
+ALTER TABLE participants ADD COLUMN pending_by TEXT;
+ALTER TABLE participants ADD COLUMN pending_at TEXT;
+CREATE UNIQUE INDEX ux_participant_regref ON participants(regulator_ref) WHERE regulator_ref IS NOT NULL;
+"""
+
+MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5]
 
 
 class Database:

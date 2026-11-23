@@ -4,7 +4,10 @@ Three kinds of caller:
   * Banks / payment apps ("participants") send `X-Api-Key` and call /v1/checks.
   * People (principals and guardians) sign in with an SMS one-time code and then send
     `Authorization: Bearer <token>`.
-  * Operators send `X-Admin-Token` (set GR_ADMIN_TOKEN) to onboard participants.
+  * Operators send `X-Admin-Token` to onboard and supervise participants. Configure named
+    operators with GR_OPERATORS="alice:<token>,bob:<token>" (four-eyes: one registers,
+    another approves). GR_ADMIN_TOKEN alone gives a single operator "admin", allowed only
+    outside production, where it approves its own requests.
 
 Run:  uvicorn guardian_registry.api:create_app --factory --port 8000
 """
@@ -27,6 +30,7 @@ from .db import Database
 from .errors import RegistryError
 from .models import CHANNELS
 from .notify import Dispatcher, SmsSender, sms_sender_from_env
+from .participants import CAPABILITIES, PARTICIPANT_KINDS
 from .presets import PRESETS
 from .ratelimit import RateLimiter
 from .security import check_production_config, is_production
@@ -68,6 +72,19 @@ class LogoutIn(BaseModel):
 
 class ParticipantIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
+    kind: Literal[tuple(PARTICIPANT_KINDS)] = "bank"  # type: ignore[valid-type]
+    regulator_ref: str = Field(min_length=3, max_length=60,
+                               description="licence / registration number, e.g. RBI or NPCI reference")
+    capabilities: list[Literal[CAPABILITIES]] | None = Field(  # type: ignore[valid-type]
+        default=None, description="default: the usual set for this kind")
+
+
+class ReasonIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=300)
+
+
+class CapabilitiesIn(BaseModel):
+    capabilities: list[Literal[CAPABILITIES]]  # type: ignore[valid-type]
 
 
 class WebhookIn(BaseModel):
@@ -142,10 +159,30 @@ class Worker(threading.Thread):
         self.stop_event.set()
 
 
+def parse_operators(spec: str | None) -> dict[str, str]:
+    """'alice:tok1,bob:tok2' -> {'alice': 'tok1', 'bob': 'tok2'}."""
+    ops: dict[str, str] = {}
+    for part in (spec or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        name, sep, token = part.partition(":")
+        name, token = name.strip(), token.strip()
+        if not sep or not name or not token:
+            raise RuntimeError("GR_OPERATORS must look like 'alice:<token>,bob:<token>'")
+        if name in ops or token in ops.values():
+            raise RuntimeError("GR_OPERATORS names and tokens must be unique")
+        if len(token) < 16 and is_production():
+            raise RuntimeError(f"operator token for {name!r} is too short (16+ characters)")
+        ops[name] = token
+    return ops
+
+
 def create_app(
     registry: Registry | None = None,
     admin_token: str | None = None,
     *,
+    operators: dict[str, str] | None = None,
     sms: SmsSender | None = None,
     http: httpx.Client | None = None,
     run_worker: bool | None = None,
@@ -160,7 +197,16 @@ def create_app(
         pkg_log.addHandler(handler)
         pkg_log.setLevel(logging.INFO)
     reg = registry or Registry(Database(os.environ.get("GR_DB", "guardian_registry.db")))
-    admin = admin_token if admin_token is not None else os.environ.get("GR_ADMIN_TOKEN")
+    if operators is None:
+        operators = parse_operators(os.environ.get("GR_OPERATORS"))
+        admin = admin_token if admin_token is not None else os.environ.get("GR_ADMIN_TOKEN")
+        if admin and not operators:
+            operators = {"admin": admin}
+    operators = {k: v for k, v in operators.items() if v}
+    if is_production() and len(operators) == 1:
+        raise RuntimeError("unsafe production config: set GR_OPERATORS with at least two operators "
+                           "(participant onboarding needs a second approver)")
+    single_operator = len(operators) == 1  # dev convenience: approves its own requests
     sms = sms or sms_sender_from_env()
     dispatcher = Dispatcher(reg.db, reg.clock, sms=sms, http=http)
     if run_worker is None:
@@ -234,17 +280,22 @@ def create_app(
             raise restricted_error(info)
         return info["user_id"]
 
-    def operator(x_admin_token: Annotated[str | None, Header()] = None) -> None:
-        if not admin:
-            raise HTTPException(503, "admin API disabled: set GR_ADMIN_TOKEN")
-        if not x_admin_token or not secrets.compare_digest(x_admin_token, admin):
+    def operator(x_admin_token: Annotated[str | None, Header()] = None) -> str:
+        if not operators:
+            raise HTTPException(503, "admin API disabled: set GR_OPERATORS (or GR_ADMIN_TOKEN in development)")
+        found = None
+        for name, token in operators.items():  # compare every token so timing reveals nothing
+            if x_admin_token and secrets.compare_digest(x_admin_token.encode(), token.encode()):
+                found = name
+        if not found:
             raise HTTPException(401, "invalid X-Admin-Token")
+        return found
 
     Participant = Annotated[str, Depends(participant)]
     User = Annotated[str, Depends(user)]
     TrustedUser = Annotated[str, Depends(trusted_user)]
     Session = Annotated[dict, Depends(session)]
-    Operator = Annotated[None, Depends(operator)]
+    Operator = Annotated[str, Depends(operator)]
 
     # ------------------------------------------------------------------ ops
     @app.get("/healthz", tags=["ops"])
@@ -252,9 +303,50 @@ def create_app(
         return {"ok": True, "version": __version__}
 
     @app.post("/v1/admin/participants", status_code=201, tags=["ops"])
-    def add_participant(body: ParticipantIn, _: Operator):
-        pid, key = reg.register_participant(body.name)
-        return {"participant_id": pid, "api_key": key, "note": "store the key now; it is not shown again"}
+    def add_participant(body: ParticipantIn, op: Operator):
+        """Register a participant. It starts `pending` until a second operator approves it
+        (with a single development operator it is approved at once)."""
+        pid, key = reg.register_participant(body.name, body.kind, body.regulator_ref, body.capabilities,
+                                            operator=op, activate=False)
+        view = reg.participant_view(pid)
+        if single_operator:
+            view = reg.approve_participant_request(op, pid, allow_self=True)
+        return {**view, "api_key": key, "note": "store the key now; it is not shown again"}
+
+    @app.get("/v1/admin/participants", tags=["ops"])
+    def all_participants(_: Operator, status: str | None = None):
+        return reg.list_participants(status)
+
+    @app.get("/v1/admin/participants/{participant_id}", tags=["ops"])
+    def one_participant(participant_id: str, _: Operator):
+        return reg.participant_view(participant_id)
+
+    @app.post("/v1/admin/participants/{participant_id}/approve", tags=["ops"])
+    def approve_participant(participant_id: str, op: Operator):
+        """Approve the pending activation, reinstatement or capability grant (four-eyes)."""
+        return reg.approve_participant_request(op, participant_id, allow_self=single_operator)
+
+    @app.post("/v1/admin/participants/{participant_id}/reject", tags=["ops"])
+    def reject_participant(participant_id: str, op: Operator):
+        return reg.reject_participant_request(op, participant_id)
+
+    @app.post("/v1/admin/participants/{participant_id}/suspend", tags=["ops"])
+    def suspend_participant(participant_id: str, body: ReasonIn, op: Operator):
+        return reg.suspend_participant(op, participant_id, body.reason)
+
+    @app.post("/v1/admin/participants/{participant_id}/reinstate", tags=["ops"])
+    def reinstate_participant(participant_id: str, op: Operator):
+        """Request reinstatement; another operator approves it."""
+        return reg.request_reinstatement(op, participant_id)
+
+    @app.put("/v1/admin/participants/{participant_id}/capabilities", tags=["ops"])
+    def participant_capabilities(participant_id: str, body: CapabilitiesIn, op: Operator):
+        """Removals apply at once; additions wait for another operator's approval."""
+        return reg.set_participant_capabilities(op, participant_id, body.capabilities)
+
+    @app.post("/v1/admin/participants/{participant_id}/offboard", tags=["ops"])
+    def offboard_participant(participant_id: str, body: ReasonIn, op: Operator):
+        return reg.offboard_participant(op, participant_id, body.reason)
 
     @app.get("/v1/admin/audit/verify", tags=["ops"])
     def verify_audit(_: Operator):
@@ -318,6 +410,11 @@ def create_app(
     def sim_change(body: SimChangeIn, pid: Participant):
         """Report that a customer's SIM changed (from your mobile-operator data)."""
         return reg.report_sim_change(pid, body.mobile, body.changed_at)
+
+    @app.get("/v1/participant/me", tags=["banks"])
+    def participant_me(pid: Participant):
+        """Your status and capabilities. Works while pending, so you can check onboarding."""
+        return reg.participant_view(pid)
 
     @app.put("/v1/participant/webhook", tags=["banks"])
     def set_webhook(body: WebhookIn, pid: Participant):

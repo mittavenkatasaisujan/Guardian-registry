@@ -238,7 +238,7 @@ class TestHttp:
         code = re.search(r"code: (\d{6})", sms.sent[-1][1]).group(1)
         tok = client.post("/v1/auth/verify", json={"mobile": AMMA, "code": code, "display_name": "Amma"}).json()["token"]
         me = {"Authorization": f"Bearer {tok}"}
-        bank = {"X-Api-Key": client.post("/v1/admin/participants", json={"name": "B"},
+        bank = {"X-Api-Key": client.post("/v1/admin/participants", json={"name": "B", "regulator_ref": "RBI-TEST-1"},
                                          headers={"X-Admin-Token": "a"}).json()["api_key"]}
 
         a = client.post("/v1/kyc/attestations", headers=bank, json={

@@ -124,6 +124,7 @@ class SimSwapMixin:
     # ------------------------------------------------------------- signals
     def report_sim_change(self, participant_id: str, mobile: str, changed_at: str | None = None) -> dict:
         """A bank reports that the customer's SIM changed (from its operator data)."""
+        self._require_participant(participant_id, "sim_signals")
         try:
             normalize_mobile(mobile)
         except ValueError as e:

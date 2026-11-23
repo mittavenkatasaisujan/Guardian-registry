@@ -12,5 +12,5 @@ USER app
 VOLUME ["/data"]
 EXPOSE 8000
 
-# Set GR_ENV=production plus GR_PEPPER, GR_DATA_KEY, GR_ADMIN_TOKEN (and GR_SMS_URL/GR_SMS_TOKEN) at run time.
+# Set GR_ENV=production plus GR_PEPPER, GR_DATA_KEY, GR_OPERATORS (two or more operators; and GR_SMS_URL/GR_SMS_TOKEN) at run time.
 CMD ["uvicorn", "guardian_registry.api:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

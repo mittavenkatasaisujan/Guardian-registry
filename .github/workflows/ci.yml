@@ -32,11 +32,11 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Start server and run the end-to-end demo over HTTP
         env:
-          GR_ADMIN_TOKEN: ci-admin
+          GR_OPERATORS: "alice:ci-alice-token,bob:ci-bob-token"
           GR_DB: ci.db
           GR_OTP_DEV_ECHO: "1"
           GR_WORKER_INTERVAL: "1"
         run: |
           python -m uvicorn guardian_registry.api:create_app --factory --port 8000 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/healthz && break; sleep 1; done
-          python scripts/demo.py http://127.0.0.1:8000 ci-admin
+          python scripts/demo.py http://127.0.0.1:8000 ci-alice-token ci-bob-token

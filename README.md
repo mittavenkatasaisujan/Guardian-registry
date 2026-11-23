@@ -14,6 +14,7 @@ its own version, a family with three bank accounts sets up three separate locks.
 
 | Feature | Behaviour |
 |---|---|
+| **Participant trust** | Every bank or app declares its **kind** (`bank`, `small_finance_bank`, `payments_bank`, `nbfc`, `ppi_issuer`, `tpap`) and its regulator reference. The kind is a ceiling on its **capabilities**: `checks`, `kyc_full`, `kyc_minimum`, `sim_signals`. A UPI app (`tpap`) can run checks but can **never vouch for identity**; a wallet gets minimum-KYC claims by default. **Onboarding is four-eyes:** one operator registers a participant as `pending` (it gets its key and can set its webhook), and a **different operator** must approve it before it can call checks, KYC or signals. Suspending a participant or removing a capability is instant. Reinstating it or adding a capability needs a second operator. While a participant is suspended, its KYC claims stop counting. **Offboarding** is permanent: keys and webhook are wiped, its KYC claims are revoked and customers are told; SIM-swap windows it opened stay open. Operator actions are audited under each operator's name. |
 | Sign-in | SMS one-time code (6 digits, 5 min, single use, 5 wrong tries locks it, 30 s resend cooldown, 3 codes per 15 min, plus a per-IP limit). The response is the same whether or not a number is enrolled. Sessions last 30 days; you can sign out of one device or all of them. |
 | **Bank-vouched KYC** | A participant bank that has already KYC'd its customer sends a claim (KYC level `full` or `minimum`, KYC date, optional date of birth, its customer ID). **It counts only after the customer approves it in the app.** Unanswered claims lapse after 7 days. Approved ones expire after a year (re-confirm yearly), and the customer can withdraw or the bank revoke at any time. The customer ID is stored only as a keyed hash and the date of birth only encrypted. Banks get a yes/no **`senior`** flag (70+, per RBI's proposal) in every check response, never the date. If two banks disagree on the date of birth, `senior` becomes unknown and the customer is told. |
 | Verified guardians | Every guardian listing shows the guardian's identity level (`bank_verified`, `bank_min_kyc` or `otp`). The rule `require_verified_guardian` lets **only bank-verified guardians approve** payments. Any guardian can still deny or cancel, since that only protects. Turning the rule off is a loosening, so it's held for 24 h. |
@@ -43,13 +44,13 @@ python -m venv .venv
 Development server. The OTP code is echoed in the response, and SMS go to the console:
 
 ```powershell
-$env:GR_ADMIN_TOKEN = "demo-admin"; $env:GR_DB = "demo.db"; $env:GR_OTP_DEV_ECHO = "1"; .venv\Scripts\uvicorn guardian_registry.api:create_app --factory --port 8000
+$env:GR_OPERATORS = "alice:demo-alice-token,bob:demo-bob-token"; $env:GR_DB = "demo.db"; $env:GR_OTP_DEV_ECHO = "1"; .venv\Scripts\uvicorn guardian_registry.api:create_app --factory --port 8000
 ```
 
 API docs: http://127.0.0.1:8000/docs. The scripted scam-call story, which also runs a local webhook receiver that checks signatures:
 
 ```powershell
-.venv\Scripts\python scripts\demo.py http://127.0.0.1:8000 demo-admin
+.venv\Scripts\python scripts\demo.py http://127.0.0.1:8000 demo-alice-token demo-bob-token
 ```
 
 Docker (set the production variables below):
@@ -64,7 +65,8 @@ docker build -t guardian-registry .
 |---|---|
 | `GR_ENV` | `production` turns on the startup safety checks |
 | `GR_DB` | SQLite file path (default `guardian_registry.db`) |
-| `GR_ADMIN_TOKEN` | Enables `/v1/admin/*`. Unset means admin is disabled. |
+| `GR_OPERATORS` | Named operators for `/v1/admin/*`: `alice:<token>,bob:<token>`. **Production needs at least two** (four-eyes onboarding); tokens must be 16+ characters. |
+| `GR_ADMIN_TOKEN` | Development shortcut: a single operator called `admin`, which approves its own onboarding requests. Refused in production. Unset (with no `GR_OPERATORS`) means admin is disabled. |
 | `GR_PEPPER` | Secret for hashing mobile numbers. **Required in production.** |
 | `GR_DATA_KEY` | Fernet key for encrypting mobile numbers. **Required in production.** Generate one with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
 | `GR_SMS_URL`, `GR_SMS_TOKEN` | SMS gateway: POST `{"to","text"}` with a bearer token. Put a thin adapter in front of MSG91, Gupshup, Twilio, etc. **Required in production.** |
@@ -80,8 +82,8 @@ Amounts are **integer paise**.
 | Who | Endpoints |
 |---|---|
 | Sign-in | `POST /v1/auth/otp`, `POST /v1/auth/verify` (send `display_name` the first time to enrol and a stable `device_id`; the response says if the session is `restricted`), `POST /v1/auth/logout` |
-| Operator | `POST /v1/admin/participants`, `GET /v1/admin/audit/verify`, `POST /v1/admin/sweep` |
-| Bank / app | `POST /v1/signals/sim-change`, `POST /v1/checks`, `GET /v1/checks/{id}`, `POST /v1/checks/{id}/outcome`, `POST /v1/kyc/attestations`, `GET/DELETE /v1/kyc/attestations/{id}`, `PUT /v1/participant/webhook`, `POST /v1/participant/rotate-key` |
+| Operator | `POST/GET /v1/admin/participants` (body: `name`, `kind`, `regulator_ref`, optional `capabilities`), `GET /v1/admin/participants/{id}`, `POST /v1/admin/participants/{id}/{approve,reject,suspend,reinstate,offboard}`, `PUT /v1/admin/participants/{id}/capabilities`, `GET /v1/admin/audit/verify`, `POST /v1/admin/sweep` |
+| Bank / app | `POST /v1/signals/sim-change`, `POST /v1/checks`, `GET /v1/checks/{id}`, `POST /v1/checks/{id}/outcome`, `POST /v1/kyc/attestations`, `GET/DELETE /v1/kyc/attestations/{id}`, `GET /v1/participant/me`, `PUT /v1/participant/webhook`, `POST /v1/participant/rotate-key` |
 | Person | `GET /v1/me`, `GET /v1/me/security`, `POST /v1/me/security/{lost-phone,confirm-sim-change}`, `POST /v1/me/mobile/{change,verify}`, `GET /v1/me/identity`, `POST /v1/me/identity/attestations/{id}/{approve,reject}`, `DELETE /v1/me/identity/attestations/{id}`, `GET /v1/me/notifications`, `POST /v1/me/notifications/read`, `GET /v1/presets`, `GET/PATCH /v1/me/rules`, `POST /v1/me/rules/preset/{name}`, `POST /v1/me/kill-switch/{on,off}`, `GET/POST /v1/me/guardians`, `DELETE /v1/me/guardians/{id}`, `GET /v1/me/changes`, `GET /v1/me/payments`, `POST /v1/me/payments/{id}/cancel`, `GET /v1/me/audit` |
 | Guardian | `GET /v1/guardian/inbox`, `GET /v1/guardian/wards`, `POST /v1/guardian/invitations/{id}/{accept,decline}`, `POST /v1/guardian/guardianships/{id}/resign`, `POST /v1/guardian/payments/{id}/{approve,deny,cancel}`, `POST /v1/guardian/changes/{id}/{approve,veto}`, `GET /v1/guardian/wards/{pid}/{rules,payments,audit,security}`, `POST /v1/guardian/wards/{pid}/{lost-phone,confirm-sim-change}`, `POST /v1/guardian/wards/{pid}/kill-switch/{on,off}`, `POST /v1/guardian/wards/{pid}/trusted-payees` |
 
@@ -90,7 +92,7 @@ Amounts are **integer paise**.
 2. If `may_execute` is true, execute it, then report with `POST /v1/checks/{id}/outcome`.
 3. If the status is `cooling_off` or `pending_approval`, wait for the `check.updated` webhook (or poll `GET /v1/checks/{id}`).
 
-Banks also get a `kyc.updated` webhook when a customer approves, rejects or withdraws a KYC claim, or when one lapses or expires.
+A participant also gets a `participant.updated` webhook when it is approved, suspended or reinstated, or its capabilities change. Banks also get a `kyc.updated` webhook when a customer approves, rejects or withdraws a KYC claim, or when one lapses or expires.
 
 To verify a webhook, compare the `X-GR-Signature` header with `"sha256=" + hex(HMAC_SHA256(webhook_secret, raw_body))` using a constant-time comparison. Each delivery carries a unique `X-GR-Delivery` ID, so retries can be de-duplicated.
 
@@ -102,6 +104,7 @@ guardian_registry/
   policy.py     pure rules engine (no I/O)
   service.py    registry: sign-in, consent, held changes, checks, approvals, sweeper
   notify.py     alert outbox, SMS senders, signed webhooks, retrying dispatcher
+  participants.py  participant kinds, capabilities, four-eyes onboarding, suspension
   kyc.py        bank-vouched identity: attestations, consent, senior flag
   simswap.py    SIM-swap windows, device probation, restricted sessions, number change
   presets.py    named rule bundles (RBI-proposal-shaped, not final rules)
@@ -110,14 +113,14 @@ guardian_registry/
   security.py   hashing, encryption, OTP, signatures, production checks
   ratelimit.py  sliding-window limiter
   api.py        FastAPI app (create_app factory) + background worker
-tests/          263 tests
+tests/          290 tests
 scripts/demo.py end-to-end story over real HTTP (also runs in CI)
 ```
 
 ## Still open
 
 - **RBI's final rules:** the paper is a proposal. Presets live in one file ([presets.py](guardian_registry/presets.py)), so the numbers can change when RBI publishes its final text. The age cut-off is `SENIOR_AGE` in [kyc.py](guardian_registry/kyc.py).
-- **Trusting the banks:** any onboarded participant can make a KYC claim. The customer's consent is the check, but a real network would also need onboarding rules (only RBI-regulated entities) and a way to suspend a bank that makes false claims.
+- **Checking the regulator reference:** operators type in the RBI/NPCI reference and a second operator approves it, but the registry doesn't look it up against RBI's published lists of regulated entities. Operator tokens are long-lived shared secrets; a real deployment would put operators behind SSO with hardware keys.
 - **SIM-swap signals depend on banks:** the registry reacts to SIM changes but doesn't detect them itself. A direct feed from mobile operators would close the gap before a bank reports. The device ID is chosen by the app, so it shows a device is new but doesn't prove one is the same: a thief can claim an old device ID. That's why a SIM change restricts every sign-in after it, whatever device it claims.
 - **Multi-node scale:** SQLite and the in-process rate limiter suit a single-node pilot. Running several nodes needs Postgres, a shared limiter (Redis or the gateway) and mTLS for banks.
 - **Delivery channels:** SMS and in-app are built. WhatsApp and push notifications need a provider account.

@@ -1,8 +1,9 @@
 """End-to-end demo against a RUNNING server, over real HTTP.
 
-    $env:GR_ADMIN_TOKEN = "demo-admin"; $env:GR_DB = "demo.db"
+    $env:GR_OPERATORS = "alice:demo-alice-token,bob:demo-bob-token"; $env:GR_DB = "demo.db"
+    $env:GR_OTP_DEV_ECHO = "1"
     .venv\\Scripts\\uvicorn guardian_registry.api:create_app --factory --port 8000
-    .venv\\Scripts\\python scripts\\demo.py http://127.0.0.1:8000 demo-admin
+    .venv\\Scripts\\python scripts\\demo.py http://127.0.0.1:8000 demo-alice-token demo-bob-token
 
 Story: Amma (72) sets Ravi as her guardian. Two banks check every payment against
 one set of rules. A scam call tries a large transfer and then tries to get the
@@ -43,7 +44,8 @@ class HookHandler(BaseHTTPRequestHandler):
 threading.Thread(target=HTTPServer(("127.0.0.1", HOOK_PORT), HookHandler).serve_forever, daemon=True).start()
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8000"
-ADMIN = sys.argv[2] if len(sys.argv) > 2 else "demo-admin"
+ADMIN = sys.argv[2] if len(sys.argv) > 2 else "demo-alice-token"    # operator 1
+ADMIN2 = sys.argv[3] if len(sys.argv) > 3 else "demo-bob-token"     # operator 2 (four-eyes)
 R = 100
 run = random.randint(100000, 999999)  # fresh numbers each run so the demo can be re-run
 
@@ -73,12 +75,23 @@ def bearer(t):
 step("health")
 print(call("GET", "/healthz"))
 
-step("operator onboards two banks")
-sbi = {"X-Api-Key": call("POST", "/v1/admin/participants", 201, json={"name": f"Bank A {run}"},
-                         headers={"X-Admin-Token": ADMIN})["api_key"]}
-app = {"X-Api-Key": call("POST", "/v1/admin/participants", 201, json={"name": f"UPI App B {run}"},
-                         headers={"X-Admin-Token": ADMIN})["api_key"]}
-print("Bank A and UPI App B have API keys")
+step("operator Alice registers a bank and a UPI app; operator Bob must approve (four-eyes)")
+op1, op2 = {"X-Admin-Token": ADMIN}, {"X-Admin-Token": ADMIN2}
+keys = {}
+for label, kind, ref in (("Bank A", "bank", f"RBI-BANK-{run}"), ("UPI App B", "tpap", f"NPCI-TPAP-{run}")):
+    p = call("POST", "/v1/admin/participants", 201, headers=op1,
+             json={"name": f"{label} {run}", "kind": kind, "regulator_ref": ref})
+    keys[label] = ({"X-Api-Key": p["api_key"]}, p["participant_id"])
+    print(f"{label}: {p['kind']} status={p['status']} capabilities={p['capabilities']}")
+sbi, app = keys["Bank A"][0], keys["UPI App B"][0]
+r = c.post("/v1/checks", headers=sbi, json={"mobile": mobile(1), "participant_txn_id": "too-early",
+                                            "amount": 100, "payee": "x@upi"})
+print("Bank A calls checks before approval ->", r.status_code, r.json()["detail"])
+r = c.post(f"/v1/admin/participants/{keys['Bank A'][1]}/approve", headers=op1)
+print("Alice approves her own request ->", r.status_code, r.json()["detail"])
+for label in keys:
+    print(f"Bob approves {label} ->",
+          call("POST", f"/v1/admin/participants/{keys[label][1]}/approve", headers=op2)["status"])
 
 step("Bank A registers a webhook (a real local HTTP receiver that checks signatures)")
 hook = call("PUT", "/v1/participant/webhook", headers=sbi, json={"url": f"http://127.0.0.1:{HOOK_PORT}/gr"})
@@ -117,6 +130,9 @@ for who, tok, n, dob, ref in ((amma, A, 1, "1952-03-10", "CIF-1001"), (ravi, G, 
     note = call("GET", "/v1/me/notifications", headers=tok)[0]
     print(f"alert: {note['title']} - {note['body'][:80]}...")
     call("POST", f"/v1/me/identity/attestations/{att['attestation_id']}/approve", headers=tok)
+r = c.post("/v1/kyc/attestations", headers=app, json={
+    "mobile": mobile(1), "kyc_level": "full", "customer_ref": "X", "verified_on": "2025-06-01"})
+print("UPI App B tries to vouch for Amma's identity ->", r.status_code, r.json()["detail"])
 ident = call("GET", "/v1/me/identity", headers=A)
 print(f"Amma: identity={ident['level']} senior={ident['senior']} (banks never see the date of birth)")
 print("Ravi as guardian:", call("GET", "/v1/me/guardians", headers=A)[0]["guardian_identity_level"])

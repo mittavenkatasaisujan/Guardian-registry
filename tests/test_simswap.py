@@ -262,7 +262,7 @@ def http():
     A, G = {"Authorization": f"Bearer {amma['token']}"}, {"Authorization": f"Bearer {ravi['token']}"}
     gid = c.post("/v1/me/guardians", json={"mobile": RAVI}, headers=A).json()["id"]
     c.post(f"/v1/guardian/invitations/{gid}/accept", headers=G)
-    bank = {"X-Api-Key": c.post("/v1/admin/participants", json={"name": "B"},
+    bank = {"X-Api-Key": c.post("/v1/admin/participants", json={"name": "B", "regulator_ref": "RBI-TEST-1"},
                                 headers={"X-Admin-Token": "adm"}).json()["api_key"]}
     return {"c": c, "clock": clock, "sign_in": sign_in, "A": A, "G": G, "bank": bank, "amma": amma, "ravi": ravi}
 

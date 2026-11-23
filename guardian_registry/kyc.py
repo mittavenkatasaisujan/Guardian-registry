@@ -90,7 +90,9 @@ class KycMixin:
                                    {"attestation": self._kyc_view(r, for_participant=True)}, r["user_id"])
 
     def _active_attestations(self, user_id: str) -> list[sqlite3.Row]:
-        return self.db.all("SELECT * FROM kyc_attestations WHERE user_id=? AND status='active' AND expires_at>?",
+        # claims from a suspended participant don't count until it is reinstated
+        return self.db.all("SELECT k.* FROM kyc_attestations k JOIN participants p ON p.id=k.participant_id "
+                           "WHERE k.user_id=? AND k.status='active' AND k.expires_at>? AND p.status='active'",
                            (user_id, self._now()))
 
     # ------------------------------------------------------------- facts
@@ -128,6 +130,7 @@ class KycMixin:
                verified_on: str, date_of_birth: str | None = None) -> dict:
         if kyc_level not in KYC_LEVELS:
             raise Invalid(f"kyc_level must be one of {list(KYC_LEVELS)}")
+        self._require_participant(participant_id, f"kyc_{kyc_level}")
         customer_ref = (customer_ref or "").strip()
         if not customer_ref or len(customer_ref) > 100:
             raise Invalid("customer_ref is required (max 100 characters)")
@@ -174,6 +177,7 @@ class KycMixin:
         return self._kyc_view(self._kyc_row(aid), for_participant=True)
 
     def bank_attestation(self, participant_id: str, aid: str) -> dict:
+        self._require_participant(participant_id, allow_suspended=True)
         r = self._kyc_row(aid)
         if r["participant_id"] != participant_id:
             raise NotFound("attestation not found")
@@ -181,6 +185,7 @@ class KycMixin:
 
     def revoke_attestation(self, participant_id: str, aid: str) -> dict:
         """The bank withdraws its claim, for example when the account is closed or KYC is in doubt."""
+        self._require_participant(participant_id, allow_suspended=True)
         r = self._kyc_row(aid)
         if r["participant_id"] != participant_id:
             raise NotFound("attestation not found")
