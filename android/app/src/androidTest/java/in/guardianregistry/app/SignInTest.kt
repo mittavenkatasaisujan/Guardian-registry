@@ -79,6 +79,18 @@ class SignInTest {
         }
     }
 
+    @Test
+    fun hindiStringsShip() {
+        val config = android.content.res.Configuration(ctx.resources.configuration)
+        config.setLocale(java.util.Locale("hi"))
+        val hi = ctx.createConfigurationContext(config)
+        assertEquals("मंज़ूर करें", hi.getString(R.string.approve))
+        assertEquals("नमस्ते, Asha", hi.getString(R.string.hello, "Asha"))
+        assertEquals("Approve", ctx.createConfigurationContext(
+            android.content.res.Configuration(config).apply { setLocale(java.util.Locale.ENGLISH) }
+        ).getString(R.string.approve))
+    }
+
     private fun emit(doc: JSONObject) {
         val text = doc.toString()
         val parts = text.chunked(3000)

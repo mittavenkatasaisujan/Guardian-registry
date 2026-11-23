@@ -2,4 +2,52 @@
 <resources>
     <string name="app_name">Guardian Registry</string>
     <string name="alerts_channel">Payment alerts</string>
+    <string name="payments_waiting">Payments waiting</string>
+    <string name="error">Error</string>
+    <string name="cant_reach">Can\'t reach Guardian Registry. Check your connection.</string>
+    <string name="intro">Payments from your account can need a family member\'s OK. Sign in with your mobile number.</string>
+    <string name="mobile_number">Mobile number</string>
+    <string name="send_code">Send code</string>
+    <string name="enter_code">Enter the code</string>
+    <string name="code">Code</string>
+    <string name="your_name_first">Your name (first time only)</string>
+    <string name="sign_in">Sign in</string>
+    <string name="back">Back</string>
+    <string name="accept">Accept</string>
+    <string name="you_protect_them">You now protect them.</string>
+    <string name="decline">Decline</string>
+    <string name="declined">Declined.</string>
+    <string name="nothing_waiting">Nothing is waiting for you.</string>
+    <string name="approve">Approve</string>
+    <string name="approve_q">Approve this payment?</string>
+    <string name="approved">Approved.</string>
+    <string name="deny">Deny</string>
+    <string name="denied">Denied. The payment will not go through.</string>
+    <string name="stop_payment">Stop this payment</string>
+    <string name="cancelled">Cancelled.</string>
+    <string name="my_protection">My protection</string>
+    <string name="all_paused">All payments from your account are paused.</string>
+    <string name="resume">Resume payments</string>
+    <string name="resume_requested">Resume requested.</string>
+    <string name="pause_all">Pause all my payments</string>
+    <string name="pause_q">Pause every payment from your account until you resume?</string>
+    <string name="paused">Payments paused.</string>
+    <string name="alerts">Alerts</string>
+    <string name="no_alerts">No alerts.</string>
+    <string name="security">Security</string>
+    <string name="lost_phone">I lost my phone</string>
+    <string name="lost_q">Sign out every device and block approvals from this number for a while?</string>
+    <string name="lost_done">Done. Every device is signed out.</string>
+    <string name="sign_out">Sign out</string>
+    <string name="signed_out">Signed out.</string>
+    <string name="refresh">Refresh</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="signed_out_reason" formatted="true">Signed out: %1$s</string>
+    <string name="code_sent" formatted="true">We sent a 6-digit code to %1$s. Never share it, not even with a guardian or a bank.</string>
+    <string name="signed_in_limits" formatted="true">Signed in with limits: %1$s</string>
+    <string name="hello" formatted="true">Hello, %1$s</string>
+    <string name="asked_guardian" formatted="true">%1$s asked you to be their payment guardian.</string>
+    <string name="from_person" formatted="true"> from %1$s</string>
+    <string name="amount_to" formatted="true">%1$s to %2$s%3$s</string>
 </resources>

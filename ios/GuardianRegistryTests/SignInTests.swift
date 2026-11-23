@@ -81,6 +81,13 @@ final class SignInTests: XCTestCase {
         XCTAssertNil(evidence)
     }
 
+    func testHindiStringsShip() throws {
+        let path = try XCTUnwrap(Bundle.main.path(forResource: "hi", ofType: "lproj"), "hi.lproj missing from the app")
+        let hi = try XCTUnwrap(Bundle(path: path))
+        XCTAssertEqual(hi.localizedString(forKey: "Approve", value: nil, table: nil), "मंज़ूर करें")
+        XCTAssertEqual(String(format: hi.localizedString(forKey: "Hello, %@", value: nil, table: nil), "Asha"), "नमस्ते, Asha")
+    }
+
     func testTokenStoreRoundTrip() {
         TokenStore.token = "gut_test"
         XCTAssertEqual(TokenStore.token, "gut_test")

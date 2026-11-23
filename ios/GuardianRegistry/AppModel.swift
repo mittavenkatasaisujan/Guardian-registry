@@ -36,7 +36,7 @@ final class AppModel: ObservableObject {
             do {
                 try await work()
             } catch let e as ApiError where e.status == 401 && screen == .home {
-                signedOut("Signed out: \(e.message)")
+                signedOut(String(format: NSLocalizedString("Signed out: %@", comment: ""), e.message))
             } catch {
                 message = error.localizedDescription
             }
@@ -90,10 +90,11 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// `text` is an English message key; it is shown in the user's language.
     func signedOut(_ text: String) {
         TokenStore.token = nil
         screen = .mobile
-        message = text
+        message = NSLocalizedString(text, comment: "")
     }
 
     func registerPush() async {
@@ -131,7 +132,7 @@ final class AppModel: ObservableObject {
         run {
             try await self.api.call("POST", path)
             try await self.load()
-            self.message = done
+            self.message = NSLocalizedString(done, comment: "")
         }
     }
 

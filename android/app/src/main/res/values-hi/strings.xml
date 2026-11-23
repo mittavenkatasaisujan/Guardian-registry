@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="alerts_channel">भुगतान सूचनाएँ</string>
+    <string name="payments_waiting">प्रतीक्षा में भुगतान</string>
+    <string name="error">त्रुटि</string>
+    <string name="cant_reach">Guardian Registry तक नहीं पहुँच पा रहे। अपना कनेक्शन जाँचें।</string>
+    <string name="intro">आपके खाते से भुगतान के लिए परिवार के किसी सदस्य की मंज़ूरी ज़रूरी हो सकती है। अपने मोबाइल नंबर से साइन इन करें।</string>
+    <string name="mobile_number">मोबाइल नंबर</string>
+    <string name="send_code">कोड भेजें</string>
+    <string name="enter_code">कोड डालें</string>
+    <string name="code">कोड</string>
+    <string name="your_name_first">आपका नाम (सिर्फ़ पहली बार)</string>
+    <string name="sign_in">साइन इन करें</string>
+    <string name="back">वापस</string>
+    <string name="accept">स्वीकार करें</string>
+    <string name="you_protect_them">अब आप उनकी सुरक्षा कर रहे हैं।</string>
+    <string name="decline">अस्वीकार करें</string>
+    <string name="declined">अस्वीकार किया।</string>
+    <string name="nothing_waiting">आपके लिए कुछ भी प्रतीक्षा में नहीं है।</string>
+    <string name="approve">मंज़ूर करें</string>
+    <string name="approve_q">यह भुगतान मंज़ूर करें?</string>
+    <string name="approved">मंज़ूर किया।</string>
+    <string name="deny">अस्वीकार करें</string>
+    <string name="denied">अस्वीकार किया। यह भुगतान नहीं होगा।</string>
+    <string name="stop_payment">यह भुगतान रोकें</string>
+    <string name="cancelled">रद्द किया।</string>
+    <string name="my_protection">मेरी सुरक्षा</string>
+    <string name="all_paused">आपके खाते से सभी भुगतान रुके हुए हैं।</string>
+    <string name="resume">भुगतान फिर से चालू करें</string>
+    <string name="resume_requested">फिर से चालू करने का अनुरोध भेजा गया।</string>
+    <string name="pause_all">मेरे सभी भुगतान रोकें</string>
+    <string name="pause_q">जब तक आप फिर से चालू न करें, आपके खाते से हर भुगतान रोकें?</string>
+    <string name="paused">भुगतान रोक दिए गए।</string>
+    <string name="alerts">सूचनाएँ</string>
+    <string name="no_alerts">कोई सूचना नहीं।</string>
+    <string name="security">सुरक्षा</string>
+    <string name="lost_phone">मेरा फ़ोन खो गया</string>
+    <string name="lost_q">हर डिवाइस से साइन आउट करें और कुछ समय के लिए इस नंबर से मंज़ूरियाँ रोकें?</string>
+    <string name="lost_done">हो गया। हर डिवाइस से साइन आउट कर दिया गया है।</string>
+    <string name="sign_out">साइन आउट</string>
+    <string name="signed_out">साइन आउट हो गया।</string>
+    <string name="refresh">रीफ़्रेश करें</string>
+    <string name="yes">हाँ</string>
+    <string name="no">नहीं</string>
+    <string name="signed_out_reason" formatted="true">साइन आउट हो गया: %1$s</string>
+    <string name="code_sent" formatted="true">हमने %1$s पर 6 अंकों का कोड भेजा है। इसे किसी से साझा न करें, गार्डियन या बैंक से भी नहीं।</string>
+    <string name="signed_in_limits" formatted="true">सीमाओं के साथ साइन इन हुआ: %1$s</string>
+    <string name="hello" formatted="true">नमस्ते, %1$s</string>
+    <string name="asked_guardian" formatted="true">%1$s ने आपसे उनका भुगतान गार्डियन बनने को कहा है।</string>
+    <string name="from_person" formatted="true"> (%1$s से)</string>
+    <string name="amount_to" formatted="true">%2$s को %1$s%3$s</string>
+</resources>

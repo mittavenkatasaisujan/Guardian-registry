@@ -25,7 +25,8 @@ import java.util.concurrent.Executors
 /**
  * One screen, rebuilt from data: sign in, then "Payments waiting" for guardians, your own
  * protection (pause payments), alerts, and lost-phone. Views are built in code to keep
- * the app dependency-free; every label comes from the server as plain text.
+ * the app dependency-free. Labels are string resources (English, and Hindi in values-hi);
+ * names, payees and alerts come from the server and are shown as plain text.
  */
 class MainActivity : Activity() {
     private val io = Executors.newSingleThreadExecutor()
@@ -62,10 +63,10 @@ class MainActivity : Activity() {
                 main.post { done(out) }
             } catch (e: ApiError) {
                 main.post {
-                    if (e.status == 401) signedOut("Signed out: ${e.message}") else toast(e.message ?: "Error")
+                    if (e.status == 401) signedOut(getString(R.string.signed_out_reason, e.message ?: "")) else toast(e.message ?: getString(R.string.error))
                 }
             } catch (e: Exception) {
-                main.post { toast("Can't reach Guardian Registry. Check your connection.") }
+                main.post { toast(getString(R.string.cant_reach)) }
             }
         }
     }
@@ -73,11 +74,11 @@ class MainActivity : Activity() {
     // ---------------------------------------------------------------- sign-in
     private fun showSignIn(message: String? = null) {
         root.removeAllViews()
-        title("Guardian Registry")
-        para("Payments from your account can need a family member's OK. Sign in with your mobile number.")
+        title(getString(R.string.app_name))
+        para(getString(R.string.intro))
         message?.let { para(it, Color.parseColor("#9A3412")) }
-        val mobile = input("Mobile number", InputType.TYPE_CLASS_PHONE, store.mobile)
-        button("Send code") {
+        val mobile = input(getString(R.string.mobile_number), InputType.TYPE_CLASS_PHONE, store.mobile)
+        button(getString(R.string.send_code)) {
             val m = mobile.text.toString().trim()
             bg({ Api(BuildConfig.API_BASE, null).post("/v1/auth/otp", JSONObject().put("mobile", m)) as JSONObject }) {
                 store.mobile = m
@@ -88,23 +89,23 @@ class MainActivity : Activity() {
 
     private fun showCode(mobile: String, devCode: String?) {
         root.removeAllViews()
-        title("Enter the code")
-        para("We sent a 6-digit code to $mobile. Never share it, not even with a guardian or a bank.")
-        val code = input("Code", InputType.TYPE_CLASS_NUMBER, devCode)
-        val name = input("Your name (first time only)", InputType.TYPE_CLASS_TEXT, null)
-        button("Sign in") {
+        title(getString(R.string.enter_code))
+        para(getString(R.string.code_sent, mobile))
+        val code = input(getString(R.string.code), InputType.TYPE_CLASS_NUMBER, devCode)
+        val name = input(getString(R.string.your_name_first), InputType.TYPE_CLASS_TEXT, null)
+        button(getString(R.string.sign_in)) {
             val c = code.text.toString().trim()
             val n = name.text.toString().trim()
             bg({ signIn(mobile, c, n) }) { out ->
                 store.token = out.getString("token")
                 PushService.refresh(this)
                 if (out.optBoolean("restricted")) {
-                    toast("Signed in with limits: " + (out.optJSONArray("restriction_reasons")?.join(", ") ?: ""))
+                    toast(getString(R.string.signed_in_limits, out.optJSONArray("restriction_reasons")?.join(", ") ?: ""))
                 }
                 loadHome()
             }
         }
-        button("Back", secondary = true) { showSignIn() }
+        button(getString(R.string.back), secondary = true) { showSignIn() }
     }
 
     /** OTP + device key proof. The key is created (and attested) on first use. */
@@ -140,7 +141,7 @@ class MainActivity : Activity() {
 
     private fun showHome(h: Home) {
         root.removeAllViews()
-        title("Hello, ${h.me.optString("display_name")}")
+        title(getString(R.string.hello, h.me.optString("display_name")))
         val names = HashMap<String, String>()
         for (i in 0 until h.wards.length()) {
             val w = h.wards.getJSONObject(i)
@@ -150,61 +151,61 @@ class MainActivity : Activity() {
         val invites = h.inbox.optJSONArray("invitations") ?: JSONArray()
         for (i in 0 until invites.length()) {
             val g = invites.getJSONObject(i)
-            card("${g.optString("principal_name")} asked you to be their payment guardian.")
+            card(getString(R.string.asked_guardian, g.optString("principal_name")))
             row(
-                "Accept" to { act("/v1/guardian/invitations/${g.getString("id")}/accept", "You now protect them.") },
-                "Decline" to { act("/v1/guardian/invitations/${g.getString("id")}/decline", "Declined.") },
+                getString(R.string.accept) to { act("/v1/guardian/invitations/${g.getString("id")}/accept", getString(R.string.you_protect_them)) },
+                getString(R.string.decline) to { act("/v1/guardian/invitations/${g.getString("id")}/decline", getString(R.string.declined)) },
             )
         }
 
-        heading("Payments waiting")
+        heading(getString(R.string.payments_waiting))
         val held = h.inbox.optJSONArray("held_payments") ?: JSONArray()
-        if (held.length() == 0) para("Nothing is waiting for you.", Color.GRAY)
+        if (held.length() == 0) para(getString(R.string.nothing_waiting), Color.GRAY)
         for (i in 0 until held.length()) {
             val p = held.getJSONObject(i)
-            val who = names[p.optString("principal_id")]?.let { " from $it" } ?: ""
-            card("${Wire.rupees(p.optLong("amount"))} to ${p.optString("payee")}$who")
+            val who = names[p.optString("principal_id")]?.let { getString(R.string.from_person, it) } ?: ""
+            card(getString(R.string.amount_to, Wire.rupees(p.optLong("amount")), p.optString("payee"), who))
             val id = p.getString("check_id")
             if (p.optString("status") == "pending_approval") {
                 row(
-                    "Approve" to { confirm("Approve this payment?") { act("/v1/guardian/payments/$id/approve", "Approved.") } },
-                    "Deny" to { act("/v1/guardian/payments/$id/deny", "Denied. The payment will not go through.") },
+                    getString(R.string.approve) to { confirm(getString(R.string.approve_q)) { act("/v1/guardian/payments/$id/approve", getString(R.string.approved)) } },
+                    getString(R.string.deny) to { act("/v1/guardian/payments/$id/deny", getString(R.string.denied)) },
                 )
             } else {
-                row("Stop this payment" to { act("/v1/guardian/payments/$id/cancel", "Cancelled.") })
+                row(getString(R.string.stop_payment) to { act("/v1/guardian/payments/$id/cancel", getString(R.string.cancelled)) })
             }
         }
 
-        heading("My protection")
+        heading(getString(R.string.my_protection))
         val paused = h.rules.optBoolean("kill_switch")
         if (paused) {
-            para("All payments from your account are paused.", Color.parseColor("#9A3412"))
-            button("Resume payments", secondary = true) { act("/v1/me/kill-switch/off", "Resume requested.") }
+            para(getString(R.string.all_paused), Color.parseColor("#9A3412"))
+            button(getString(R.string.resume), secondary = true) { act("/v1/me/kill-switch/off", getString(R.string.resume_requested)) }
         } else {
-            button("Pause all my payments") {
-                confirm("Pause every payment from your account until you resume?") {
-                    act("/v1/me/kill-switch/on", "Payments paused.")
+            button(getString(R.string.pause_all)) {
+                confirm(getString(R.string.pause_q)) {
+                    act("/v1/me/kill-switch/on", getString(R.string.paused))
                 }
             }
         }
 
-        heading("Alerts")
-        if (h.alerts.length() == 0) para("No alerts.", Color.GRAY)
+        heading(getString(R.string.alerts))
+        if (h.alerts.length() == 0) para(getString(R.string.no_alerts), Color.GRAY)
         for (i in 0 until minOf(h.alerts.length(), 10)) {
             val n = h.alerts.getJSONObject(i)
             card(n.optString("title") + "\n" + n.optString("body"))
         }
 
-        heading("Security")
-        button("I lost my phone", secondary = true) {
-            confirm("Sign out every device and block approvals from this number for a while?") {
-                bg({ api().post("/v1/me/security/lost-phone") }) { signedOut("Done. Every device is signed out.") }
+        heading(getString(R.string.security))
+        button(getString(R.string.lost_phone), secondary = true) {
+            confirm(getString(R.string.lost_q)) {
+                bg({ api().post("/v1/me/security/lost-phone") }) { signedOut(getString(R.string.lost_done)) }
             }
         }
-        button("Sign out", secondary = true) {
-            bg({ api().post("/v1/auth/logout", JSONObject().put("everywhere", false)) }) { signedOut("Signed out.") }
+        button(getString(R.string.sign_out), secondary = true) {
+            bg({ api().post("/v1/auth/logout", JSONObject().put("everywhere", false)) }) { signedOut(getString(R.string.signed_out)) }
         }
-        button("Refresh", secondary = true) { loadHome() }
+        button(getString(R.string.refresh), secondary = true) { loadHome() }
     }
 
     private fun act(path: String, done: String) {
@@ -264,8 +265,8 @@ class MainActivity : Activity() {
 
     private fun confirm(question: String, yes: () -> Unit) {
         AlertDialog.Builder(this).setMessage(question)
-            .setPositiveButton("Yes") { _, _ -> yes() }
-            .setNegativeButton("No", null).show()
+            .setPositiveButton(getString(R.string.yes)) { _, _ -> yes() }
+            .setNegativeButton(getString(R.string.no), null).show()
     }
 
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()

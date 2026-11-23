@@ -132,7 +132,7 @@ struct PaymentRow: View {
         let id = p["check_id"] as? String ?? ""
         VStack(alignment: .leading, spacing: 8) {
             Text(Wire.rupees(paise: p["amount"] as? Int ?? 0)).font(.title3).bold()
-            Text("To \(p["payee"] as? String ?? "")" + (from.map { " · from \($0)" } ?? ""))
+            Text("To \(p["payee"] as? String ?? "")\(from.map { String(format: NSLocalizedString(" · from %@", comment: ""), $0) } ?? "")")
             if (p["status"] as? String) == "pending_approval" {
                 HStack {
                     Button("Approve") { confirmApprove = true }.buttonStyle(.borderedProminent)
