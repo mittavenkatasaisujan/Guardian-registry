@@ -23,7 +23,7 @@ class ChannelMixin:
     def set_urgent_channel(self, user_id: str, channel: str) -> dict:
         if channel not in URGENT_CHANNELS:
             raise Invalid(f"urgent_channel must be one of {list(URGENT_CHANNELS)}")
-        with self.db.tx() as c:
+        with self.db.tx(user_id) as c:
             c.execute("UPDATE users SET urgent_channel=? WHERE id=?", (channel, user_id))
             self._audit(c, user_id, "alerts.channel_set", user_id, urgent_channel=channel)
         return self.alert_settings(user_id)
@@ -35,7 +35,7 @@ class ChannelMixin:
         if platform not in PLATFORMS:
             raise Invalid(f"platform must be one of {list(PLATFORMS)}")
         h = secret_hash(token)
-        with self.db.tx() as c:
+        with self.db.tx(user_id) as c:
             c.execute("DELETE FROM push_tokens WHERE token_hash=?", (h,))  # a device moves to its new owner
             n = c.execute("SELECT COUNT(*) n FROM push_tokens WHERE user_id=?", (user_id,)).fetchone()["n"]
             if n >= MAX_PUSH_TOKENS:
@@ -48,7 +48,7 @@ class ChannelMixin:
         return self.alert_settings(user_id)
 
     def remove_push_token(self, user_id: str, token_id: str) -> dict:
-        with self.db.tx() as c:
+        with self.db.tx(user_id) as c:
             if not c.execute("DELETE FROM push_tokens WHERE id=? AND user_id=?", (token_id, user_id)).rowcount:
                 raise NotFound("push device not found")
         return self.alert_settings(user_id)

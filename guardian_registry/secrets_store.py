@@ -75,7 +75,7 @@ def rotate_data_key(db, limit: int = 1000) -> dict:
     done: dict[str, int] = {}
     budget = limit
     for table, pk, col, json_key in ENCRYPTED:
-        rows = db.all(f"SELECT {pk} AS pk, {col} AS v FROM {table} WHERE {col} IS NOT NULL")
+        rows = db.all(f"SELECT {pk} AS pk, {col} AS v FROM {table} WHERE {col} IS NOT NULL")  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
         n = 0
         for r in rows:
             if budget <= 0:
@@ -92,7 +92,7 @@ def rotate_data_key(db, limit: int = 1000) -> dict:
                     continue
                 new = multi.rotate(r["v"].encode()).decode()
             with db.tx(shared=True) as c:  # value-for-value swap: compare-and-set, no person's state changes
-                c.execute(f"UPDATE {table} SET {col}=? WHERE {pk}=? AND {col}=?", (new, r["pk"], r["v"]))
+                c.execute(f"UPDATE {table} SET {col}=? WHERE {pk}=? AND {col}=?", (new, r["pk"], r["v"]))  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
             n += 1
             budget -= 1
         if n:
@@ -105,7 +105,7 @@ def count_unrotated(db) -> int:
     primary = _primary_only()
     left = 0
     for table, _pk, col, json_key in ENCRYPTED:
-        for r in db.all(f"SELECT {col} AS v FROM {table} WHERE {col} IS NOT NULL"):
+        for r in db.all(f"SELECT {col} AS v FROM {table} WHERE {col} IS NOT NULL"):  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
             tok = r["v"]
             if json_key:
                 doc = json.loads(tok)

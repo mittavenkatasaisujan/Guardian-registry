@@ -115,7 +115,7 @@ class CertMixin:
     """Mixed into Registry."""
 
     def _cert_rows(self, pid: str, status: str | None = None):
-        sql = "SELECT * FROM participant_certs WHERE participant_id=?" + (" AND status=?" if status else "")
+        sql = "SELECT * FROM participant_certs WHERE participant_id=?" + (" AND status=?" if status else "")  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
         return self.db.all(sql + " ORDER BY added_at", (pid, status) if status else (pid,))
 
     def participant_certs(self, pid: str) -> list[dict]:

@@ -208,7 +208,7 @@ class RegisterFeedMixin:
         """Check every active feed that is due. Called from the worker's sweep."""
         now = self.clock.now()
         due_before = iso(now - timedelta(hours=refresh_hours()))
-        rows = self.db.all("SELECT * FROM register_feeds WHERE status='active'" +
+        rows = self.db.all("SELECT * FROM register_feeds WHERE status='active'" +  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
                            ("" if force else " AND (last_checked_at IS NULL OR last_checked_at<=?)"),
                            () if force else (due_before,))
         out = {}
@@ -272,7 +272,7 @@ class RegisterFeedMixin:
             suspended = []
             if auto_suspend and removed:
                 marks = ",".join("?" * len(removed))
-                for p in c.execute(f"SELECT id, status, pending_action FROM participants WHERE kind=? AND status='active' "
+                for p in c.execute(f"SELECT id, status, pending_action FROM participants WHERE kind=? AND status='active' "  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
                                    f"AND regulator_ref IN ({marks})", (kind, *sorted(removed))).fetchall():
                     reason = f"no longer on the official {kind} register ({source}, as of {as_of})"
                     c.execute("UPDATE participants SET status='suspended', status_reason=?, status_changed_at=? "

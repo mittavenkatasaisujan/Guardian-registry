@@ -162,7 +162,7 @@ class SimSwapMixin:
         """The person or a guardian says the phone is lost or stolen: sign the person out
         everywhere and open the risk window."""
         role = self._require_principal_or_guardian(user_id, actor_id)
-        with self.db.tx() as c:
+        with self.db.tx(user_id) as c:
             n = c.execute("UPDATE sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL",
                           (self._now(), user_id)).rowcount
             c.execute("UPDATE devices SET trusted_at=? WHERE user_id=?",  # every device must re-earn trust
@@ -181,7 +181,7 @@ class SimSwapMixin:
         events = self._open_sim_events(user_id)
         if not events:
             raise Conflict("no open SIM-change window")
-        with self.db.tx() as c:
+        with self.db.tx(user_id) as c:
             for ev in events:
                 c.execute("UPDATE sim_events SET cleared_at=?, cleared_by=? WHERE id=?", (self._now(), actor_id, ev["id"]))
             self._audit(c, actor_id, "sim.window_cleared", user_id, by=role, events=[e["id"] for e in events])

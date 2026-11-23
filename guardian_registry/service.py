@@ -213,7 +213,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         uid = self.user_by_token(token)
         if not uid:
             return
-        with self.db.tx() as c:
+        with self.db.tx(uid) as c:
             if everywhere:
                 c.execute("UPDATE sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL", (self._now(), uid))
             else:
@@ -241,7 +241,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
                 if sends >= OTP_MAX_SENDS_PER_WINDOW:
                     raise TooMany(f"too many codes requested; try again in {OTP_WINDOW_MINUTES} minutes")
         code = new_otp()
-        with self.db.tx() as c:
+        with self.db.tx(f"otp:{mh}") as c:
             c.execute("INSERT INTO otps (mobile_hash, code_hash, expires_at, attempts, window_start, sends, "
                       "last_sent_at) VALUES (?,?,?,0,?,?,?) ON CONFLICT(mobile_hash) DO UPDATE SET "
                       "code_hash=excluded.code_hash, expires_at=excluded.expires_at, attempts=0, "
@@ -274,13 +274,13 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         if row["attempts"] >= OTP_MAX_ATTEMPTS:
             raise Unauthorized("too many wrong codes; request a new one")
         if not hmac.compare_digest(row["code_hash"], otp_hash(mh, (code or "").strip())):
-            with self.db.tx() as c:
+            with self.db.tx(f"otp:{mh}") as c:
                 c.execute("UPDATE otps SET attempts=attempts+1 WHERE mobile_hash=?", (mh,))
             raise Unauthorized("wrong code")
         return mh
 
     def _consume_otp(self, mh: str) -> None:
-        with self.db.tx() as c:
+        with self.db.tx(f"otp:{mh}") as c:
             c.execute("DELETE FROM otps WHERE mobile_hash=?", (mh,))  # single use
 
     def verify_otp(self, mobile: str, code: str, display_name: str | None = None,
@@ -303,7 +303,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         if uid:
             self.refresh_sim_status(uid, force=True)  # a fresh SIM change makes THIS session restricted
             token = new_secret("gut")
-            with self.db.tx() as c:
+            with self.db.tx(uid) as c:
                 device_hash, probation_until = self._register_device(c, uid, device_id)
                 proven = False
                 if key_id:
@@ -323,7 +323,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             return out
         uid, token = self.register_user(mobile, display_name, device_id)
         if key_id:
-            with self.db.tx() as c:
+            with self.db.tx(uid) as c:
                 self._register_key(c, uid, key_id, device_key, key_attestation, platform, new_account=True,
                                    challenge=challenge)
                 c.execute("UPDATE sessions SET device_key_id=? WHERE token_hash=?", (key_id, secret_hash(token)))
@@ -367,7 +367,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         if len(live) >= MAX_GUARDIANS:
             raise Conflict(f"at most {MAX_GUARDIANS} guardians (invited + active)")
         gid = new_id("gdn")
-        with self.db.tx() as c:
+        with self.db.tx(principal_id, guardian_id) as c:
             c.execute("INSERT INTO guardianships (id, principal_id, guardian_id, status, invited_at) VALUES (?,?,?,?,?)",
                       (gid, principal_id, guardian_id, GuardianStatus.INVITED.value, self._now()))
             self._audit(c, principal_id, "guardian.invited", principal_id, guardianship_id=gid, guardian_id=guardian_id)
@@ -396,7 +396,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             raise NotFound("invitation not found")
         if r["status"] != GuardianStatus.INVITED.value:
             raise Conflict(f"invitation is already {r['status']}")
-        with self.db.tx() as c:
+        with self.db.tx(r["principal_id"], guardian_id) as c:
             if accept:
                 c.execute("UPDATE guardianships SET status=?, accepted_at=? WHERE id=?",
                           (GuardianStatus.ACTIVE.value, self._now(), gid))
@@ -418,7 +418,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             raise NotFound("guardianship not found")
         if r["status"] != GuardianStatus.ACTIVE.value:
             raise Conflict("guardianship is not active")
-        with self.db.tx() as c:
+        with self.db.tx(r["principal_id"], guardian_id) as c:
             c.execute("UPDATE guardianships SET status=?, ended_at=? WHERE id=?",
                       (GuardianStatus.ENDED.value, self._now(), gid))
             self._audit(c, guardian_id, "guardian.resigned", r["principal_id"], guardianship_id=gid)
@@ -433,7 +433,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         if not r or r["principal_id"] != principal_id:
             raise NotFound("guardianship not found")
         if r["status"] == GuardianStatus.INVITED.value:
-            with self.db.tx() as c:
+            with self.db.tx(principal_id) as c:
                 c.execute("UPDATE guardianships SET status=?, ended_at=? WHERE id=?",
                           (GuardianStatus.ENDED.value, self._now(), gid))
                 self._audit(c, principal_id, "guardian.invite_cancelled", principal_id, guardianship_id=gid)
@@ -502,7 +502,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
 
         result: dict = {"applied": {}, "held": None}
         if tighten:
-            with self.db.tx() as c:
+            with self.db.tx(principal_id) as c:
                 self._write_rules(c, principal_id, Rules.from_dict({**current.to_dict(), **tighten}))
                 self._audit(c, principal_id, "rules.tightened", principal_id, changes=tighten)
             result["applied"] = tighten
@@ -516,7 +516,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         current = self.get_rules(principal_id)
         if not current.kill_switch:
             current.kill_switch = True
-            with self.db.tx() as c:
+            with self.db.tx(principal_id) as c:
                 self._write_rules(c, principal_id, current)
                 self._audit(c, actor_id, "kill_switch.on", principal_id, by=role)
                 self._alert(c, [principal_id, *self._active_guardian_ids(principal_id)], "kill_switch_on",
@@ -534,7 +534,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             return {"applied": True, "rules": current.to_dict()}
         if role == "guardian":
             current.kill_switch = False
-            with self.db.tx() as c:
+            with self.db.tx(principal_id) as c:
                 self._write_rules(c, principal_id, current)
                 self._audit(c, actor_id, "kill_switch.off", principal_id, by=role)
                 self._alert(c, [principal_id, *self._active_guardian_ids(principal_id)], "kill_switch_off",
@@ -548,7 +548,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
     def _propose_change(self, principal_id: str, kind: ChangeKind, payload: dict) -> dict:
         cid = new_id("chg")
         effective = iso(self.clock.now() + timedelta(hours=LOOSENING_DELAY_HOURS))
-        with self.db.tx() as c:
+        with self.db.tx(principal_id) as c:
             c.execute("INSERT INTO pending_changes (id, principal_id, kind, payload, status, requested_by, created_at, effective_at) "
                       "VALUES (?,?,?,?,?,?,?,?)",
                       (cid, principal_id, kind.value, json.dumps(payload), ChangeStatus.PENDING.value,
@@ -652,14 +652,14 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
 
     def approve_change(self, guardian_id: str, cid: str) -> dict:
         r = self._guardian_change(guardian_id, cid)
-        with self.db.tx() as c:
+        with self.db.tx(r["principal_id"]) as c:
             if not self._apply_change(c, r, guardian_id):
                 raise Conflict("this change was already decided")
         return self.change(cid)
 
     def veto_change(self, guardian_id: str, cid: str) -> dict:
         r = self._guardian_change(guardian_id, cid)
-        with self.db.tx() as c:
+        with self.db.tx(r["principal_id"]) as c:
             if not c.execute("UPDATE pending_changes SET status=?, decided_by=?, decided_at=? WHERE id=? AND status=?",
                              (ChangeStatus.VETOED.value, guardian_id, self._now(), cid,
                               ChangeStatus.PENDING.value)).rowcount:
@@ -677,7 +677,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         payee = payee.strip().lower()
         if not payee:
             raise Invalid("payee is required")
-        with self.db.tx() as c:
+        with self.db.tx(principal_id) as c:
             c.execute("INSERT INTO trusted_payees VALUES (?,?,?,?) ON CONFLICT DO NOTHING",
                       (principal_id, payee, guardian_id, self._now()))
             self._audit(c, guardian_id, "payee.vouched", principal_id, payee=payee)
@@ -792,7 +792,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         self._refresh_principal(c, principal_id)
         spend_statuses = [s.value for s in CheckStatus if s.counts_as_spend]
         spent = c.execute(
-            "SELECT COALESCE(SUM(amount),0) s FROM checks WHERE principal_id=? AND day=? AND status IN (%s)"
+            "SELECT COALESCE(SUM(amount),0) s FROM checks WHERE principal_id=? AND day=? AND status IN (%s)"  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
             % ",".join("?" * len(spend_statuses)),
             (principal_id, day, *spend_statuses),
         ).fetchone()["s"]
@@ -994,7 +994,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
 
     # ---------------------------------------------------------- notifications
     def notifications(self, user_id: str, unread_only: bool = False, limit: int = 50) -> list[dict]:
-        sql = ("SELECT * FROM notifications WHERE recipient_type='user' AND recipient_id=? AND channel='inapp'"
+        sql = ("SELECT * FROM notifications WHERE recipient_type='user' AND recipient_id=? AND channel='inapp'"  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
                + (" AND read_at IS NULL" if unread_only else "") + " ORDER BY created_at DESC, rowid DESC LIMIT ?")
         return [{"id": r["id"], "kind": r["kind"], "title": r["title"], "body": r["body"],
                  "principal_id": r["principal_id"], "data": json.loads(r["payload"]),
@@ -1002,10 +1002,10 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
                 for r in self.db.all(sql, (user_id, limit))]
 
     def mark_read(self, user_id: str, ids: list[str] | None = None) -> int:
-        with self.db.tx() as c:
+        with self.db.tx(user_id) as c:
             if ids:
                 q = ",".join("?" * len(ids))
-                cur = c.execute(f"UPDATE notifications SET read_at=? WHERE recipient_type='user' AND recipient_id=? "
+                cur = c.execute(f"UPDATE notifications SET read_at=? WHERE recipient_type='user' AND recipient_id=? "  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
                                 f"AND read_at IS NULL AND id IN ({q})", (self._now(), user_id, *ids))
             else:
                 cur = c.execute("UPDATE notifications SET read_at=? WHERE recipient_type='user' AND recipient_id=? "

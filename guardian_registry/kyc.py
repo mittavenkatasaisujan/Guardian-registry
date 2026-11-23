@@ -212,7 +212,7 @@ class KycMixin:
         r = self._own_attestation(user_id, aid)
         if r["status"] != "pending_consent":
             raise Conflict(f"attestation is already {r['status']}")
-        with self.db.tx() as c:
+        with self.db.tx(user_id) as c:
             if approve:
                 c.execute("UPDATE kyc_attestations SET status='superseded', decided_at=? "
                           "WHERE user_id=? AND participant_id=? AND status='active'",
@@ -223,7 +223,7 @@ class KycMixin:
             self._kyc_webhook(c, aid)
         after = self.identity(user_id)
         if after["dob_conflict"]:
-            with self.db.tx() as c:
+            with self.db.tx(user_id) as c:
                 self._alert(c, [user_id], "kyc_dob_conflict", "Banks disagree on your date of birth",
                             "Two banks reported different dates of birth, so we can't confirm your age. "
                             "Ask one of them to correct their record.", user_id)
@@ -233,7 +233,7 @@ class KycMixin:
         r = self._own_attestation(user_id, aid)
         if r["status"] not in LIVE:
             raise Conflict(f"attestation is already {r['status']}")
-        with self.db.tx() as c:
+        with self.db.tx(user_id) as c:
             c.execute("UPDATE kyc_attestations SET status='withdrawn', decided_at=?, ended_by=? WHERE id=?",
                       (self._now(), user_id, aid))
             self._audit(c, user_id, "kyc.withdrawn", user_id, attestation_id=aid)

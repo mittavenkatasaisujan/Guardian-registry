@@ -107,7 +107,7 @@ class DeviceKeyMixin:
     def new_challenge(self) -> dict:
         nonce = new_secret("chl")
         exp = self.clock.now() + CHALLENGE_TTL
-        with self.db.tx() as c:
+        with self.db.tx(shared=True) as c:
             c.execute("INSERT INTO auth_challenges (nonce_hash, expires_at) VALUES (?,?)", (secret_hash(nonce), iso(exp)))
             c.execute("DELETE FROM auth_challenges WHERE expires_at < ?", (iso(self.clock.now() - CHALLENGE_TTL),))
         return {"challenge": nonce, "expires_at": iso(exp),
@@ -115,7 +115,7 @@ class DeviceKeyMixin:
 
     def _verify_proof(self, public_key_b64: str, challenge: str, signature_b64: str) -> str:
         """Check the signature and burn the challenge. Returns the key id."""
-        with self.db.tx() as c:
+        with self.db.tx(shared=True) as c:
             used = c.execute("UPDATE auth_challenges SET used_at=? WHERE nonce_hash=? AND used_at IS NULL "
                              "AND expires_at>?", (self._now(), secret_hash(challenge or ""), self._now())).rowcount
         if not used:
@@ -188,7 +188,7 @@ class DeviceKeyMixin:
                 for r in self.db.all("SELECT * FROM device_keys WHERE user_id=? ORDER BY created_at", (uid,))]
 
     def revoke_device_key(self, uid: str, key_id: str) -> list[dict]:
-        with self.db.tx() as c:
+        with self.db.tx(uid) as c:
             if not c.execute("UPDATE device_keys SET revoked_at=? WHERE user_id=? AND key_id=? AND revoked_at IS NULL",
                              (self._now(), uid, key_id)).rowcount:
                 raise NotFound("device key not found")

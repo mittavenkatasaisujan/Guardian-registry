@@ -114,7 +114,7 @@ class ParticipantMixin:
     def list_participants(self, status: str | None = None) -> list[dict]:
         if status and status not in STATUSES:
             raise Invalid(f"status must be one of {list(STATUSES)}")
-        rows = self.db.all("SELECT id FROM participants" + (" WHERE status=?" if status else "") +
+        rows = self.db.all("SELECT id FROM participants" + (" WHERE status=?" if status else "") +  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
                            " ORDER BY created_at", (status,) if status else ())
         return [self.participant_view(r["id"]) for r in rows]
 

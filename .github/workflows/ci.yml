@@ -292,3 +292,19 @@ jobs:
           gradle -p sdk/java test --no-daemon
       - if: failure()
         run: tail -100 server.log || true
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt pip-audit==2.7.3 bandit==1.8.0
+      - name: Known vulnerabilities in the runtime dependencies
+        run: pip-audit -r requirements-runtime.txt --strict
+      - name: Static analysis (medium and high findings fail the build)
+        run: bandit -r guardian_registry -ll -q
+      - name: Authorization matrix
+        run: python -m pytest -q tests/test_authz.py

@@ -219,7 +219,7 @@ class PrivacyMixin:
         for table, col in (("sessions", "user_id"), ("push_tokens", "user_id"), ("device_keys", "user_id"),
                            ("devices", "user_id"), ("trusted_payees", "principal_id"), ("consents", "user_id"),
                            ("sim_events", "user_id")):
-            c.execute(f"DELETE FROM {table} WHERE {col}=?", (uid,))
+            c.execute(f"DELETE FROM {table} WHERE {col}=?", (uid,))  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
         c.execute("DELETE FROM notifications WHERE recipient_type='user' AND recipient_id=?", (uid,))
         c.execute("UPDATE pending_changes SET status='cancelled' WHERE principal_id=? AND status='pending'", (uid,))
         self._audit(c, "system:privacy", "privacy.erased", uid, retained=sorted(RETAINED))

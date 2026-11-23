@@ -599,7 +599,7 @@ class PgConnection:
         tables = self._c.execute("SELECT table_name FROM information_schema.tables "
                                  "WHERE table_schema = current_schema() ORDER BY table_name").fetchall()
         for t in tables:
-            for row in self._c.execute(f'SELECT * FROM "{t["table_name"]}"').fetchall():
+            for row in self._c.execute(f'SELECT * FROM "{t["table_name"]}"').fetchall():  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
                 yield f"{t['table_name']}: {row!r}"
 
     def drop_schema(self) -> None:

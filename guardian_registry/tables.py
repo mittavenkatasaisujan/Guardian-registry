@@ -81,7 +81,12 @@ def xlsx_rows(raw: bytes, sheet: str | None = None) -> list[list[str]]:
 
     def xml(name: str):
         try:
-            return ET.fromstring(z.read(name))
+            data = z.read(name)
+            # A workbook part never needs a DTD; refusing one rules out entity-expansion and
+            # external-entity tricks whatever the XML parser's defaults are.
+            if b"<!DOCTYPE" in data[:4096].upper() or b"<!ENTITY" in data.upper():
+                raise TableError(f"{name} declares a DTD; refusing it")
+            return ET.fromstring(data)  # nosec B314: DTDs refused above; the stdlib parser resolves no external entities
         except KeyError:
             return None
         except ET.ParseError:
