@@ -80,7 +80,19 @@ wait next time). Reporting twice is safe.
   (`DELETE /v1/signals/fraud-payees/{payee}`) and check a payee (`GET`); you never learn which bank
   reported it.
 
-## 6. Prove it works
+## 6. Label outcomes
+
+When you learn how a checked payment turned out (the customer reported fraud and you confirmed it, or
+you confirmed it was genuine), tell the registry:
+
+```
+POST /v1/checks/{check_id}/fraud-label   {"fraud": true, "note": "complaint 2026-118"}
+```
+
+Labels never change the check. They let operators measure how well each scam signal predicts real
+fraud and tune the thresholds for everyone (`label_fraud` / `labelFraud` in the libraries).
+
+## 7. Prove it works
 
 ```
 python scripts/bank_conformance.py https://sandbox.registry.example.in --admin <sandbox operator token>
@@ -89,7 +101,7 @@ python scripts/bank_conformance.py https://sandbox.registry.example.in --admin <
 It registers a test bank and a protected family in the sandbox, starts a webhook receiver, and checks
 the whole flow: an allowed payment and its outcome, idempotent retries, a payment held for a guardian
 and approved (with a signed webhook), a denied one, a customer who isn't enrolled, a reported fraud
-payee, and that a tampered webhook fails verification. Every line must say PASS.
+payee, labelling an outcome, and that a tampered webhook fails verification. Every line must say PASS.
 
 ## Errors and limits
 

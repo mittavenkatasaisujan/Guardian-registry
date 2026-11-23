@@ -476,8 +476,27 @@ CREATE TABLE payee_decisions (
 );
 """
 
+# v17: tuning the scam signals: features measured on every check, outcome labels, settings
+SCHEMA_V17 = """
+ALTER TABLE checks ADD COLUMN features TEXT;
+ALTER TABLE checks ADD COLUMN signals TEXT;
+ALTER TABLE checks ADD COLUMN fraud_label TEXT;
+ALTER TABLE checks ADD COLUMN fraud_labelled_by TEXT;
+ALTER TABLE checks ADD COLUMN fraud_labelled_at TEXT;
+CREATE TABLE signal_settings (
+    id          TEXT PRIMARY KEY,
+    settings    TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    reason      TEXT,
+    proposed_by TEXT NOT NULL,
+    proposed_at TEXT NOT NULL,
+    decided_by  TEXT,
+    decided_at  TEXT
+);
+"""
+
 MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8, SCHEMA_V9,
-              SCHEMA_V10, SCHEMA_V11, SCHEMA_V12, SCHEMA_V13, SCHEMA_V14, SCHEMA_V15, SCHEMA_V16]
+              SCHEMA_V10, SCHEMA_V11, SCHEMA_V12, SCHEMA_V13, SCHEMA_V14, SCHEMA_V15, SCHEMA_V16, SCHEMA_V17]
 
 # Postgres-only follow-ups, run after the baseline or after the portable migration of the
 # same version. v11: audit rows get their global seq from a sequence (SQLite's INTEGER

@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
-__version__ = "0.20.0"
+__version__ = "0.21.0"
 WAITING = ("cooling_off", "pending_approval")
 RETRY_STATUSES = (429, 502, 503, 504)
 
@@ -171,6 +171,11 @@ class Client:
             if e.status == 409 and "already reported" in e.detail:
                 return self.get_check(check_id)  # a retry of a report that already arrived
             raise
+
+    def label_fraud(self, check_id: str, fraud: bool, note: str | None = None) -> dict:
+        """Once you know the outcome: confirmed fraud (True) or genuine (False). Labels tune the
+        scam signals for every bank; they never change the check."""
+        return self._call("POST", f"/v1/checks/{check_id}/fraud-label", {"fraud": fraud, "note": note})
 
     # ------------------------------------------------------------------ signals
     def report_sim_change(self, mobile: str, changed_at: str | None = None) -> dict:

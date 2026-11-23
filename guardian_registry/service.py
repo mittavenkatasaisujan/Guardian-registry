@@ -28,7 +28,7 @@ from .kyc import KycMixin
 from .certs import CertMixin
 from .registerfeed import RegisterFeedMixin
 from .privacy import PrivacyMixin
-from .scamsignals import ScamSignalsMixin
+from .scamsignals import ScamSignalsMixin, signals_from
 from .channels import ChannelMixin
 from .devicekeys import DeviceKeyMixin, KeyAttestor
 from .participants import ParticipantMixin
@@ -798,6 +798,8 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         ).fetchone()["s"]
         rules = self._rules_raw(principal_id)
         known = self._payee_known(principal_id, payee)
+        features = self._risk_features(c, principal_id, amount, payee, known)  # measured always (shadow mode)
+        fired = signals_from(features, self.active_signal_settings())
         decision = evaluate(
             rules, Transaction(amount=amount, payee=payee, channel=channel),
             spent_today=spent,
@@ -805,7 +807,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             sim_swap_recent=self.sim_swap_active(principal_id),
             has_active_guardian=bool(self._approver_ids(principal_id)),
             payee_watch=self._watch(c, payee),
-            risk_signals=self._risk_signals(c, principal_id, amount, payee, known) if rules.scam_signals else [],
+            risk_signals=[text for _, text in fired] if rules.scam_signals else [],
         )
         status = _OUTCOME_TO_STATUS[decision.outcome]
         release_at = iso(now + timedelta(minutes=decision.delay_minutes)) if decision.outcome is Outcome.DELAY else None
@@ -814,10 +816,11 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         cid = new_id("chk")
         c.execute(
             "INSERT INTO checks (id, principal_id, participant_id, participant_txn_id, amount, payee, channel, "
-            "outcome, status, reasons, day, created_at, release_at, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "outcome, status, reasons, day, created_at, release_at, expires_at, features, signals) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (cid, principal_id, participant_id, participant_txn_id, amount, payee, channel,
              decision.outcome.value, status.value, json.dumps(decision.reasons, ensure_ascii=False),
-             day, iso(now), release_at, expires_at),
+             day, iso(now), release_at, expires_at, json.dumps(features), json.dumps([c_ for c_, _ in fired])),
         )
         self._audit(c, participant_id, "check.decided", principal_id, check_id=cid,
                     amount=amount, payee=payee, channel=channel, outcome=decision.outcome.value)

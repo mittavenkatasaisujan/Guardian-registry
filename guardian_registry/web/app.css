@@ -219,3 +219,8 @@ ul.list > li:first-child { border-top: none; }
 /* language switch in the header */
 .lang { margin-left: auto; background: transparent; border: 1px solid rgba(255, 255, 255, 0.6); color: inherit; padding: 4px 12px; min-height: 0; font-size: 0.95rem; }
 .bar nav { order: 3; }
+
+/* operator console tables */
+table.grid { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+table.grid th, table.grid td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line, rgba(127,127,127,0.3)); }
+table.grid th { color: var(--muted); font-weight: 600; }

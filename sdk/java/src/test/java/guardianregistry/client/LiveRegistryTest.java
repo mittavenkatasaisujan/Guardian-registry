@@ -41,6 +41,7 @@ class LiveRegistryTest {
         CheckResult done = gr.waitForDecision(r.checkId(), Duration.ofSeconds(10), Duration.ofMillis(200));
         assertEquals("approved", done.status());
         assertTrue(done.mayExecute());
+        assertEquals("genuine", gr.labelFraud(r.checkId(), false, "java live test").getString("label"));
     }
 
     @Test void notEnrolledPassesThrough() {

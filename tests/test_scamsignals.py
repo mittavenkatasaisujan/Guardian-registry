@@ -145,7 +145,7 @@ class TestCoachingPatterns:
         night = Registry(reg.db, FixedClock(datetime(2026, 11, 23, 20, 30, tzinfo=timezone.utc)))  # 02:00 IST
         night.update_rules(family["amma"], {"scam_signals": True})
         out = night.check(family["bank"], AMMA, "night", 6_000 * R, "known@upi")
-        assert "a large payment between midnight and 5 am" in out["reasons"]
+        assert "a large payment at night (00:00 to 05:00)" in out["reasons"]
 
     def test_turning_it_off_is_held(self, reg, signals_on):
         out = reg.update_rules(signals_on["amma"], {"scam_signals": False})
@@ -163,5 +163,5 @@ class TestCoachingPatterns:
 
 def test_new_reasons_have_hindi():
     for reason in ("banks have confirmed fraud involving this payee", "a bank has reported fraud involving this payee",
-                   "3 new payees in 24 hours", "a large payment between midnight and 5 am"):
+                   "3 new payees in 24 hours", "a large payment at night (00:00 to 05:00)"):
         assert messages._value(reason, 2) != reason

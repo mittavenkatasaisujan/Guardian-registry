@@ -167,7 +167,7 @@ FRAGMENTS_HI = {
         "इस व्यक्ति के सामान्य भुगतानों से बहुत बड़ा (90 दिनों में सबसे बड़ा: {0})",
     "{0} new payees in 24 hours": "24 घंटों में {0} नए प्राप्तकर्ता",
     "a request to loosen protection is waiting": "सुरक्षा ढीली करने का एक अनुरोध प्रतीक्षा में है",
-    "a large payment between midnight and 5 am": "आधी रात से सुबह 5 बजे के बीच बड़ा भुगतान",
+    "a large payment at night ({0}:00 to {1}:00)": "रात में बड़ा भुगतान ({0}:00 से {1}:00 के बीच)",
     "kill switch is on: all outgoing payments are paused": "सभी भुगतान रोकने वाला बटन चालू है: सभी भुगतान रुके हुए हैं",
     "channel '{0}' is switched off": "माध्यम '{0}' बंद है",
     "amount {0} is over the per-payment limit {1}": "राशि {0} एक भुगतान की सीमा {1} से ज़्यादा है",

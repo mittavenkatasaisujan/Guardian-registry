@@ -12,7 +12,8 @@ person and their guardian, registers a webhook receiver on localhost, then check
   4. a denied payment arrives by webhook with may_execute = false;
   5. a customer who isn't enrolled passes straight through;
   6. a reported fraud payee holds the payment;
-  7. a tampered webhook body fails verification.
+  7. an outcome label (fraud / genuine) is accepted;
+  8. a tampered webhook body fails verification.
 
 Partner banks run the same script against the sandbox before going live. --setup-env writes
 the test bank's key and the test people for other clients (the Java library's live test).
@@ -163,6 +164,9 @@ def main(argv=None) -> int:
     held = gr.check(elder, f"mule-{run}", 100 * R, f"mule-{run}@upi")
     assert held.waiting and any("reported fraud" in x for x in held.reasons), held
     passed("reported fraud payee holds the payment")
+
+    assert gr.label_fraud(deny.check_id, True, "conformance: customer confirmed a scam")["label"] == "fraud"
+    passed("outcome label accepted")
 
     assert not verify_webhook(secret, body.replace(b"approved", b"APPROVED"), sig)
     passed("tampered webhook body fails verification")

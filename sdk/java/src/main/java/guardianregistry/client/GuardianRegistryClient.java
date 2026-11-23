@@ -33,7 +33,7 @@ import org.json.JSONObject;
  * Amounts are long paise.
  */
 public final class GuardianRegistryClient {
-    public static final String VERSION = "0.20.0";
+    public static final String VERSION = "0.21.0";
     private static final int[] RETRY = {429, 502, 503, 504};
 
     private final String base;
@@ -104,6 +104,12 @@ public final class GuardianRegistryClient {
             if (e.status() == 409 && e.detail().contains("already reported")) return getCheck(checkId);
             throw e;
         }
+    }
+
+    /** Once you know the outcome: confirmed fraud (true) or genuine (false). Tunes the scam signals. */
+    public JSONObject labelFraud(String checkId, boolean fraud, String note) {
+        return call("POST", "/v1/checks/" + enc(checkId) + "/fraud-label",
+            new JSONObject().put("fraud", fraud).put("note", note == null ? JSONObject.NULL : note), true);
     }
 
     /** After you confirmed a fraud: protects every bank's customers from this payee. */

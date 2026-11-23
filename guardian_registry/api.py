@@ -152,6 +152,22 @@ class FraudPayeeIn(BaseModel):
     evidence_ref: str | None = Field(default=None, max_length=100, description="your case or complaint number")
 
 
+class FraudLabelIn(BaseModel):
+    fraud: bool = Field(description="true: confirmed fraud; false: confirmed genuine")
+    note: str | None = Field(default=None, max_length=200)
+
+
+class SignalSettingsIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    large_multiple: float | None = None
+    large_min: int | None = Field(default=None, description="paise")
+    min_prior: int | None = None
+    burst_count: int | None = None
+    night_start: int | None = None
+    night_end: int | None = None
+    reason: str = Field(min_length=5, max_length=500, description="why: e.g. which tuning report this follows")
+
+
 class WatchDecisionIn(BaseModel):
     reason: str = Field(min_length=5, max_length=500)
 
@@ -553,6 +569,38 @@ def create_app(
         from .secrets_store import rotate_data_key as rotate
         return rotate(reg.db, min(max(limit, 1), 10000))
 
+    @app.get("/v1/admin/signals/report", tags=["ops"])
+    def signals_report(_: Operator, days: int = 90, max_hold_rate: float = 0.05):
+        """How well each scam signal predicts confirmed fraud, what other thresholds would do,
+        suggestions within a hold-rate budget, and the registry's impact."""
+        return reg.tuning_report(min(max(days, 1), 365), min(max(max_hold_rate, 0.001), 0.5))
+
+    @app.get("/v1/admin/signals/settings", tags=["ops"])
+    def signals_settings(_: Operator):
+        return reg.signal_settings_view()
+
+    @app.put("/v1/admin/signals/settings", tags=["ops"])
+    def propose_signals(body: SignalSettingsIn, op: Operator):
+        """Propose new thresholds; a second operator approves them."""
+        changes = body.model_dump(exclude_none=True)
+        reason = changes.pop("reason")
+        out = reg.propose_signal_settings(op, changes, reason)
+        if single_operator:
+            out = reg.decide_signal_settings(op, True, allow_self=True)
+        return out
+
+    @app.post("/v1/admin/signals/settings/approve", tags=["ops"])
+    def approve_signals(op: Operator):
+        return reg.decide_signal_settings(op, True, allow_self=single_operator)
+
+    @app.post("/v1/admin/signals/settings/reject", tags=["ops"])
+    def reject_signals(op: Operator):
+        return reg.decide_signal_settings(op, False)
+
+    @app.post("/v1/admin/checks/{check_id}/fraud-label", tags=["ops"])
+    def admin_label(check_id: str, body: FraudLabelIn, op: Operator):
+        return reg.label_check(f"operator:{op}", check_id, body.fraud, body.note)
+
     @app.get("/v1/admin/watchlist", tags=["ops"])
     def admin_watchlist(_: Operator):
         """Payees banks have reported for fraud, with the reports and any operator decision."""
@@ -697,6 +745,12 @@ def create_app(
         reg.logout(token, everywhere=body.everywhere)
 
     # --------------------------------------------------------- participants
+    @app.post("/v1/checks/{check_id}/fraud-label", tags=["banks"])
+    def label_check(check_id: str, body: FraudLabelIn, pid: Participant):
+        """Once you know: was this payment fraud (the customer reported it and you confirmed) or
+        genuine? Labels tune the scam signals for everyone; they never change the check."""
+        return reg.label_check(pid, check_id, body.fraud, body.note, participant_id=pid)
+
     @app.post("/v1/signals/fraud-payees", status_code=201, tags=["banks"])
     def report_fraud_payee(body: FraudPayeeIn, pid: Participant):
         """Report a payee after you confirmed a fraud. Every bank's protected customers are then

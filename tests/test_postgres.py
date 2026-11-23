@@ -114,6 +114,9 @@ class TestMultiNode:
         c.execute("ALTER TABLE users DROP COLUMN language")  # v15
         c.execute("DROP TABLE payee_reports")  # v16
         c.execute("DROP TABLE payee_decisions")
+        for col in ("features", "signals", "fraud_label", "fraud_labelled_by", "fraud_labelled_at"):  # v17
+            c.execute(f"ALTER TABLE checks DROP COLUMN {col}")
+        c.execute("DROP TABLE signal_settings")
         c.execute("DROP TABLE device_keys")
         c.execute("DROP TABLE auth_challenges")
         c.execute("ALTER TABLE sessions DROP COLUMN device_key_id")

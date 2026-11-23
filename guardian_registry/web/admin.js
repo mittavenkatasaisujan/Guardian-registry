@@ -200,6 +200,50 @@ async function watchlistView() {
       : h("p", { class: "empty" }, "No payee has been reported."))];
 }
 
+// ------------------------------------------------------------------ scam-signal tuning
+const pct = (x) => (x === null || x === undefined ? "–" : `${Math.round(x * 1000) / 10}%`);
+const SETTING_LABELS = {
+  large_multiple: "Much larger than usual (× largest in 90 days)", large_min: "Size that counts (paise)",
+  min_prior: "Earlier payments needed", burst_count: "New payees in 24 h", night_start: "Night from (hour)",
+  night_end: "Night until (hour)",
+};
+
+async function signalsView() {
+  const [rep, settings] = await Promise.all([api("GET", "/v1/admin/signals/report?days=90"), api("GET", "/v1/admin/signals/settings")]);
+  const row = (label, m) => h("tr", {}, h("td", {}, label), h("td", {}, String(m.held)), h("td", {}, pct(m.hold_rate)),
+    h("td", {}, pct(m.precision)), h("td", {}, pct(m.recall)));
+  const table = (rows) => h("table", { class: "grid" },
+    h("thead", {}, h("tr", {}, ["Signal", "Held", "Hold rate", "Precision", "Recall"].map((x) => h("th", {}, x)))), h("tbody", {}, rows));
+  const p = settings.pending;
+  return [h("h1", {}, "Scam signals"),
+    h("p", { class: "muted" }, `Last ${rep.days} days: ${rep.checks} protected payments, ${rep.labelled} labelled by banks, ${rep.confirmed_fraud} confirmed fraud.`),
+    rep.note ? h("p", { class: "card alert-warn" }, rep.note) : null,
+    h("section", { class: "card" }, h("h2", {}, "How each signal does"),
+      table([row("Any signal", rep.all_signals), ...Object.entries(rep.per_signal).map(([k, m]) => row(k, m))])),
+    h("section", { class: "card" }, h("h2", {}, "Thresholds"),
+      h("dl", { class: "rules" }, Object.entries(settings.active).map(([k, v]) => [h("dt", {}, SETTING_LABELS[k] || k), h("dd", {}, String(v))])),
+      p ? h("div", { class: "card alert-warn mt" },
+        h("p", {}, `Waiting for a second operator: ${Object.entries(p.settings).filter(([k, v]) => v !== settings.active[k]).map(([k, v]) => `${k} → ${v}`).join(", ") || "no change"}`),
+        h("p", { class: "muted small" }, `proposed by ${p.proposed_by}: ${p.reason || ""}`),
+        h("div", { class: "row" },
+          h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", "/v1/admin/signals/settings/approve"), "Approved.") }, "Approve"),
+          h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("POST", "/v1/admin/signals/settings/reject"), "Rejected.") }, "Reject"))) : null),
+    h("section", { class: "card" }, h("h2", {}, "Suggestions"),
+      rep.suggestions.length ? h("ul", { class: "list" }, rep.suggestions.map((s) => h("li", {},
+        h("p", {}, h("strong", {}, SETTING_LABELS[s.setting] || s.setting), `: ${s.from} → ${s.to}`),
+        h("p", { class: "muted small" }, `precision ${pct(s.precision)}, recall ${pct(s.recall)}, hold rate ${pct(s.hold_rate)}`),
+        h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("PUT", "/v1/admin/signals/settings",
+          { [s.setting]: s.to, reason: `tuning report: precision ${pct(s.precision)}, recall ${pct(s.recall)}` }), "Proposed; a second operator approves it.") }, "Propose this"))))
+        : h("p", { class: "empty" }, "No change suggested.")),
+    h("section", { class: "card" }, h("h2", {}, "Impact"),
+      h("dl", { class: "rules" },
+        h("dt", {}, "Held for review"), h("dd", {}, String(rep.impact.held_for_review)),
+        h("dt", {}, "Stopped"), h("dd", {}, String(rep.impact.stopped)),
+        h("dt", {}, "Amount stopped (₹)"), h("dd", {}, (rep.impact.amount_stopped / 100).toLocaleString("en-IN")),
+        h("dt", {}, "Confirmed fraud stopped"), h("dd", {}, String(rep.impact.confirmed_fraud_stopped)),
+        h("dt", {}, "Confirmed fraud that went through"), h("dd", {}, String(rep.impact.confirmed_fraud_that_went_through))))];
+}
+
 // ------------------------------------------------------------------ registers
 async function registersView() {
   const [regs, feeds] = await Promise.all([api("GET", "/v1/admin/register"), api("GET", "/v1/admin/register-feeds")]);
@@ -238,7 +282,7 @@ async function systemView() {
 }
 
 // ------------------------------------------------------------------ shell
-const VIEWS = { queue: queueView, participants: participantsView, watchlist: watchlistView, registers: registersView, system: systemView };
+const VIEWS = { queue: queueView, participants: participantsView, watchlist: watchlistView, signals: signalsView, registers: registersView, system: systemView };
 
 function show(nodes) {
   const v = document.getElementById("view");

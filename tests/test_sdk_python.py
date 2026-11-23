@@ -119,6 +119,14 @@ def test_fraud_payee_report_and_status(app_client):
     assert gr.check(AMMA, "T-8", 100 * R, "mule@upi").waiting
 
 
+def test_label_fraud(app_client, reg):
+    tc, key, _ = app_client
+    gr = sdk(tc, key)
+    res = gr.check(AMMA, "T-9", 100 * R, "known@upi")
+    assert gr.label_fraud(res.check_id, True, "complaint 9")["label"] == "fraud"
+    assert reg.db.one("SELECT fraud_label FROM checks WHERE id=?", (res.check_id,))["fraud_label"] == "fraud"
+
+
 def test_webhooks():
     assert verify_webhook(VECTOR_SECRET, VECTOR_BODY, VECTOR_SIG)
     assert not verify_webhook(VECTOR_SECRET, VECTOR_BODY + b" ", VECTOR_SIG)
