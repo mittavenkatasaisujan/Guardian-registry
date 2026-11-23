@@ -77,3 +77,17 @@ def test_webcrypto_signature_conversion_is_accepted(clock):
                                           "device_key": pub, "challenge": ch, "platform": "web",
                                           "device_proof": base64.b64encode(raw_to_der(raw)).decode()})
     assert out.status_code == 200, out.text
+
+
+def test_admin_console_follows_the_same_rules(clock):
+    html = (WEB_DIR / "admin.html").read_text(encoding="utf-8")
+    js = (WEB_DIR / "admin.js").read_text(encoding="utf-8")
+    assert not re.search(r"<script(?![^>]*\bsrc=)", html) and " style=" not in html
+    assert "innerHTML" not in js and "localStorage" not in js     # credential lives only in sessionStorage
+    from guardian_registry.api import create_app
+    from guardian_registry.service import Registry
+    from .conftest import new_db
+    with TestClient(create_app(Registry(new_db(), clock), run_worker=False)) as c:
+        r = c.get("/app/admin.html")
+        assert r.status_code == 200 and "frame-ancestors 'none'" in r.headers["content-security-policy"]
+        assert c.get("/app/admin.js").status_code == 200

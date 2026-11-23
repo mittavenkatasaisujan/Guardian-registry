@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex">
+  <title>Guardian Registry operators</title>
+  <link rel="stylesheet" href="app.css">
+  <script src="admin.js" defer></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="brand"><span class="shield" aria-hidden="true"></span>Registry operators</div>
+    <nav id="nav" hidden>
+      <a href="#queue" data-tab="queue">Waiting <span id="queue-count" class="badge" hidden></span></a>
+      <a href="#participants" data-tab="participants">Participants</a>
+      <a href="#registers" data-tab="registers">Registers</a>
+      <a href="#system" data-tab="system">System</a>
+    </nav>
+  </header>
+  <main id="view" tabindex="-1"></main>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <noscript><p class="card">This console needs JavaScript.</p></noscript>
+</body>
+</html>
