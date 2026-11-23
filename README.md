@@ -32,8 +32,16 @@ Android's Keystore attestation certificate carries the challenge, and iOS asks A
 `SHA256(prefix + challenge + device key)`. In the apps you sign in by SMS code, approve or deny payments (approvals
 ask you to confirm), stop held payments, accept guardian requests, pause your own payments, read alerts and report a
 lost phone. Push alerts come through FCM / APNs. CI compiles both apps on every push (Android on Linux with its unit
-tests, iOS for the simulator on macOS) and checks byte for byte that the apps and the server agree on the signing
+tests, iOS for the simulator on macOS). It checks byte for byte that the apps and the server agree on the signing
 input, the key encoding and the attestation format.
+
+CI also **runs the apps' own sign-in code against a live registry**:
+- **Android emulator:** the real Android Keystore creates a key with the server's challenge, enrols, then signs in
+  again as a *proven device*. A signature over the wrong challenge is refused.
+  [scripts/check_attestation.py](scripts/check_attestation.py) then checks the Keystore's real certificate chain with
+  the registry's parser: the chain verifies, it is bound to that key and challenge, and it names this app's package
+  and signing certificate. Replaying it with another challenge fails.
+- **iOS simulator:** the same flow with the Keychain key, plus the token store. App Attest is correctly absent there.
 
 
 | Feature | Behaviour |
@@ -207,10 +215,11 @@ guardian_registry/
   security.py   hashing, encryption, OTP, signatures, production checks
   ratelimit.py  sliding-window limiter
   api.py        FastAPI app (create_app factory) + background worker
-tests/          495 tests (9 need Postgres, 1 runs in the macOS CI job)
+tests/          498 tests (9 need Postgres, 1 runs in the macOS CI job; plus the apps' own tests)
 scripts/demo.py end-to-end story over real HTTP (also runs in CI)
 scripts/dev_server.py  fresh local server for trying the web app
 scripts/mirror_register.py  keygen / build a signed mirror of an official list
+scripts/check_attestation.py  checks real Keystore evidence from the emulator run
 android/        Android app (Kotlin): Keystore / StrongBox key with attestation, FCM push
 ios/            iOS app (SwiftUI, XcodeGen project.yml): Secure Enclave key, App Attest, APNs push
 ```
@@ -226,7 +235,7 @@ ios/            iOS app (SwiftUI, XcodeGen project.yml): Secure Enclave key, App
   - a Play Console signing key.
 
   The Google and Apple attestation roots must be downloaded from their documentation and pinned. Operator SIM data still needs an agreement with the mobile operators or an aggregator.
-- **Store releases:** the apps build in CI, but they are unsigned and haven't been run on physical phones; the simulator and emulator have no secure hardware or attestation. Release signing, store listings and testing on a range of devices must come before a launch.
+- **Physical phones:** the apps' sign-in runs in CI on an emulator and a simulator, but neither has a secure chip. The emulator's attestation is software-level and the simulator has no Secure Enclave or App Attest, so the hardware-backed checks have only been exercised on test certificates. The apps are also unsigned. Release signing, store listings and testing on a range of devices must come before a launch.
 - **Register sources:** spreadsheets and CSV files are read directly, and the mirror tool signs them. Lists published only as PDFs still need their table exported to a spreadsheet by a person, because PDF tables can't be read reliably and a misread licence would suspend a bank. Someone also has to run the mirror each month, or point a feed straight at the regulator's spreadsheet if its URL stays the same.
 - **Social engineering of contacts:** the hour's wait, the 24 h hold and the 72 h aftercare window reduce the damage of a contact being fooled, but a determined, patient attacker can still talk someone into vouching.
 - **One person's writes are serial:** two checks for the *same* person still run one after another (that's what keeps their daily limit exact). Rule and guardian changes take the database-wide lock; they are rare, but a burst of them pauses payment checks briefly.
