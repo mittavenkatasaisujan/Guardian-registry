@@ -168,6 +168,30 @@ class SignalSettingsIn(BaseModel):
     reason: str = Field(min_length=5, max_length=500, description="why: e.g. which tuning report this follows")
 
 
+class IncidentIn(BaseModel):
+    title: str = Field(min_length=5, max_length=200)
+    description: str = Field(min_length=10, max_length=5000, description="what happened, as far as known")
+    detected_at: str
+    occurred_from: str
+    occurred_to: str
+    categories: list[Literal["mobile_numbers", "names", "dates_of_birth", "payment_history", "sign_in_sessions",
+                             "device_data"]] = Field(min_length=1)
+    cause: str = Field(default="", max_length=5000)
+    containment: str = Field(default="", max_length=5000)
+    scope: Literal["window", "all", "users"] = "window"
+    user_ids: list[str] | None = Field(default=None, max_length=100000)
+
+
+class IncidentUpdateIn(BaseModel):
+    cause: str | None = Field(default=None, max_length=5000)
+    containment: str | None = Field(default=None, max_length=5000)
+    remediation: str | None = Field(default=None, max_length=5000)
+
+
+class BoardReportIn(BaseModel):
+    reference: str = Field(min_length=1, max_length=100, description="the Board's acknowledgement number")
+
+
 class WatchDecisionIn(BaseModel):
     reason: str = Field(min_length=5, max_length=500)
 
@@ -600,6 +624,42 @@ def create_app(
     @app.post("/v1/admin/checks/{check_id}/fraud-label", tags=["ops"])
     def admin_label(check_id: str, body: FraudLabelIn, op: Operator):
         return reg.label_check(f"operator:{op}", check_id, body.fraud, body.note)
+
+    @app.get("/v1/admin/incidents", tags=["ops"])
+    def list_incidents(_: Operator):
+        return reg.incidents()
+
+    @app.post("/v1/admin/incidents", status_code=201, tags=["ops"])
+    def record_incident(body: IncidentIn, op: Operator):
+        """Record a personal-data breach (DPDP Act): what, when, which data, who is affected."""
+        return reg.record_incident(op, body.title, body.description, body.detected_at, body.occurred_from,
+                                   body.occurred_to, body.categories, body.cause, body.containment, body.scope,
+                                   body.user_ids)
+
+    @app.patch("/v1/admin/incidents/{incident_id}", tags=["ops"])
+    def update_incident(incident_id: str, body: IncidentUpdateIn, op: Operator):
+        return reg.update_incident(op, incident_id, body.cause, body.containment, body.remediation)
+
+    @app.post("/v1/admin/incidents/{incident_id}/notify", tags=["ops"])
+    def propose_notify(incident_id: str, op: Operator):
+        """Propose telling every affected person; a second operator sends it."""
+        out = reg.propose_notification(op, incident_id)
+        if single_operator:
+            out = reg.send_notification(op, incident_id, allow_self=True)
+        return out
+
+    @app.post("/v1/admin/incidents/{incident_id}/notify/approve", tags=["ops"])
+    def approve_notify(incident_id: str, op: Operator):
+        return reg.send_notification(op, incident_id, allow_self=single_operator)
+
+    @app.get("/v1/admin/incidents/{incident_id}/board-report", tags=["ops"])
+    def board_report(incident_id: str, _: Operator):
+        """Everything the Data Protection Board's detailed report needs, and its 72-hour deadline."""
+        return reg.board_report(incident_id)
+
+    @app.post("/v1/admin/incidents/{incident_id}/board-report", tags=["ops"])
+    def record_board_report(incident_id: str, body: BoardReportIn, op: Operator):
+        return reg.record_board_report(op, incident_id, body.reference)
 
     @app.get("/v1/admin/watchlist", tags=["ops"])
     def admin_watchlist(_: Operator):

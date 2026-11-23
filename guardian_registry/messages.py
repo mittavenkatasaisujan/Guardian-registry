@@ -147,6 +147,11 @@ ALERTS_HI = {
         "{2} को नया नंबर जोड़ने में मदद करें।",
     "{0}. {1}'s account moves to {2} at {3} unless someone stops it.":
         "{0}। {1} का खाता {3} पर {2} पर चला जाएगा, जब तक कोई इसे न रोके।",
+    "A security incident may affect your data": "एक सुरक्षा घटना से आपका डेटा प्रभावित हो सकता है",
+    "On {0} we found a security incident that may have exposed {1}. What you can do: {2}. Your protection rules "
+    "and guardians are not affected. Questions: {3}.":
+        "{0} को हमें एक सुरक्षा घटना का पता चला, जिससे {1} उजागर हो सकते हैं। आप क्या कर सकते हैं: {2}। आपके सुरक्षा "
+        "नियम और गार्डियन प्रभावित नहीं हैं। सवालों के लिए: {3}।",
     "Guardian Registry code: {0}. Valid {1} min. Never share it with anyone, not even a guardian or a bank.":
         "Guardian Registry कोड: {0}। {1} मिनट तक मान्य। इसे किसी से साझा न करें, गार्डियन या बैंक से भी नहीं।",
 }
@@ -179,6 +184,18 @@ FRAGMENTS_HI = {
     "move their account to a new number ({0})": "अपना खाता नए नंबर ({0}) पर ले जाना",
     "approved": "मंज़ूर किया", "denied": "अस्वीकार किया", "cancelled": "रद्द किया",
     "is now your guardian": "अब आपके गार्डियन हैं", "declined your request": "ने आपका अनुरोध अस्वीकार किया",
+    # breach notices (breach.py)
+    "your mobile number": "आपका मोबाइल नंबर", "your name": "आपका नाम", "your date of birth": "आपकी जन्मतिथि",
+    "your payment history": "आपके भुगतानों का इतिहास", "your sign-in sessions": "आपके साइन-इन सत्र",
+    "data about your phone": "आपके फ़ोन से जुड़ी जानकारी",
+    "be careful with calls and messages that claim to be from us or your bank":
+        "हमारी या आपके बैंक की ओर से होने का दावा करने वाली कॉल और संदेशों से सावधान रहें",
+    "expect scam calls that use your name to sound genuine": "आपका नाम लेकर असली लगने वाली धोखाधड़ी कॉल आ सकती हैं",
+    "never confirm your date of birth to a caller": "किसी कॉल करने वाले को अपनी जन्मतिथि की पुष्टि कभी न करें",
+    "check your recent payments in the app": "ऐप में अपने हाल के भुगतान जाँचें",
+    "sign out everywhere in the app and sign in again": "ऐप में हर जगह से साइन आउट करें और फिर से साइन इन करें",
+    "ignore unexpected messages asking you to install apps or share codes":
+        "ऐप इंस्टॉल करने या कोड साझा करने के लिए कहने वाले अनचाहे संदेशों को अनदेखा करें",
     # SIM and number events (simswap.py, simfeed.py, recovery.py)
     "reported a lost or stolen phone": "ने फ़ोन खोने या चोरी होने की सूचना दी",
     "had their SIM card changed": "का सिम कार्ड बदला गया",

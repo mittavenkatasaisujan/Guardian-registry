@@ -152,7 +152,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 label { display: block; font-weight: 600; margin: 12px 0 6px; }
 
-input, select {
+input, select, textarea {
   font: inherit;
   width: 100%;
   min-height: 48px;

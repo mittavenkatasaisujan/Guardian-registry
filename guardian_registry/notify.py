@@ -52,6 +52,7 @@ URGENT_KINDS = {
     "recovery_requested",   # someone is recovering a contact's account
     "recovery_held",
     "sim_changed",          # a guardian's ward (or the guardian) had a SIM change / lost phone
+    "data_breach_notice",   # DPDP Act: affected people are told without delay
 }
 
 

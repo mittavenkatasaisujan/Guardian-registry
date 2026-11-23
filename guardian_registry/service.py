@@ -29,6 +29,7 @@ from .certs import CertMixin
 from .registerfeed import RegisterFeedMixin
 from .privacy import PrivacyMixin
 from .scamsignals import ScamSignalsMixin, signals_from
+from .breach import BreachMixin
 from .channels import ChannelMixin
 from .devicekeys import DeviceKeyMixin, KeyAttestor
 from .participants import ParticipantMixin
@@ -69,7 +70,7 @@ _OUTCOME_TO_STATUS = {
 
 
 class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryMixin, ChannelMixin,
-               DeviceKeyMixin, CertMixin, RegisterFeedMixin, PrivacyMixin, ScamSignalsMixin):
+               DeviceKeyMixin, CertMixin, RegisterFeedMixin, PrivacyMixin, ScamSignalsMixin, BreachMixin):
     def __init__(self, db: Database | None = None, clock: Clock | None = None,
                  sim_lookup: SimLookup | None = None, key_attestor: KeyAttestor | None = None):
         self.db = db or Database()

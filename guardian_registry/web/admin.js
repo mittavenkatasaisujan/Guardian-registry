@@ -244,6 +244,50 @@ async function signalsView() {
         h("dt", {}, "Confirmed fraud that went through"), h("dd", {}, String(rep.impact.confirmed_fraud_that_went_through))))];
 }
 
+// ------------------------------------------------------------------ personal-data incidents
+const CATS = ["mobile_numbers", "names", "dates_of_birth", "payment_history", "sign_in_sessions", "device_data"];
+
+async function incidentsView() {
+  const list = await api("GET", "/v1/admin/incidents");
+  const out = h("pre", { class: "card small", hidden: true });
+  const field = (id, label, type) => [h("label", { for: id }, label), h(type || "input", { id, required: true })];
+  const form = h("form", { class: "card", onsubmit: async (e) => {
+    e.preventDefault();
+    const v = (id) => document.getElementById(id).value.trim();
+    const cats = CATS.filter((c) => document.getElementById(`cat-${c}`).checked);
+    const iso = (id) => new Date(v(id)).toISOString();
+    try {
+      await api("POST", "/v1/admin/incidents", { title: v("i-title"), description: v("i-desc"), detected_at: iso("i-detected"),
+        occurred_from: iso("i-from"), occurred_to: iso("i-to"), categories: cats, cause: v("i-cause"), containment: v("i-contain") });
+      toast("Recorded. The Board report is due within 72 hours of detection.");
+      await render();
+    } catch (err) { toast(err.message); }
+  } }, h("h2", {}, "Record an incident"),
+    field("i-title", "Title"), field("i-desc", "What happened", "textarea"),
+    h("label", { for: "i-detected" }, "Detected at"), h("input", { id: "i-detected", type: "datetime-local", required: true }),
+    h("label", { for: "i-from" }, "Exposure from"), h("input", { id: "i-from", type: "datetime-local", required: true }),
+    h("label", { for: "i-to" }, "Exposure until"), h("input", { id: "i-to", type: "datetime-local", required: true }),
+    h("p", { class: "small" }, "Data that may be affected:"),
+    CATS.map((c) => h("label", { class: "small" }, h("input", { type: "checkbox", id: `cat-${c}` }), ` ${c.replace(/_/g, " ")}`)),
+    h("label", { for: "i-cause" }, "Cause (so far)"), h("textarea", { id: "i-cause" }),
+    h("label", { for: "i-contain" }, "Containment (so far)"), h("textarea", { id: "i-contain" }),
+    h("div", { class: "row mt" }, h("button", { type: "submit", class: "danger" }, "Record incident")));
+  return [h("h1", {}, "Personal-data incidents"),
+    h("p", { class: "muted" }, "DPDP Act: tell affected people without delay; send the Data Protection Board a detailed report within 72 hours."),
+    h("section", { class: "card" }, list.length ? h("ul", { class: "list" }, list.map((i) => h("li", {},
+      h("div", { class: "row space" }, h("strong", {}, i.title), pill(i.status, i.status === "open" ? "warn" : "ok")),
+      h("p", { class: "small" }, `${i.categories.join(", ")} · ${i.affected_people} people · detected ${when(i.detected_at)}`),
+      h("p", { class: `small ${i.board.overdue ? "" : "muted"}` }, i.board.reported_at ? `Board report filed: ${i.board.reference}` :
+        `${i.board.overdue ? "OVERDUE: " : ""}Board report due ${when(i.board.deadline)}`),
+      h("div", { class: "row" },
+        !i.notify.sent_at && !i.notify.proposed_by ? h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/admin/incidents/${i.id}/notify`), "Proposed; a second operator sends it.") }, "Propose notifying people") : null,
+        !i.notify.sent_at && i.notify.proposed_by ? h("button", { class: "danger", onclick: (e) => { if (window.confirm(`Send the notice to ${i.affected_people} people now?`)) act(e.target, () => api("POST", `/v1/admin/incidents/${i.id}/notify/approve`), "Sent."); } }, `Approve and send (proposed by ${i.notify.proposed_by})`) : null,
+        h("button", { class: "secondary", onclick: async () => { out.textContent = JSON.stringify(await api("GET", `/v1/admin/incidents/${i.id}/board-report`), null, 2); out.hidden = false; } }, "Board report"),
+        !i.board.reported_at ? h("button", { class: "secondary", onclick: (e) => { const ref = ask("The Board's acknowledgement number:"); if (ref) act(e.target, () => api("POST", `/v1/admin/incidents/${i.id}/board-report`, { reference: ref }), "Filing recorded."); } }, "Record filing") : null))))
+      : h("p", { class: "empty" }, "No incidents recorded.")),
+    out, form];
+}
+
 // ------------------------------------------------------------------ registers
 async function registersView() {
   const [regs, feeds] = await Promise.all([api("GET", "/v1/admin/register"), api("GET", "/v1/admin/register-feeds")]);
@@ -282,7 +326,7 @@ async function systemView() {
 }
 
 // ------------------------------------------------------------------ shell
-const VIEWS = { queue: queueView, participants: participantsView, watchlist: watchlistView, signals: signalsView, registers: registersView, system: systemView };
+const VIEWS = { queue: queueView, participants: participantsView, watchlist: watchlistView, signals: signalsView, incidents: incidentsView, registers: registersView, system: systemView };
 
 function show(nodes) {
   const v = document.getElementById("view");

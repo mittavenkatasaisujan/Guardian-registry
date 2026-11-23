@@ -495,8 +495,37 @@ CREATE TABLE signal_settings (
 );
 """
 
+# v18: personal-data breach response (breach.py)
+SCHEMA_V18 = """
+CREATE TABLE incidents (
+    id                 TEXT PRIMARY KEY,
+    title              TEXT NOT NULL,
+    description        TEXT NOT NULL,
+    cause              TEXT,
+    containment        TEXT,
+    remediation        TEXT,
+    categories         TEXT NOT NULL,
+    detected_at        TEXT NOT NULL,
+    occurred_from      TEXT NOT NULL,
+    occurred_to        TEXT NOT NULL,
+    scope              TEXT NOT NULL,
+    user_ids           TEXT,
+    status             TEXT NOT NULL,
+    created_by         TEXT NOT NULL,
+    created_at         TEXT NOT NULL,
+    notify_proposed_by TEXT,
+    notify_proposed_at TEXT,
+    notified_by        TEXT,
+    notified_at        TEXT,
+    notified_count     INTEGER,
+    board_reported_at  TEXT,
+    board_reference    TEXT
+);
+"""
+
 MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8, SCHEMA_V9,
-              SCHEMA_V10, SCHEMA_V11, SCHEMA_V12, SCHEMA_V13, SCHEMA_V14, SCHEMA_V15, SCHEMA_V16, SCHEMA_V17]
+              SCHEMA_V10, SCHEMA_V11, SCHEMA_V12, SCHEMA_V13, SCHEMA_V14, SCHEMA_V15, SCHEMA_V16, SCHEMA_V17,
+              SCHEMA_V18]
 
 # Postgres-only follow-ups, run after the baseline or after the portable migration of the
 # same version. v11: audit rows get their global seq from a sequence (SQLite's INTEGER
