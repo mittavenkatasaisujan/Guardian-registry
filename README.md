@@ -77,6 +77,12 @@ CI also **runs the apps' own sign-in code against a live registry**:
 | Bank API | Idempotent on `(participant, participant_txn_id)`. A failed payment frees the daily limit, and a completed one makes the payee "known". Customers who aren't enrolled pass through. Per-bank rate limit. **Key rotation** with a 24 h grace period. |
 | Privacy | Mobile numbers are stored as an HMAC hash (for lookups) and an encrypted copy (only for sending SMS). Never in plain text. Keys, tokens and OTP codes are stored only as hashes. Banks never see principal IDs. Logs mask numbers. |
 | Audit | Every change writes a SHA-256 **hash-chained** audit entry in the same transaction: one chain per person plus a `system` chain, so writes for different people never contend. `verify` walks every chain and detects any edited, deleted, reordered or moved row; its `head` is one hash over all chains. Entries written before per-person chains stay verifiable as the original chain. |
+| **Privacy (DPDP Act)** | `GET /v1/privacy/notice` states what is collected, why, for how long, people's rights and the grievance officer (`GR_GRIEVANCE_CONTACT`). Acceptance is recorded per notice version (`POST /v1/me/consents`). `GET /v1/me/data-export` returns everything held about the person as readable JSON: number, rules, guardians, payment checks, alerts, devices, sessions, identity claims with date of birth, SIM events, recoveries, consents and their audit trail. `POST /v1/me/erasure` deletes the account after a **7-day hold**, during which guardians are alerted and the person can cancel, so a scammer can't make someone remove their protection in one tap. After the hold, the number, name, devices, sessions, alerts and links are erased. Payment check records (without payees) and the audit chain stay, and the chain still verifies. The worker deletes delivered alerts after 180 days and ended sessions after 90. |
+| **Operator console** | `/app/admin.html`: a four-eyes queue (participant requests, certificate pins, new feeds, held register refreshes), participants (register, suspend, reinstate, offboard), registers and feeds, and system checks (audit verify, worker run, data-key rotation). Sign-in is with an operator token or an SSO ID token, kept in the tab's session storage only. It follows the same strict CSP as the people's app. |
+| **Languages** | The web app, the Android app and the iOS app are available in **English and Hindi**. The web app has a switch in the header and defaults to the browser's language; the phones follow the system language. A test fails if any web string lacks Hindi. |
+| **Operations** | `GET /metrics` serves Prometheus counters and histograms: requests by route template, check decisions, worker iterations, and outbox and register-feed gauges read from the shared database. It needs `GR_METRICS_TOKEN` and is off in production without it. `GET /readyz` checks the database and schema version. Every response and log line carries an `X-Request-ID`, and `GR_LOG_FORMAT=json` gives one JSON object per line. Any secret can come from a file (`GR_X_FILE`, for Docker or Kubernetes secrets and vault agents). `GR_DATA_KEY` can list several keys while you rotate: `POST /v1/admin/data-key/rotate` re-encrypts every stored secret. Behind a proxy, rate limits use the real client address from `X-Forwarded-For`, accepted only from `GR_TRUSTED_PROXIES`. |
+| **Deployment** | `deploy/docker-compose.yml` runs Postgres, two API nodes, nginx (TLS, optional bank client certificates, request IDs) and nightly `pg_dump` backups with a restore script. Secrets are Docker secrets read through `GR_*_FILE`. `scripts/deploy_init.py` creates the secrets, trial certificates and settings. CI starts the whole stack and runs `scripts/smoke_deploy.py` through nginx: TLS, four-eyes onboarding, the API key refused without its certificate, a forged certificate header refused, the real client certificate accepted, a sign-in and a check. CI also backs up, restores into a new database and verifies the restored audit chain. |
+| **Load test** | `scripts/loadtest.py` sends concurrent checks to several nodes and reports throughput and p50/p95/p99 latency. It also checks that **no person ever goes over their daily limit** while checks for the same person race on different nodes. In CI, two nodes on Postgres handle 4,000 checks at concurrency 64 with no errors and no limit exceeded (about 100 checks a second on a shared CI runner). |
 | Safe production start | With `GR_ENV=production` the server refuses to start on dev secrets, with no SMS gateway, or with the OTP dev echo on. |
 
 ## Run it
@@ -124,11 +130,19 @@ location /v1/ {
 }
 ```
 
-Docker (set the production variables below):
+With Docker (Postgres, two API nodes, nginx with TLS and bank client certificates, nightly backups):
 
 ```powershell
-docker build -t guardian-registry .
+python scripts/deploy_init.py --dev
 ```
+
+```powershell
+docker compose -f deploy/docker-compose.yml up -d --build
+```
+
+Then open https://localhost:8443/app/ (trust `deploy/certs/ca.pem`, or accept the warning) and the operator console at
+https://localhost:8443/app/admin.html with an operator token from `deploy/secrets/operators`. Without `--dev`,
+`deploy/.env` is set up for production and lists the provider settings to fill in.
 
 ### Configuration
 
@@ -142,7 +156,12 @@ docker build -t guardian-registry .
 | `GR_REQUIRE_ENTITY_REGISTER` | `1` refuses participants whose kind has no loaded register. Default `1` in production. |
 | `GR_ADMIN_TOKEN` | Development shortcut: a single operator called `admin`, which approves its own onboarding requests. Refused in production. Unset (with no `GR_OPERATORS`) means admin is disabled. |
 | `GR_PEPPER` | Secret for hashing mobile numbers. **Required in production.** |
-| `GR_DATA_KEY` | Fernet key for encrypting mobile numbers. **Required in production.** Generate one with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `GR_X_FILE` | For any setting `GR_X`, read the value from a file instead (Docker / Kubernetes secrets, vault agents). Setting both is an error. |
+| `GR_METRICS_TOKEN` | Bearer token for `GET /metrics`. Without it, metrics are open in development and off in production. |
+| `GR_LOG_FORMAT` | `json` for one JSON object per log line (with `request_id`); default is text |
+| `GR_GRIEVANCE_CONTACT` | Your grievance officer's contact, shown in the privacy notice (DPDP Act) |
+| `GR_RETENTION_ALERT_DAYS`, `GR_RETENTION_SESSION_DAYS` | How long delivered alerts (default 180) and ended sessions (default 90) are kept |
+| `GR_DATA_KEY` | Fernet key for encrypting mobile numbers (several, comma-separated, while rotating: the first encrypts). **Required in production.** Generate one with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
 | `GR_SMS_PROVIDER` | `twilio` (`GR_TWILIO_ACCOUNT_SID`, `GR_TWILIO_AUTH_TOKEN`, `GR_TWILIO_FROM`: a number or a Messaging Service `MG...`) or `msg91` (`GR_MSG91_AUTHKEY`, `GR_MSG91_OTP_TEMPLATE` with variable `otp`, `GR_MSG91_ALERT_TEMPLATE` with variable `title`). **This or `GR_SMS_URL` is required in production.** |
 | `GR_SMS_URL`, `GR_SMS_TOKEN` | Any other SMS gateway: POST `{"to","text"}` with a bearer token, through a thin adapter |
 | `GR_OTP_DEV_ECHO` | `1` returns the OTP in the response (development only, refused in production) |
@@ -172,9 +191,9 @@ Amounts are **integer paise**.
 | Who | Endpoints |
 |---|---|
 | Sign-in | `POST /v1/auth/challenge`, `POST /v1/recovery/start`, `POST /v1/recovery/status`, `POST /v1/auth/otp`, `POST /v1/auth/verify` (send `display_name` the first time to enrol and a stable `device_id`; the response says if the session is `restricted`), `POST /v1/auth/logout` |
-| Operator | `GET/POST /v1/admin/participants/{id}/certificates`, `POST /v1/admin/participants/{id}/certificates/{fp}/approve`, `DELETE /v1/admin/participants/{id}/certificates/{fp}`, `PUT /v1/admin/register/{kind}`, `GET /v1/admin/register`, `GET /v1/admin/register-feeds`, `PUT/DELETE /v1/admin/register-feeds/{kind}`, `POST /v1/admin/register-feeds/{kind}/{approve,refresh}`, `POST /v1/admin/register-feeds/{kind}/held/apply`, `DELETE /v1/admin/register-feeds/{kind}/held`, `POST/GET /v1/admin/participants` (body: `name`, `kind`, `regulator_ref`, optional `capabilities`), `GET /v1/admin/participants/{id}`, `POST /v1/admin/participants/{id}/{approve,reject,suspend,reinstate,offboard}`, `PUT /v1/admin/participants/{id}/capabilities`, `GET /v1/admin/audit/verify`, `POST /v1/admin/sweep` |
+| Operator | `GET/POST /v1/admin/participants/{id}/certificates`, `POST /v1/admin/participants/{id}/certificates/{fp}/approve`, `DELETE /v1/admin/participants/{id}/certificates/{fp}`, `PUT /v1/admin/register/{kind}`, `GET /v1/admin/register`, `GET /v1/admin/register-feeds`, `PUT/DELETE /v1/admin/register-feeds/{kind}`, `POST /v1/admin/register-feeds/{kind}/{approve,refresh}`, `POST /v1/admin/register-feeds/{kind}/held/apply`, `DELETE /v1/admin/register-feeds/{kind}/held`, `POST/GET /v1/admin/participants` (body: `name`, `kind`, `regulator_ref`, optional `capabilities`), `GET /v1/admin/participants/{id}`, `POST /v1/admin/participants/{id}/{approve,reject,suspend,reinstate,offboard}`, `PUT /v1/admin/participants/{id}/capabilities`, `GET /v1/admin/audit/verify`, `POST /v1/admin/sweep`, `POST /v1/admin/data-key/rotate`; plus `GET /metrics` and `GET /readyz` for monitoring |
 | Bank / app | `POST /v1/signals/sim-change`, `POST /v1/signals/operator-events` (telecom), `POST /v1/kyc/recovery-vouch`, `POST /v1/checks`, `GET /v1/checks/{id}`, `POST /v1/checks/{id}/outcome`, `POST /v1/kyc/attestations`, `GET/DELETE /v1/kyc/attestations/{id}`, `GET /v1/participant/me`, `GET/POST /v1/participant/certificates`, `DELETE /v1/participant/certificates/{fp}`, `PUT /v1/participant/webhook`, `POST /v1/participant/rotate-key` |
-| Person | `GET /v1/me`, `GET /v1/me/devices`, `DELETE /v1/me/devices/{key_id}`, `GET/PUT /v1/me/alerts`, `POST /v1/me/alerts/push`, `DELETE /v1/me/alerts/push/{id}`, `GET /v1/me/recoveries`, `POST /v1/me/recoveries/{id}/cancel`, `GET /v1/me/security`, `POST /v1/me/security/{lost-phone,confirm-sim-change}`, `POST /v1/me/mobile/{change,verify}`, `GET /v1/me/identity`, `POST /v1/me/identity/attestations/{id}/{approve,reject}`, `DELETE /v1/me/identity/attestations/{id}`, `GET /v1/me/notifications`, `POST /v1/me/notifications/read`, `GET /v1/presets`, `GET/PATCH /v1/me/rules`, `POST /v1/me/rules/preset/{name}`, `POST /v1/me/kill-switch/{on,off}`, `GET/POST /v1/me/guardians`, `DELETE /v1/me/guardians/{id}`, `GET /v1/me/changes`, `GET /v1/me/payments`, `POST /v1/me/payments/{id}/cancel`, `GET /v1/me/audit` |
+| Person | `GET /v1/privacy/notice`, `GET/POST /v1/me/consents`, `GET /v1/me/data-export`, `POST/DELETE /v1/me/erasure`, `GET /v1/me`, `GET /v1/me/devices`, `DELETE /v1/me/devices/{key_id}`, `GET/PUT /v1/me/alerts`, `POST /v1/me/alerts/push`, `DELETE /v1/me/alerts/push/{id}`, `GET /v1/me/recoveries`, `POST /v1/me/recoveries/{id}/cancel`, `GET /v1/me/security`, `POST /v1/me/security/{lost-phone,confirm-sim-change}`, `POST /v1/me/mobile/{change,verify}`, `GET /v1/me/identity`, `POST /v1/me/identity/attestations/{id}/{approve,reject}`, `DELETE /v1/me/identity/attestations/{id}`, `GET /v1/me/notifications`, `POST /v1/me/notifications/read`, `GET /v1/presets`, `GET/PATCH /v1/me/rules`, `POST /v1/me/rules/preset/{name}`, `POST /v1/me/kill-switch/{on,off}`, `GET/POST /v1/me/guardians`, `DELETE /v1/me/guardians/{id}`, `GET /v1/me/changes`, `GET /v1/me/payments`, `POST /v1/me/payments/{id}/cancel`, `GET /v1/me/audit` |
 | Guardian | `GET /v1/guardian/inbox`, `GET /v1/guardian/recoveries`, `POST /v1/guardian/recoveries/{id}/{approve,deny}`, `GET /v1/guardian/wards`, `POST /v1/guardian/invitations/{id}/{accept,decline}`, `POST /v1/guardian/guardianships/{id}/resign`, `POST /v1/guardian/payments/{id}/{approve,deny,cancel}`, `POST /v1/guardian/changes/{id}/{approve,veto}`, `GET /v1/guardian/wards/{pid}/{rules,payments,audit,security}`, `POST /v1/guardian/wards/{pid}/{lost-phone,confirm-sim-change}`, `POST /v1/guardian/wards/{pid}/kill-switch/{on,off}`, `POST /v1/guardian/wards/{pid}/trusted-payees` |
 
 **How a bank integrates:**
@@ -190,7 +209,7 @@ To verify a webhook, compare the `X-GR-Signature` header with `"sha256=" + hex(H
 
 ```
 guardian_registry/
-  web/          the people-facing web app (index.html, app.js, app.css), served at /app
+  web/          the people's web app (index.html, app.js, i18n.js) and the operator console (admin.html), at /app
   models.py     domain types, Rules.is_loosening
   policy.py     pure rules engine (no I/O)
   service.py    registry: sign-in, consent, held changes, checks, approvals, sweeper
@@ -204,6 +223,9 @@ guardian_registry/
   attestation.py Android Key Attestation and Apple App Attest, verified locally against pinned roots
   providers.py  Twilio / MSG91 SMS, WhatsApp Cloud API, FCM v1 and APNs push
   registerfeed.py automatic refresh of the official registers, held refreshes, auto-suspension
+  privacy.py    DPDP Act: notice and consent, data export, held erasure, retention
+  observability.py Prometheus metrics, request IDs, JSON logs
+  secrets_store.py secrets from files, data-key rotation
   tables.py     reads published .xlsx / CSV tables: header detection, forgiving header matching
   mirror.py     signed, deterministic mirrors of official lists (used by scripts/mirror_register.py)
   simswap.py    SIM-swap windows, device probation, restricted sessions, number change
@@ -215,28 +237,38 @@ guardian_registry/
   security.py   hashing, encryption, OTP, signatures, production checks
   ratelimit.py  sliding-window limiter
   api.py        FastAPI app (create_app factory) + background worker
-tests/          498 tests (9 need Postgres, 1 runs in the macOS CI job; plus the apps' own tests)
+tests/          519 tests (9 need Postgres, 1 runs in the macOS CI job; plus the apps' own tests)
 scripts/demo.py end-to-end story over real HTTP (also runs in CI)
 scripts/dev_server.py  fresh local server for trying the web app
 scripts/mirror_register.py  keygen / build a signed mirror of an official list
 scripts/check_attestation.py  checks real Keystore evidence from the emulator run
+scripts/deploy_init.py, smoke_deploy.py, loadtest.py  deployment setup, smoke test, load test
+deploy/         docker-compose (Postgres, two nodes, nginx mTLS, backups), nginx.conf, backup / restore
 android/        Android app (Kotlin): Keystore / StrongBox key with attestation, FCM push
 ios/            iOS app (SwiftUI, XcodeGen project.yml): Secure Enclave key, App Attest, APNs push
 ```
 
 ## Still open
 
-- **RBI's final rules:** RBI's revised directions on customer liability for digital fraud are final and take effect on 1 January 2027. The idea this registry implements, **a trusted person approving high-value payments for vulnerable customers, is still only in the April 2026 discussion paper**. The presets live in one file ([presets.py](guardian_registry/presets.py)) and the age cut-off is `SENIOR_AGE` in [kyc.py](guardian_registry/kyc.py), so both can follow the final text when it comes.
-- **Accounts and keys the code can't create:** every provider connection is built, but each needs an account:
-  - Twilio or MSG91, with DLT-registered templates;
+Everything that can be built in code is built. What is left needs people, accounts or decisions outside it:
+
+- **Provider accounts and keys:**
+  - Twilio or MSG91, with DLT-registered templates (one for codes, one for alerts);
   - a WhatsApp Business account with an approved template;
   - a Firebase project and an APNs key;
-  - an Apple developer team, for the App Attest and push entitlements;
+  - an Apple developer team, for signing, App Attest and push;
   - a Play Console signing key.
 
-  The Google and Apple attestation roots must be downloaded from their documentation and pinned. Operator SIM data still needs an agreement with the mobile operators or an aggregator.
-- **Physical phones:** the apps' sign-in runs in CI on an emulator and a simulator, but neither has a secure chip. The emulator's attestation is software-level and the simulator has no Secure Enclave or App Attest, so the hardware-backed checks have only been exercised on test certificates. The apps are also unsigned. Release signing, store listings and testing on a range of devices must come before a launch.
-- **Register sources:** spreadsheets and CSV files are read directly, and the mirror tool signs them. Lists published only as PDFs still need their table exported to a spreadsheet by a person, because PDF tables can't be read reliably and a misread licence would suspend a bank. Someone also has to run the mirror each month, or point a feed straight at the regulator's spreadsheet if its URL stays the same.
+  The Google and Apple attestation roots must be downloaded from their documentation and pinned. Operator SIM data needs an agreement with the mobile operators or an aggregator.
+- **Real phones and the stores:** the apps' sign-in runs in CI on an emulator and a simulator, which have no secure chip, so the hardware-backed checks have only met test certificates. Signed builds, store listings and testing on a range of devices come next.
+- **Hosting:** a domain and a server certificate from a public CA, a server or cloud account, and off-site storage for backups (object storage with versioning and a retention lock). Monitoring needs a Prometheus and alerting setup to scrape `/metrics`.
+- **Security and legal review:**
+  - an independent security audit and penetration test;
+  - a data-protection review of the notice, the retention periods and the lawful basis for each purpose under the DPDP Act and its rules, plus a breach-response process;
+  - a legal entity to act as the data fiduciary, and agreements with partner banks.
+- **RBI's final rules:** the liability directions take effect on 1 January 2027, but the trusted-person approval this registry implements is still only in the April 2026 discussion paper. Presets ([presets.py](guardian_registry/presets.py)) and the age cut-off (`SENIOR_AGE` in [kyc.py](guardian_registry/kyc.py)) can follow the final text.
+- **Register sources:** lists published only as PDFs need their table exported to a spreadsheet by a person. Someone must also run the mirror tool each month, unless a regulator keeps a stable spreadsheet URL.
+- **Languages beyond the apps' screens:** alerts, SMS texts and error messages from the server are English. Hindi SMS also needs Hindi DLT templates, and other Indian languages need translators.
 - **Social engineering of contacts:** the hour's wait, the 24 h hold and the 72 h aftercare window reduce the damage of a contact being fooled, but a determined, patient attacker can still talk someone into vouching.
 - **One person's writes are serial:** two checks for the *same* person still run one after another (that's what keeps their daily limit exact). Rule and guardian changes take the database-wide lock; they are rare, but a burst of them pauses payment checks briefly.
 - **Schema changes:** from v9 on, every migration must be plain SQL that runs on both SQLite and Postgres (`PORTABLE_FROM` in [db.py](guardian_registry/db.py)); Postgres applies them in place. A migration that needs a table rebuild would need its own Postgres step.
