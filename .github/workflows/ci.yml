@@ -137,7 +137,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO build | tail -40
       - name: Start a registry for the app to talk to
         run: |
-          GR_DB=ios-e2e.db python scripts/dev_server.py 8010 > server.log 2>&1 &
+          PYTHONUNBUFFERED=1 GR_DB=ios-e2e.db python scripts/dev_server.py 8010 > server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8010/healthz && break; sleep 1; done
       - name: Sign in from the app's code in the simulator (Keychain key, signing, server checks)
         run: |

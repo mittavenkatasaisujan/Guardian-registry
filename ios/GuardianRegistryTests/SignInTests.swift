@@ -88,6 +88,12 @@ final class SignInTests: XCTestCase {
         XCTAssertEqual(String(format: hi.localizedString(forKey: "Hello, %@", value: nil, table: nil), "Asha"), "नमस्ते, Asha")
     }
 
+    func testOnlyLocalServersSkipKeepAlive() {
+        XCTAssertTrue(Api.isLocal(URL(string: "http://127.0.0.1:8010")!))
+        XCTAssertTrue(Api.isLocal(URL(string: "http://localhost:8010")!))
+        XCTAssertFalse(Api.isLocal(URL(string: "https://registry.example.in")!))
+    }
+
     func testTokenStoreRoundTrip() {
         TokenStore.token = "gut_test"
         XCTAssertEqual(TokenStore.token, "gut_test")

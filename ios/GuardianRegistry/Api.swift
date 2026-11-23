@@ -17,6 +17,10 @@ struct Api {
         (Locale.preferredLanguages.first ?? "en").hasPrefix("hi") ? "hi" : "en"
     }
 
+    static func isLocal(_ url: URL) -> Bool {
+        ["127.0.0.1", "localhost", "::1"].contains(url.host ?? "")
+    }
+
     static var configuredBase: URL {
         let s = Bundle.main.object(forInfoDictionaryKey: "GRApiBase") as? String ?? ""
         return URL(string: s.isEmpty ? "https://registry.example.in" : s)!
@@ -30,6 +34,11 @@ struct Api {
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue(Api.language, forHTTPHeaderField: "Accept-Language")  // server errors in the phone's language
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        if Api.isLocal(base) {
+            // A development server on this machine: don't reuse keep-alive connections. The
+            // simulator's network stack has been seen to stall on a reused local connection.
+            req.setValue("close", forHTTPHeaderField: "Connection")
+        }
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
