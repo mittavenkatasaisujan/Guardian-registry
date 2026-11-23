@@ -20,6 +20,12 @@ os.environ.setdefault("GR_ADMIN_TOKEN", "dev-admin")
 os.environ.setdefault("GR_WORKER_INTERVAL", "2")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# `kill -USR1 <pid>` prints every thread's stack to stderr: for finding a stuck request
+import faulthandler  # noqa: E402
+import signal  # noqa: E402
+if hasattr(signal, "SIGUSR1"):
+    faulthandler.register(signal.SIGUSR1, all_threads=True)
 import uvicorn  # noqa: E402
 
 # keep idle connections longer than clients do, so a reused connection is never closed mid-request
