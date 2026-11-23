@@ -75,15 +75,16 @@ def bearer(t):
 step("health")
 print(call("GET", "/healthz"))
 
-step("operator Alice registers a bank and a UPI app; operator Bob must approve (four-eyes)")
+step("operator Alice registers a bank, a UPI app and a mobile operator; operator Bob must approve (four-eyes)")
 op1, op2 = {"X-Admin-Token": ADMIN}, {"X-Admin-Token": ADMIN2}
 keys = {}
-for label, kind, ref in (("Bank A", "bank", f"RBI-BANK-{run}"), ("UPI App B", "tpap", f"NPCI-TPAP-{run}")):
+for label, kind, ref in (("Bank A", "bank", f"RBI-BANK-{run}"), ("UPI App B", "tpap", f"NPCI-TPAP-{run}"),
+                         ("Telco C", "telecom", f"DOT-UL-{run}")):
     p = call("POST", "/v1/admin/participants", 201, headers=op1,
              json={"name": f"{label} {run}", "kind": kind, "regulator_ref": ref})
     keys[label] = ({"X-Api-Key": p["api_key"]}, p["participant_id"])
     print(f"{label}: {p['kind']} status={p['status']} capabilities={p['capabilities']}")
-sbi, app = keys["Bank A"][0], keys["UPI App B"][0]
+sbi, app, telco = keys["Bank A"][0], keys["UPI App B"][0], keys["Telco C"][0]
 r = c.post("/v1/checks", headers=sbi, json={"mobile": mobile(1), "participant_txn_id": "too-early",
                                             "amount": 100, "payee": "x@upi"})
 print("Bank A calls checks before approval ->", r.status_code, r.json()["detail"])
@@ -249,6 +250,33 @@ print("old key still works:", c.get("/healthz").status_code == 200 and
       c.post("/v1/checks", headers=sbi, json={"mobile": mobile(1), "participant_txn_id": "rot-old",
                                                "amount": 100, "payee": "veggies@upi"}).status_code == 200)
 sbi = {"X-Api-Key": new_key["api_key"]}
+
+step("NUMBER RECYCLED: Ravi's old number is disconnected, then given to a stranger")
+from datetime import datetime, timezone  # noqa: E402
+
+now = datetime.now(timezone.utc).isoformat()
+out = call("POST", "/v1/signals/operator-events", headers=telco, json={"events": [
+    {"event_id": f"dc-{run}", "type": "disconnected", "mobile": mobile(2), "occurred_at": now}]})
+print("Telco C reports the disconnection ->", out["counts"])
+again = call("POST", "/v1/signals/operator-events", headers=telco, json={"events": [
+    {"event_id": f"dc-{run}", "type": "disconnected", "mobile": mobile(2), "occurred_at": now}]})
+print("resent by mistake ->", again["results"][0]["result"])
+print("Ravi's account:", call("GET", "/v1/me", headers=G)["number_status"],
+      "| Amma is told:", call("GET", "/v1/me/notifications", headers=A)[0]["title"])
+for _ in range(25):  # wait out the OTP resend cooldown from the thief's sign-in above
+    r = c.post("/v1/auth/otp", json={"mobile": mobile(2)})
+    if r.status_code == 202:
+        break
+    time.sleep(2)
+else:
+    raise SystemExit(f"FAIL OTP for the stranger: {r.status_code} {r.text}")
+stranger = call("POST", "/v1/auth/verify", json={"mobile": mobile(2), "code": r.json()["dev_code"],
+                                                 "display_name": "New owner"})
+S = bearer(stranger["token"])
+print("stranger signs in with the old number -> new_user:", stranger["new_user"],
+      "| people they guard:", call("GET", "/v1/guardian/wards", headers=S))
+print("Ravi, on his signed-in phone, still guards:",
+      [w["principal_name"] for w in call("GET", "/v1/guardian/wards", headers=G) if w["status"] == "active"])
 
 step("Amma signs out of every device")
 c.post("/v1/auth/logout", json={"everywhere": True}, headers=A)

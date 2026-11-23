@@ -231,7 +231,33 @@ ALTER TABLE participants ADD COLUMN pending_at TEXT;
 CREATE UNIQUE INDEX ux_participant_regref ON participants(regulator_ref) WHERE regulator_ref IS NOT NULL;
 """
 
-MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5]
+# v6: mobile-operator SIM feed. Operator events are kept only as (event id, type, outcome)
+# for idempotency; no number. A disconnected number is detached from its account.
+SCHEMA_V6 = """
+ALTER TABLE users ADD COLUMN number_status TEXT NOT NULL DEFAULT 'active';  -- active | disconnected
+ALTER TABLE users ADD COLUMN mobile_since TEXT;          -- when this number was linked (NULL = created_at)
+ALTER TABLE users ADD COLUMN number_detached_at TEXT;
+
+CREATE TABLE operator_events (
+    participant_id TEXT NOT NULL REFERENCES participants(id),
+    event_id       TEXT NOT NULL,
+    type           TEXT NOT NULL,
+    occurred_at    TEXT NOT NULL,
+    received_at    TEXT NOT NULL,
+    outcome        TEXT NOT NULL,
+    PRIMARY KEY (participant_id, event_id)
+);
+
+CREATE TABLE sim_lookups (
+    user_id       TEXT PRIMARY KEY REFERENCES users(id),
+    checked_at    TEXT NOT NULL,
+    ok            INTEGER NOT NULL,
+    latest_change TEXT,
+    error         TEXT
+);
+"""
+
+MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6]
 
 
 class Database:

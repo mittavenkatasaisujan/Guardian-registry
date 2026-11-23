@@ -26,6 +26,7 @@ from .db import Database
 from .errors import Conflict, Forbidden, Invalid, NotFound, TooMany, Unauthorized
 from .kyc import KycMixin
 from .participants import ParticipantMixin
+from .simfeed import SimFeedMixin, SimLookup
 from .simswap import SimSwapMixin
 from .models import (
     CHANNELS, ChangeKind, ChangeStatus, CheckStatus, GuardianStatus, Outcome, Rules, Transaction,
@@ -60,10 +61,12 @@ _OUTCOME_TO_STATUS = {
 }
 
 
-class Registry(ParticipantMixin, KycMixin, SimSwapMixin):
-    def __init__(self, db: Database | None = None, clock: Clock | None = None):
+class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin):
+    def __init__(self, db: Database | None = None, clock: Clock | None = None,
+                 sim_lookup: SimLookup | None = None):
         self.db = db or Database()
         self.clock = clock or Clock()
+        self.sim_lookup = sim_lookup  # live operator SIM-swap check (simfeed.py); None = off
 
     # ------------------------------------------------------------------ helpers
     def _now(self) -> str:
@@ -269,6 +272,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin):
             raise Invalid("this number is not enrolled yet: send display_name to enrol")
         self._consume_otp(mh)
         if uid:
+            self.refresh_sim_status(uid, force=True)  # a fresh SIM change makes THIS session restricted
             token = new_secret("gut")
             with self.db.tx() as c:
                 device_hash, probation_until = self._register_device(c, uid, device_id)
@@ -296,7 +300,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin):
     def profile(self, user_id: str) -> dict:
         u = self._user(user_id)
         return {"id": u["id"], "display_name": u["display_name"], "enrolled_at": u["created_at"],
-                "identity_level": self.identity_level(user_id)}
+                "identity_level": self.identity_level(user_id), "number_status": u["number_status"]}
 
     # ---------------------------------------------------------------- guardians
     def invite_guardian(self, principal_id: str, guardian_mobile: str) -> dict:

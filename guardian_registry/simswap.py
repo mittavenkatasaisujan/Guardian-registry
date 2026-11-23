@@ -98,14 +98,15 @@ class SimSwapMixin:
                 "created_at": r["created_at"]}
 
     def _open_window(self, c: sqlite3.Connection, uid: str, source: str, reported_by: str,
-                     changed_at: datetime) -> str:
+                     changed_at: datetime, what: str | None = None) -> str:
         eid = new_id("sim")
         ends = changed_at + timedelta(hours=SIM_SWAP_WINDOW_HOURS)
         c.execute("INSERT INTO sim_events (id, user_id, source, reported_by, changed_at, created_at, window_ends_at) "
                   "VALUES (?,?,?,?,?,?,?)", (eid, uid, source, reported_by, iso(changed_at), self._now(), iso(ends)))
         self._audit(c, reported_by, "sim.window_opened", uid, event_id=eid, source=source, changed_at=iso(changed_at))
         who = self._name(uid)
-        what = "had their SIM card changed" if source == "participant" else "reported a lost or stolen phone"
+        what = what or ("reported a lost or stolen phone" if source in ("self", "guardian")
+                        else "had their SIM card changed")
         self._alert_guardians(c, uid, "sim_changed", "SIM change alert",
                               f"{who} {what}. For {SIM_SWAP_WINDOW_HOURS} h, new sign-ins can't approve or loosen "
                               f"anything and larger payments are held. Call {who} on another number. If it wasn't "
@@ -224,8 +225,10 @@ class SimSwapMixin:
         taken = c.execute("SELECT id FROM users WHERE mobile_hash=? AND id<>?", (payload["new_mobile_hash"], uid)).fetchone()
         if taken:
             raise Conflict("the new number was enrolled by someone else in the meantime")
-        c.execute("UPDATE users SET mobile_hash=?, mobile_enc=? WHERE id=?",
-                  (payload["new_mobile_hash"], payload["new_mobile_enc"], uid))
+        c.execute("UPDATE users SET mobile_hash=?, mobile_enc=?, number_status='active', mobile_since=?, "
+                  "number_detached_at=NULL WHERE id=?",
+                  (payload["new_mobile_hash"], payload["new_mobile_enc"], self._now(), uid))
+        c.execute("DELETE FROM sim_lookups WHERE user_id=?", (uid,))
         ended = c.execute("UPDATE kyc_attestations SET status='expired', decided_at=?, ended_by='number_changed' "
                           "WHERE user_id=? AND status IN ('pending_consent','active')", (self._now(), uid)).rowcount
         self._audit(c, uid, "mobile.changed", uid, new_mobile=payload["new_mobile_masked"], kyc_ended=ended)

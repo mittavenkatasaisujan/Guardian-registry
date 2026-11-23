@@ -5,12 +5,13 @@ open SIM-swap windows. A registry that decides who can approve money for a 75-ye
 cannot take claims from just anyone, so:
 
   * Kind sets the ceiling. Every participant declares what kind of regulated entity it is
-    (bank, NBFC, PPI issuer, UPI app...) and its regulator reference. The kind fixes the
+    (bank, NBFC, PPI issuer, UPI app, mobile operator...) and its regulator reference. The kind fixes the
     most it may ever be granted:
       - checks        ask the registry before moving a customer's money
       - kyc_full      vouch that a customer passed full KYC
       - kyc_minimum   vouch for minimum-KYC (small wallets)
       - sim_signals   report that a customer's SIM changed
+      - number_lifecycle  report that a number was disconnected (telecom operators only)
     A UPI app does not hold the customer's KYC, so it can never vouch for identity.
   * Onboarding is four-eyes. An operator registers a participant as `pending`. It gets an
     API key at once so it can set up its webhook, but it can't call checks, KYC or
@@ -34,18 +35,23 @@ from . import notify
 from .errors import Conflict, Forbidden, Invalid, NotFound
 from .security import new_id, new_secret, secret_hash
 
-CAPABILITIES = ("checks", "kyc_full", "kyc_minimum", "sim_signals")
+CAPABILITIES = ("checks", "kyc_full", "kyc_minimum", "sim_signals", "number_lifecycle")
+
+_BANK = frozenset({"checks", "kyc_full", "kyc_minimum", "sim_signals"})
 
 # kind -> (most it may be granted, granted by default)
 PARTICIPANT_KINDS: dict[str, tuple[frozenset, frozenset]] = {
-    "bank":               (frozenset(CAPABILITIES), frozenset(CAPABILITIES)),
-    "small_finance_bank": (frozenset(CAPABILITIES), frozenset(CAPABILITIES)),
-    "payments_bank":      (frozenset(CAPABILITIES), frozenset(CAPABILITIES)),
+    "bank":               (_BANK, _BANK),
+    "small_finance_bank": (_BANK, _BANK),
+    "payments_bank":      (_BANK, _BANK),
     "nbfc":               (frozenset({"checks", "kyc_full", "kyc_minimum"}),
                            frozenset({"checks", "kyc_full", "kyc_minimum"})),
     "ppi_issuer":         (frozenset({"checks", "kyc_full", "kyc_minimum"}),
                            frozenset({"checks", "kyc_minimum"})),
     "tpap":               (frozenset({"checks", "sim_signals"}), frozenset({"checks"})),
+    # mobile operators: the source of SIM-swap, port-out and disconnection events (simfeed.py)
+    "telecom":            (frozenset({"sim_signals", "number_lifecycle"}),
+                           frozenset({"sim_signals", "number_lifecycle"})),
 }
 
 STATUSES = ("pending", "active", "suspended", "offboarded")

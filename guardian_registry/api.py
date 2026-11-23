@@ -31,6 +31,7 @@ from .errors import RegistryError
 from .models import CHANNELS
 from .notify import Dispatcher, SmsSender, sms_sender_from_env
 from .participants import CAPABILITIES, PARTICIPANT_KINDS
+from .simfeed import SimLookup, sim_lookup_from_env
 from .presets import PRESETS
 from .ratelimit import RateLimiter
 from .security import check_production_config, is_production
@@ -55,6 +56,17 @@ class VerifyIn(BaseModel):
 class SimChangeIn(BaseModel):
     mobile: str
     changed_at: str | None = Field(default=None, description="ISO 8601 with timezone; default now")
+
+
+class OperatorEvent(BaseModel):
+    event_id: str = Field(min_length=1, max_length=100, description="your id; resending it is a no-op")
+    type: Literal["sim_swap", "port_out", "disconnected"]
+    mobile: str
+    occurred_at: str = Field(description="ISO 8601 with timezone")
+
+
+class OperatorEventsIn(BaseModel):
+    events: list[OperatorEvent] = Field(min_length=1, max_length=500)
 
 
 class NewMobileIn(BaseModel):
@@ -183,6 +195,7 @@ def create_app(
     admin_token: str | None = None,
     *,
     operators: dict[str, str] | None = None,
+    sim_lookup: SimLookup | None = None,
     sms: SmsSender | None = None,
     http: httpx.Client | None = None,
     run_worker: bool | None = None,
@@ -197,6 +210,10 @@ def create_app(
         pkg_log.addHandler(handler)
         pkg_log.setLevel(logging.INFO)
     reg = registry or Registry(Database(os.environ.get("GR_DB", "guardian_registry.db")))
+    if sim_lookup is not None:
+        reg.sim_lookup = sim_lookup
+    elif reg.sim_lookup is None:
+        reg.sim_lookup = sim_lookup_from_env()
     if operators is None:
         operators = parse_operators(os.environ.get("GR_OPERATORS"))
         admin = admin_token if admin_token is not None else os.environ.get("GR_ADMIN_TOKEN")
@@ -274,8 +291,15 @@ def create_app(
             "allowed": ["read", "deny", "cancel", "veto", "kill switch on", "tighten rules", "report lost phone"],
         })
 
-    def trusted_user(info: Annotated[dict, Depends(session)]) -> str:
-        """For actions a phone-number thief must not be able to take (see simswap.py)."""
+    def trusted_user(info: Annotated[dict, Depends(session)],
+                     token: Annotated[str | None, Depends(bearer_token)]) -> str:
+        """For actions a phone-number thief must not be able to take (see simswap.py).
+        First asks the mobile operator (cached) whether the SIM just changed."""
+        if not info["restricted"]:
+            if reg.lookup_blocks_trust(info["user_id"]):
+                raise restricted_error({**info, "reasons": [
+                    "we couldn't confirm with your mobile operator that your SIM hasn't changed; try again shortly"]})
+            info = reg.session_info(token) or info
         if info["restricted"]:
             raise restricted_error(info)
         return info["user_id"]
@@ -410,6 +434,13 @@ def create_app(
     def sim_change(body: SimChangeIn, pid: Participant):
         """Report that a customer's SIM changed (from your mobile-operator data)."""
         return reg.report_sim_change(pid, body.mobile, body.changed_at)
+
+    @app.post("/v1/signals/operator-events", tags=["banks"])
+    def operator_events(body: OperatorEventsIn, pid: Participant):
+        """Mobile operators: push SIM swaps, port-outs and disconnections (up to 500 per call).
+        Each event gets its own result; resending an event_id is a no-op."""
+        limited(check_limiter, pid)
+        return reg.ingest_operator_events(pid, [e.model_dump() for e in body.events])
 
     @app.get("/v1/participant/me", tags=["banks"])
     def participant_me(pid: Participant):
