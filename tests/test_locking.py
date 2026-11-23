@@ -99,6 +99,8 @@ class TestStreams:
                           "VALUES (?,?,?,?,?,?,?,?)", (seq, "2026-01-01T00:00:00+00:00", "old", "legacy.event",
                                                        None, json.dumps(data), prev, h))
                 prev = h
+            if db.backend == "postgres":  # as the v11 upgrade does: continue numbering after old rows
+                c.execute("SELECT setval('audit_log_seq', 4, false)")
             audit.append(c, "2026-11-23T00:00:00+00:00", "new", "new.event", "usr_1", {})
         with db.tx() as c:
             v = audit.verify(c)
@@ -126,7 +128,8 @@ class TestParallelOnPostgres:
 
     def _hold(self, db, keys, ready, release):
         with db.tx(*keys) as c:
-            c.execute("INSERT INTO rate_counters (bucket, count, window_end) VALUES (?, 1, 0)", (f"hold-{keys}",))
+            c.execute("INSERT INTO rate_counters (bucket, count, window_end) VALUES (?, 1, 0)",
+                      (f"hold-{uuid.uuid4().hex}",))  # unique per call, so a hold never fails early
             ready.set()
             release.wait(5)
 
