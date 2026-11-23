@@ -77,6 +77,15 @@ print(call("GET", "/healthz"))
 
 step("operator Alice registers a bank, a UPI app and a mobile operator; operator Bob must approve (four-eyes)")
 op1, op2 = {"X-Admin-Token": ADMIN}, {"X-Admin-Token": ADMIN2}
+for kind, ref, name in (("bank", f"RBI-BANK-{run}", "Bank A"), ("tpap", f"NPCI-TPAP-{run}", "UPI App B"),
+                        ("telecom", f"DOT-UL-{run}", "Telco C")):
+    call("PUT", f"/v1/admin/register/{kind}", headers=op1, json={
+        "source": "demo copy of the regulator's published list", "as_of": "2026-11-01",
+        "entities": [{"regulator_ref": ref, "name": name}]})
+print("official registers loaded:", [f"{r['kind']}={r['entities']}" for r in call("GET", "/v1/admin/register", headers=op1)])
+r = c.post("/v1/admin/participants", headers=op1, json={"name": f"Totally Real Bank {run}", "kind": "bank",
+                                                        "regulator_ref": "RBI-MADE-UP"})
+print("a 'bank' with a made-up licence number ->", r.status_code, r.json()["detail"][:60] + "...")
 keys = {}
 for label, kind, ref in (("Bank A", "bank", f"RBI-BANK-{run}"), ("UPI App B", "tpap", f"NPCI-TPAP-{run}"),
                          ("Telco C", "telecom", f"DOT-UL-{run}")):
@@ -295,9 +304,9 @@ print("recovery started -> status", rec["status"],
       "| same answer for a number that matches nothing:", sorted(rec) == sorted(fake))
 ask = call("GET", "/v1/guardian/recoveries", headers=A)[0]
 print(f"Amma is asked to vouch for {ask['person_name']} moving to {ask['new_number']}")
-held = call("POST", f"/v1/guardian/recoveries/{ask['recovery_id']}/approve", headers=A)
-print("Amma vouches (after calling Ravi herself) ->", held["status"], "until", held["effective_at"][:16],
-      "(24 h for anyone to stop it)")
+r = c.post(f"/v1/guardian/recoveries/{ask['recovery_id']}/approve", headers=A)
+print("Amma tries to vouch at once ->", r.status_code, r.json()["detail"][:75] + "...")
+print("(after the hour she can vouch; then 24 h for anyone to stop it, and 72 h of restricted sign-ins after)")
 print("Ravi checks progress:", call("POST", "/v1/recovery/status", json={"recovery_token": rec["recovery_token"]})["status"])
 
 print("\nchain verification:", call("GET", "/v1/admin/audit/verify", headers={"X-Admin-Token": ADMIN}))

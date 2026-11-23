@@ -75,6 +75,15 @@ def decrypt_mobile(token: str) -> str:
     return _fernet().decrypt(token.encode()).decode()
 
 
+def encrypt_text(value: str) -> str:
+    """Encrypt any secret we must be able to read back (push tokens)."""
+    return _fernet().encrypt(value.encode()).decode()
+
+
+def decrypt_text(token: str) -> str:
+    return _fernet().decrypt(token.encode()).decode()
+
+
 def mask_mobile(mobile: str) -> str:
     m = normalize_mobile(mobile)
     return m[:3] + "******" + m[-4:]

@@ -29,11 +29,12 @@ from . import __version__
 from .db import Database
 from .errors import RegistryError
 from .models import CHANNELS
-from .notify import Dispatcher, SmsSender, sms_sender_from_env
+from .notify import Dispatcher, PushSender, SmsSender, WhatsAppSender, sms_sender_from_env
 from .participants import CAPABILITIES, PARTICIPANT_KINDS
 from .simfeed import SimLookup, sim_lookup_from_env
 from .presets import PRESETS
-from .ratelimit import RateLimiter
+from .operator_auth import OidcVerifier, OperatorAuthError, oidc_from_env
+from .ratelimit import RateLimiter, make_limiter
 from .security import check_production_config, is_production
 from .service import OTP_TTL_MINUTES, Registry
 
@@ -91,6 +92,10 @@ class RecoveryTokenIn(BaseModel):
 class BankRecoveryIn(BaseModel):
     new_mobile: str
     customer_ref: str = Field(min_length=1, max_length=100, description="the id you used when you attested before")
+    assisted: bool = Field(default=False, description="in-person recovery for someone with no contacts and no "
+                                                      "earlier KYC; needs verified_on; held 7 days")
+    verified_on: str | None = None
+    date_of_birth: str | None = None
 
 
 class LogoutIn(BaseModel):
@@ -104,6 +109,17 @@ class ParticipantIn(BaseModel):
                                description="licence / registration number, e.g. RBI or NPCI reference")
     capabilities: list[Literal[CAPABILITIES]] | None = Field(  # type: ignore[valid-type]
         default=None, description="default: the usual set for this kind")
+
+
+class EntityIn(BaseModel):
+    regulator_ref: str = Field(min_length=1, max_length=60)
+    name: str = Field(min_length=1, max_length=200)
+
+
+class RegisterIn(BaseModel):
+    source: str = Field(min_length=3, max_length=300, description="where the list came from, e.g. its URL")
+    as_of: str = Field(min_length=4, max_length=40, description="date of the published list")
+    entities: list[EntityIn] = Field(min_length=1, max_length=20000)
 
 
 class ReasonIn(BaseModel):
@@ -146,6 +162,15 @@ class AttestIn(BaseModel):
 
 class PayeeIn(BaseModel):
     payee: str = Field(min_length=1, max_length=200)
+
+
+class AlertChannelIn(BaseModel):
+    urgent_channel: Literal["sms", "whatsapp"]
+
+
+class PushTokenIn(BaseModel):
+    token: str = Field(min_length=8, max_length=4096, description="FCM / APNs device token")
+    platform: Literal["android", "ios", "web"]
 
 
 class ReadIn(BaseModel):
@@ -211,7 +236,10 @@ def create_app(
     *,
     operators: dict[str, str] | None = None,
     sim_lookup: SimLookup | None = None,
+    operator_sso: OidcVerifier | None = None,
     sms: SmsSender | None = None,
+    whatsapp: WhatsAppSender | None = None,
+    push: PushSender | None = None,
     http: httpx.Client | None = None,
     run_worker: bool | None = None,
     check_rate: str | None = None,
@@ -235,17 +263,21 @@ def create_app(
         if admin and not operators:
             operators = {"admin": admin}
     operators = {k: v for k, v in operators.items() if v}
-    if is_production() and len(operators) == 1:
-        raise RuntimeError("unsafe production config: set GR_OPERATORS with at least two operators "
-                           "(participant onboarding needs a second approver)")
-    single_operator = len(operators) == 1  # dev convenience: approves its own requests
+    sso = operator_sso if operator_sso is not None else oidc_from_env()
+    n_operators = len(operators) + (len(sso.allowed) if sso else 0)
+    if is_production() and n_operators == 1:
+        raise RuntimeError("unsafe production config: configure at least two operators (GR_OPERATORS or "
+                           "GR_OPERATOR_OIDC_ALLOWED); participant onboarding needs a second approver")
+    single_operator = n_operators == 1  # dev convenience: approves its own requests
     sms = sms or sms_sender_from_env()
-    dispatcher = Dispatcher(reg.db, reg.clock, sms=sms, http=http)
+    dispatcher = Dispatcher(reg.db, reg.clock, sms=sms, http=http, whatsapp=whatsapp, push=push)
     if run_worker is None:
         run_worker = os.environ.get("GR_WORKER", "1") == "1"
     worker_interval = float(os.environ.get("GR_WORKER_INTERVAL", "5"))
-    check_limiter = RateLimiter.parse(check_rate or os.environ.get("GR_RATE_CHECKS", "600/60"))
-    otp_limiter = RateLimiter.parse(otp_rate or os.environ.get("GR_RATE_OTP", "10/60"))
+    rate_backend = os.environ.get("GR_RATE_BACKEND", "memory")
+    check_limiter = make_limiter(reg.db, "checks", check_rate or os.environ.get("GR_RATE_CHECKS", "600/60"),
+                                 rate_backend)
+    otp_limiter = make_limiter(reg.db, "otp", otp_rate or os.environ.get("GR_RATE_OTP", "10/60"), rate_backend)
     dev_echo = os.environ.get("GR_OTP_DEV_ECHO") == "1" and not is_production()
 
     @asynccontextmanager
@@ -274,7 +306,7 @@ def create_app(
         body = exc.detail if isinstance(exc.detail, dict) else {"detail": exc.detail}
         return JSONResponse(status_code=exc.status_code, content=body, headers=getattr(exc, "headers", None))
 
-    def limited(limiter: RateLimiter, key: str) -> None:
+    def limited(limiter, key: str) -> None:
         ok, retry = limiter.hit(key)
         if not ok:
             raise HTTPException(429, "rate limit exceeded", headers={"Retry-After": str(math.ceil(retry) or 1)})
@@ -319,9 +351,18 @@ def create_app(
             raise restricted_error(info)
         return info["user_id"]
 
-    def operator(x_admin_token: Annotated[str | None, Header()] = None) -> str:
+    def operator(x_admin_token: Annotated[str | None, Header()] = None,
+                 authorization: Annotated[str | None, Header()] = None) -> str:
+        if not operators and not sso:
+            raise HTTPException(503, "admin API disabled: set GR_OPERATOR_OIDC_* or GR_OPERATORS "
+                                     "(or GR_ADMIN_TOKEN in development)")
+        if sso and authorization and authorization.lower().startswith("bearer "):
+            try:
+                return sso.verify(authorization[7:])
+            except OperatorAuthError as e:
+                raise HTTPException(401, str(e)) from None
         if not operators:
-            raise HTTPException(503, "admin API disabled: set GR_OPERATORS (or GR_ADMIN_TOKEN in development)")
+            raise HTTPException(401, "sign in with your identity provider: Authorization: Bearer <ID token>")
         found = None
         for name, token in operators.items():  # compare every token so timing reveals nothing
             if x_admin_token and secrets.compare_digest(x_admin_token.encode(), token.encode()):
@@ -351,6 +392,16 @@ def create_app(
         if single_operator:
             view = reg.approve_participant_request(op, pid, allow_self=True)
         return {**view, "api_key": key, "note": "store the key now; it is not shown again"}
+
+    @app.put("/v1/admin/register/{kind}", tags=["ops"])
+    def load_register(kind: str, body: RegisterIn, op: Operator):
+        """Replace the official register for one kind (RBI / NPCI / DoT published list)."""
+        return reg.load_regulated_entities(op, kind, body.source, body.as_of,
+                                           [e.model_dump() for e in body.entities])
+
+    @app.get("/v1/admin/register", tags=["ops"])
+    def register_status(_: Operator):
+        return reg.register_status()
 
     @app.get("/v1/admin/participants", tags=["ops"])
     def all_participants(_: Operator, status: str | None = None):
@@ -472,7 +523,8 @@ def create_app(
     def bank_recovery_vouch(body: BankRecoveryIn, pid: Participant):
         """You have seen this customer (branch or video KYC) and they are recovering their
         account to new_mobile. customer_ref must match the id you attested with before."""
-        return reg.bank_vouch_recovery(pid, body.new_mobile, body.customer_ref)
+        return reg.bank_vouch_recovery(pid, body.new_mobile, body.customer_ref, assisted=body.assisted,
+                                       verified_on=body.verified_on, date_of_birth=body.date_of_birth)
 
     @app.get("/v1/participant/me", tags=["banks"])
     def participant_me(pid: Participant):
@@ -546,6 +598,24 @@ def create_app(
     @app.delete("/v1/me/identity/attestations/{attestation_id}", tags=["people"])
     def withdraw_attestation(attestation_id: str, uid: User):
         return reg.withdraw_attestation(uid, attestation_id)
+
+    @app.get("/v1/me/alerts", tags=["people"])
+    def my_alerts(uid: User):
+        return reg.alert_settings(uid)
+
+    @app.put("/v1/me/alerts", tags=["people"])
+    def set_alerts(body: AlertChannelIn, uid: User):
+        """Urgent alerts by SMS (default) or WhatsApp."""
+        return reg.set_urgent_channel(uid, body.urgent_channel)
+
+    @app.post("/v1/me/alerts/push", status_code=201, tags=["people"])
+    def add_push(body: PushTokenIn, uid: User):
+        """Register this app install for push alerts. Push keeps working during a SIM swap."""
+        return reg.add_push_token(uid, body.token, body.platform)
+
+    @app.delete("/v1/me/alerts/push/{token_id}", tags=["people"])
+    def remove_push(token_id: str, uid: User):
+        return reg.remove_push_token(uid, token_id)
 
     @app.get("/v1/me/notifications", tags=["people"])
     def my_notifications(uid: User, unread_only: bool = False, limit: int = 50):

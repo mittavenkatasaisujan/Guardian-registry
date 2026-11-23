@@ -24,16 +24,23 @@ cannot take claims from just anyone, so:
     working, its webhook is cleared, its KYC claims are revoked and customers are told.
     SIM-swap windows it opened stay open: they only ever protect.
   * Every operator action is audited under the operator's own name.
+  * Registration numbers are checked against the official register. Operators load each
+    regulator's published list (RBI's banks, NBFCs and PPI issuers, NPCI's UPI apps, DoT's
+    telecom licensees) with load_regulated_entities. Once a list for a kind is loaded, a
+    participant of that kind can only be registered, and approved, with a reference on it.
+    In production a list is REQUIRED for the kind (GR_REQUIRE_ENTITY_REGISTER, on by default
+    there), so nobody can join on a made-up number.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 
 from . import notify
 from .errors import Conflict, Forbidden, Invalid, NotFound
-from .security import new_id, new_secret, secret_hash
+from .security import is_production, new_id, new_secret, secret_hash
 
 CAPABILITIES = ("checks", "kyc_full", "kyc_minimum", "sim_signals", "number_lifecycle")
 
@@ -55,6 +62,11 @@ PARTICIPANT_KINDS: dict[str, tuple[frozenset, frozenset]] = {
 }
 
 STATUSES = ("pending", "active", "suspended", "offboarded")
+
+
+def register_required() -> bool:
+    default = "1" if is_production() else "0"
+    return os.environ.get("GR_REQUIRE_ENTITY_REGISTER", default) == "1"
 
 
 def _sorted(caps) -> list[str]:
@@ -89,7 +101,13 @@ class ParticipantMixin:
             "capabilities": _sorted(self._caps(r)), "kind_allows": _sorted(allowed),
             "created_at": r["created_at"], "created_by": r["created_by"],
             "webhook_url": r["webhook_url"], "pending_request": pending,
+            "register_match": self._safe_match(r["kind"], r["regulator_ref"]),
         }
+
+    def _safe_match(self, kind: str, ref: str | None) -> dict | None:
+        row = self.db.one("SELECT name, source, as_of FROM regulated_entities WHERE kind=? AND regulator_ref=?",
+                          (kind, ref or ""))
+        return dict(row) if row else None
 
     def list_participants(self, status: str | None = None) -> list[dict]:
         if status and status not in STATUSES:
@@ -129,6 +147,53 @@ class ParticipantMixin:
         return {"participant_id": pid, "status": r["status"], "status_reason": r["status_reason"],
                 "capabilities": _sorted(json.loads(r["capabilities"]))}
 
+    # ------------------------------------------------------------- official register
+    def load_regulated_entities(self, operator: str, kind: str, source: str, as_of: str,
+                                entities: list[dict]) -> dict:
+        """Replace the register for one kind with a regulator's published list."""
+        if kind not in PARTICIPANT_KINDS:
+            raise Invalid(f"kind must be one of {list(PARTICIPANT_KINDS)}")
+        source, as_of = (source or "").strip(), (as_of or "").strip()
+        if not source or not as_of:
+            raise Invalid("source (where the list came from) and as_of (its date) are required")
+        rows, seen = [], set()
+        for e in entities:
+            ref = str(e.get("regulator_ref") or "").strip()
+            name = str(e.get("name") or "").strip()
+            if not ref or not name:
+                raise Invalid("every entity needs regulator_ref and name")
+            if ref in seen:
+                raise Invalid(f"duplicate regulator_ref {ref!r}")
+            seen.add(ref)
+            rows.append((kind, ref, name, source, as_of))
+        if not rows:
+            raise Invalid("entities must not be empty")
+        with self.db.tx() as c:
+            c.execute("DELETE FROM regulated_entities WHERE kind=?", (kind,))
+            c.executemany("INSERT INTO regulated_entities VALUES (?,?,?,?,?)", rows)
+            self._audit(c, f"operator:{operator}", "register.loaded", None, kind=kind, source=source,
+                        as_of=as_of, entities=len(rows))
+        return {"kind": kind, "entities": len(rows), "source": source, "as_of": as_of}
+
+    def register_status(self) -> list[dict]:
+        return [dict(r) for r in self.db.all(
+            "SELECT kind, COUNT(*) AS entities, MAX(source) AS source, MAX(as_of) AS as_of "
+            "FROM regulated_entities GROUP BY kind ORDER BY kind")]
+
+    def _register_match(self, kind: str, ref: str | None) -> dict | None:
+        """None if no list is loaded for the kind (and none is required); raises if the ref is
+        missing from a loaded list."""
+        has_list = self.db.one("SELECT 1 FROM regulated_entities WHERE kind=?", (kind,))
+        if not has_list:
+            if register_required():
+                raise Invalid(f"no official register is loaded for kind {kind!r}; load one first")
+            return None
+        row = self.db.one("SELECT * FROM regulated_entities WHERE kind=? AND regulator_ref=?", (kind, ref or ""))
+        if not row:
+            src = self.db.one("SELECT source, as_of FROM regulated_entities WHERE kind=? LIMIT 1", (kind,))
+            raise Invalid(f"regulator_ref {ref!r} is not on the {kind} register ({src['source']}, as of {src['as_of']})")
+        return {"name": row["name"], "source": row["source"], "as_of": row["as_of"]}
+
     # ------------------------------------------------------------- onboarding
     def register_participant(self, name: str, kind: str = "bank", regulator_ref: str | None = None,
                              capabilities=None, *, operator: str = "admin",
@@ -144,6 +209,8 @@ class ParticipantMixin:
             raise Invalid(f"kind must be one of {list(PARTICIPANT_KINDS)}")
         regulator_ref = (regulator_ref or "").strip() or None
         caps = self._validate_caps(kind, PARTICIPANT_KINDS[kind][1] if capabilities is None else capabilities)
+        if not activate or regulator_ref:  # the API path always checks; back-office scripts may skip
+            self._register_match(kind, regulator_ref)
         if self.db.one("SELECT 1 FROM participants WHERE name=?", (name,)):
             raise Conflict("participant already registered")
         if regulator_ref and self.db.one("SELECT 1 FROM participants WHERE regulator_ref=?", (regulator_ref,)):
@@ -183,6 +250,8 @@ class ParticipantMixin:
             raise Forbidden("a different operator must approve this (four-eyes rule)")
         if r["status"] == "offboarded":
             raise Conflict("participant is offboarded")
+        if action in ("activate", "reinstate"):
+            self._register_match(r["kind"], r["regulator_ref"])  # still on the register?
         with self.db.tx() as c:
             if action in ("activate", "reinstate"):
                 c.execute("UPDATE participants SET status='active', status_reason=NULL, status_changed_at=? "

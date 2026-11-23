@@ -162,7 +162,8 @@ class SimSwapMixin:
                           (self._now(), user_id)).rowcount
             c.execute("UPDATE devices SET trusted_at=? WHERE user_id=?",  # every device must re-earn trust
                       (iso(self.clock.now() + timedelta(hours=NEW_DEVICE_PROBATION_HOURS)), user_id))
-            self._audit(c, actor_id, "sim.lost_phone", user_id, by=role, sessions_revoked=n)
+            pushes = self._drop_push_tokens(c, user_id)  # the lost phone must stop getting alerts
+            self._audit(c, actor_id, "sim.lost_phone", user_id, by=role, sessions_revoked=n, push_removed=pushes)
             eid = self._open_window(c, user_id, "self" if role == "principal" else "guardian", actor_id,
                                     self.clock.now())
         return {"event_id": eid, "sessions_revoked": n,

@@ -7,6 +7,11 @@ the event, so an alert is never lost or sent for something that rolled back.
 The dispatcher then delivers pending rows:
   * inapp   - nothing to send; the row is the in-app feed entry (status 'sent' at once)
   * sms     - urgent alerts to a person, through an SmsSender
+  * whatsapp - urgent alerts instead of SMS, for people who chose WhatsApp (falls back to
+              SMS if no WhatsApp provider is configured)
+  * push    - urgent alerts to every app install the person registered. Push goes to the
+              app, not the phone number, so unlike SMS and WhatsApp it keeps flowing during
+              a SIM-swap window
   * webhook - signed POST to a bank/app's registered URL when a check changes state,
               so banks don't have to poll
 
@@ -26,7 +31,7 @@ import httpx
 
 from .clock import Clock, iso
 from .db import Database
-from .security import decrypt_mobile, mask_mobile, new_id, sign_webhook
+from .security import decrypt_mobile, decrypt_text, mask_mobile, new_id, sign_webhook
 
 log = logging.getLogger("guardian_registry.notify")
 
@@ -78,6 +83,74 @@ class HttpSmsSender(SmsSender):
         r.raise_for_status()
 
 
+class WhatsAppSender:
+    def send(self, to: str, title: str, body: str) -> None:  # pragma: no cover - interface
+        raise NotImplementedError
+
+
+@dataclass
+class LogWhatsAppSender(WhatsAppSender):
+    sent: list[tuple[str, str, str]] = field(default_factory=list)
+
+    def send(self, to: str, title: str, body: str) -> None:
+        self.sent.append((to, title, body))
+        log.info("WhatsApp to %s: %s", mask_mobile(to), title)
+
+
+class HttpWhatsAppSender(WhatsAppSender):
+    """POST {"to", "template", "params": [title, body]} to GR_WHATSAPP_URL. WhatsApp only
+    allows pre-approved templates for messages a business starts, so put an adapter in front
+    of the Cloud API (or Gupshup, Twilio...) that maps 'guardian_alert' to your template."""
+
+    def __init__(self, url: str, token: str, client: httpx.Client | None = None):
+        self.url, self.token = url, token
+        self.client = client or httpx.Client(timeout=10)
+
+    def send(self, to: str, title: str, body: str) -> None:
+        r = self.client.post(self.url, json={"to": to, "template": "guardian_alert", "params": [title, body]},
+                             headers={"Authorization": f"Bearer {self.token}"})
+        r.raise_for_status()
+
+
+class PushSender:
+    def send(self, token: str, platform: str, title: str, body: str, data: dict) -> None:  # pragma: no cover
+        raise NotImplementedError
+
+
+@dataclass
+class LogPushSender(PushSender):
+    sent: list[tuple[str, str, str]] = field(default_factory=list)
+
+    def send(self, token: str, platform: str, title: str, body: str, data: dict) -> None:
+        self.sent.append((token, platform, title))
+        log.info("push to %s device: %s", platform, title)
+
+
+class HttpPushSender(PushSender):
+    """POST {"token", "platform", "title", "body", "data"} to GR_PUSH_URL: an adapter for
+    Firebase Cloud Messaging / APNs."""
+
+    def __init__(self, url: str, token: str, client: httpx.Client | None = None):
+        self.url, self.token = url, token
+        self.client = client or httpx.Client(timeout=10)
+
+    def send(self, token: str, platform: str, title: str, body: str, data: dict) -> None:
+        r = self.client.post(self.url, json={"token": token, "platform": platform, "title": title,
+                                             "body": body, "data": data},
+                             headers={"Authorization": f"Bearer {self.token}"})
+        r.raise_for_status()
+
+
+def whatsapp_sender_from_env() -> WhatsAppSender | None:
+    url = os.environ.get("GR_WHATSAPP_URL")
+    return HttpWhatsAppSender(url, os.environ.get("GR_WHATSAPP_TOKEN", "")) if url else None
+
+
+def push_sender_from_env() -> PushSender | None:
+    url = os.environ.get("GR_PUSH_URL")
+    return HttpPushSender(url, os.environ.get("GR_PUSH_TOKEN", "")) if url else None
+
+
 def sms_sender_from_env() -> SmsSender:
     url = os.environ.get("GR_SMS_URL")
     if url:
@@ -88,7 +161,7 @@ def sms_sender_from_env() -> SmsSender:
 # ------------------------------------------------------------------ outbox
 def enqueue_user(c: sqlite3.Connection, now: str, user_id: str, kind: str, title: str, body: str,
                  principal_id: str | None = None, payload: dict | None = None) -> None:
-    """Queue an in-app entry, plus an SMS for urgent kinds."""
+    """Queue an in-app entry; for urgent kinds also SMS or WhatsApp (the person's choice) and push."""
     data = json.dumps(payload or {}, ensure_ascii=False)
     c.execute(
         "INSERT INTO notifications (id, recipient_type, recipient_id, principal_id, kind, channel, title, body, "
@@ -98,7 +171,18 @@ def enqueue_user(c: sqlite3.Connection, now: str, user_id: str, kind: str, title
         c.execute(
             "INSERT INTO notifications (id, recipient_type, recipient_id, principal_id, kind, channel, title, body, "
             "payload, status, next_attempt_at, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            (new_id("ntf"), "user", user_id, principal_id, kind, "sms", title, body, data, "pending", now, now))
+            (new_id("ntf"), "user", user_id, principal_id, kind, _urgent_channel(c, user_id), title, body, data,
+             "pending", now, now))
+        if c.execute("SELECT 1 FROM push_tokens WHERE user_id=? LIMIT 1", (user_id,)).fetchone():
+            c.execute(
+                "INSERT INTO notifications (id, recipient_type, recipient_id, principal_id, kind, channel, title, "
+                "body, payload, status, next_attempt_at, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (new_id("ntf"), "user", user_id, principal_id, kind, "push", title, body, data, "pending", now, now))
+
+
+def _urgent_channel(c: sqlite3.Connection, user_id: str) -> str:
+    r = c.execute("SELECT urgent_channel FROM users WHERE id=?", (user_id,)).fetchone()
+    return r["urgent_channel"] if r and r["urgent_channel"] in ("sms", "whatsapp") else "sms"
 
 
 def enqueue_participant(c: sqlite3.Connection, now: str, participant_id: str, kind: str,
@@ -124,9 +208,12 @@ class DispatchStats:
 
 class Dispatcher:
     def __init__(self, db: Database, clock: Clock, sms: SmsSender | None = None,
-                 http: httpx.Client | None = None):
+                 http: httpx.Client | None = None, whatsapp: WhatsAppSender | None = None,
+                 push: PushSender | None = None):
         self.db, self.clock = db, clock
         self.sms = sms or sms_sender_from_env()
+        self.whatsapp = whatsapp if whatsapp is not None else whatsapp_sender_from_env()
+        self.push = push if push is not None else push_sender_from_env()
         self._http = http
 
     @property
@@ -157,7 +244,15 @@ class Dispatcher:
         return stats
 
     def _deliver(self, n: sqlite3.Row) -> bool:
-        if n["channel"] == "sms":
+        if n["channel"] == "push":
+            if self.push is None:
+                return False
+            tokens = self.db.all("SELECT token_enc, platform FROM push_tokens WHERE user_id=?", (n["recipient_id"],))
+            for t in tokens:
+                self.push.send(decrypt_text(t["token_enc"]), t["platform"], n["title"], n["body"],
+                               {"kind": n["kind"], "id": n["id"]})
+            return bool(tokens)
+        if n["channel"] in ("sms", "whatsapp"):
             u = self.db.one("SELECT mobile_enc FROM users WHERE id=?", (n["recipient_id"],))
             if not u or not u["mobile_enc"]:
                 return False  # no number on file (enrolled before v2): in-app only
@@ -165,7 +260,11 @@ class Dispatcher:
                                   "AND window_ends_at>?", (n["recipient_id"], iso(self.clock.now())))
             if swapped:
                 return False  # the number may be in an attacker's hands: in-app only until cleared
-            self.sms.send(decrypt_mobile(u["mobile_enc"]), f"{n['title']}: {n['body']}")
+            to = decrypt_mobile(u["mobile_enc"])
+            if n["channel"] == "whatsapp" and self.whatsapp is not None:
+                self.whatsapp.send(to, n["title"], n["body"])
+            else:  # SMS, or WhatsApp chosen but no provider configured
+                self.sms.send(to, f"{n['title']}: {n['body']}")
             return True
         if n["channel"] == "webhook":
             p = self.db.one("SELECT webhook_url, webhook_secret FROM participants WHERE id=?", (n["recipient_id"],))

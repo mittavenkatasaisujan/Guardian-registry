@@ -9,9 +9,11 @@ from fastapi.testclient import TestClient
 from guardian_registry.api import create_app
 from guardian_registry.clock import FixedClock, iso
 from guardian_registry.db import Database
-from guardian_registry.errors import Conflict, Forbidden, NotFound, Unauthorized
+from guardian_registry.errors import Conflict, Forbidden, Invalid, NotFound, Unauthorized
 from guardian_registry.notify import LogSmsSender
-from guardian_registry.recovery import RECOVERY_HOLD_HOURS, RECOVERY_TTL_HOURS
+from guardian_registry.recovery import (
+    ASSISTED_HOLD_DAYS, RECOVERY_HOLD_HOURS, RECOVERY_TTL_HOURS, RECOVERY_VOUCH_DELAY_MINUTES,
+)
 from guardian_registry.service import OTP_RESEND_SECONDS, Registry
 
 from .conftest import AMMA, PRIYA, R, RAVI
@@ -32,9 +34,12 @@ def disconnect(reg, telco, clock, mobile, eid="d1"):
     assert out["results"][0]["result"] == "number_detached"
 
 
-def start(reg, old, new=NEW):
+def start(reg, old, new=NEW, wait=True):
     code = reg.request_otp(new, LogSmsSender())
-    return reg.start_recovery(old, new, code)
+    out = reg.start_recovery(old, new, code)
+    if wait:
+        reg.clock.advance(minutes=RECOVERY_VOUCH_DELAY_MINUTES + 1)  # vouching opens after a pause
+    return out
 
 
 def rid_of(reg, uid):
@@ -176,6 +181,73 @@ class TestVouching:
         assert reg.profile(lost_ravi["ravi"])["number_status"] == "disconnected"
 
 
+class TestHardening:
+    def test_vouching_waits_an_hour(self, reg, lost_ravi, clock):
+        start(reg, RAVI, wait=False)
+        rid = rid_of(reg, lost_ravi["ravi"])
+        with pytest.raises(Conflict, match="vouching opens at"):
+            reg.vouch_recovery(lost_ravi["amma"], rid, True)
+        clock.advance(minutes=RECOVERY_VOUCH_DELAY_MINUTES)
+        assert reg.vouch_recovery(lost_ravi["amma"], rid, True)["status"] == "held"
+
+    def test_deny_works_at_once(self, reg, lost_ravi):
+        start(reg, RAVI, wait=False)
+        assert reg.vouch_recovery(lost_ravi["amma"], rid_of(reg, lost_ravi["ravi"]), False)["status"] == "denied"
+
+    def test_aftercare_window(self, reg, lost_ravi, clock):
+        start(reg, RAVI)
+        reg.vouch_recovery(lost_ravi["amma"], rid_of(reg, lost_ravi["ravi"]), True)
+        clock.advance(hours=RECOVERY_HOLD_HOURS + 1)
+        reg.sweep()
+        assert reg.sim_swap_active(lost_ravi["ravi"])
+        # new payees are held while the window is open
+        bank = lost_ravi["bank"]
+        g = reg.invite_guardian(lost_ravi["ravi"], AMMA)
+        reg.respond_to_invite(lost_ravi["amma"], g["id"], True)
+        assert reg.check(bank, NEW, "t1", 500 * R, "new@upi")["status"] == "pending_approval"
+        # Amma, having spoken to him, can end it early
+        reg.confirm_sim_change(lost_ravi["amma"], lost_ravi["ravi"])
+        assert not reg.sim_swap_active(lost_ravi["ravi"])
+
+
+class TestAssisted:
+    @pytest.fixture
+    def loner(self, reg, telco, clock):
+        uid, _ = reg.register_user("9876500044", "Loner")
+        bank, _ = reg.register_participant("B", "bank", "RBI-3")
+        disconnect(reg, telco, clock, "9876500044")
+        start(reg, "9876500044")
+        return uid, bank
+
+    def test_branch_kyc_recovers_after_a_week(self, reg, loner, clock):
+        uid, bank = loner
+        out = reg.bank_vouch_recovery(bank, NEW, "NEW-CIF", assisted=True, verified_on="2026-11-22",
+                                      date_of_birth="1950-01-01")
+        assert out["assisted"] is True
+        clock.advance(days=ASSISTED_HOLD_DAYS - 1)
+        reg.sweep()
+        assert reg.user_by_mobile(NEW) is None
+        clock.advance(days=1, minutes=1)
+        reg.sweep()
+        assert reg.user_by_mobile(NEW) == uid
+        att = reg.identity(uid)["attestations"][0]
+        assert att["status"] == "pending_consent"  # the person approves the bank's KYC afterwards
+        reg.respond_to_attestation(uid, att["attestation_id"], True)
+        assert reg.identity_level(uid) == "bank_verified"
+
+    def test_needs_recent_kyc(self, reg, loner):
+        uid, bank = loner
+        with pytest.raises(Invalid):
+            reg.bank_vouch_recovery(bank, NEW, "X", assisted=True)
+        with pytest.raises(Invalid):
+            reg.bank_vouch_recovery(bank, NEW, "X", assisted=True, verified_on="2025-01-01")
+
+    def test_not_for_people_with_contacts(self, reg, lost_ravi):
+        start(reg, RAVI)
+        with pytest.raises(NotFound, match="assisted"):
+            reg.bank_vouch_recovery(lost_ravi["bank"], NEW, "X", assisted=True, verified_on="2026-11-22")
+
+
 class TestBankVouch:
     @pytest.fixture
     def kycd_ravi(self, reg, family, telco, clock):
@@ -244,6 +316,7 @@ def test_http_flow():
     r = c.post("/v1/recovery/start", json={"old_mobile": RAVI, "new_mobile": NEW, "code": code_for(NEW)})
     assert r.status_code == 202
     token = r.json()["recovery_token"]
+    clock.advance(minutes=RECOVERY_VOUCH_DELAY_MINUTES + 1)
     pending = c.get("/v1/guardian/recoveries", headers=A).json()
     assert pending[0]["person_name"] == "Ravi"
     assert c.post(f"/v1/guardian/recoveries/{pending[0]['recovery_id']}/approve", headers=A).json()["status"] == "held"
@@ -252,5 +325,6 @@ def test_http_flow():
     assert c.post("/v1/recovery/status", json={"recovery_token": token}).json()["status"] == "completed"
     back = sign_in(NEW, None, "ravi-new-phone")
     assert back["user_id"] == ravi["user_id"] and back["new_user"] is False
-    assert back["restricted"] is True  # a new device starts on probation, as always
+    assert back["restricted"] is True  # new device AND the post-recovery risk window
+    assert any("SIM change" in x for x in back["restriction_reasons"])
     assert c.post("/v1/recovery/status", json={"recovery_token": "grr_nope_nope"}).status_code == 404

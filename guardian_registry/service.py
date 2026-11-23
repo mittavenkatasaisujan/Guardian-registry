@@ -25,6 +25,7 @@ from .clock import Clock, iso, ist_day
 from .db import Database
 from .errors import Conflict, Forbidden, Invalid, NotFound, TooMany, Unauthorized
 from .kyc import KycMixin
+from .channels import ChannelMixin
 from .participants import ParticipantMixin
 from .recovery import RecoveryMixin
 from .simfeed import SimFeedMixin, SimLookup
@@ -62,7 +63,7 @@ _OUTCOME_TO_STATUS = {
 }
 
 
-class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryMixin):
+class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryMixin, ChannelMixin):
     def __init__(self, db: Database | None = None, clock: Clock | None = None,
                  sim_lookup: SimLookup | None = None):
         self.db = db or Database()

@@ -291,7 +291,40 @@ CREATE TABLE recovery_vouches (
 );
 """
 
-MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7]
+# v8: assisted recovery flag; register of regulated entities; shared rate-limit counters;
+# alert channel choice and push tokens.
+SCHEMA_V8 = """
+ALTER TABLE recoveries ADD COLUMN assisted INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE regulated_entities (
+    kind          TEXT NOT NULL,
+    regulator_ref TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    source        TEXT NOT NULL,
+    as_of         TEXT NOT NULL,
+    PRIMARY KEY (kind, regulator_ref)
+);
+
+CREATE TABLE rate_counters (
+    bucket       TEXT PRIMARY KEY,         -- limiter name + key + window number
+    count        INTEGER NOT NULL,
+    window_end   REAL NOT NULL
+);
+
+ALTER TABLE users ADD COLUMN urgent_channel TEXT NOT NULL DEFAULT 'sms';   -- sms | whatsapp
+
+CREATE TABLE push_tokens (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES users(id),
+    token_hash  TEXT NOT NULL UNIQUE,
+    token_enc   TEXT NOT NULL,
+    platform    TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX ix_push_user ON push_tokens(user_id);
+"""
+
+MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8]
 
 
 class Database:

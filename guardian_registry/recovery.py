@@ -20,22 +20,37 @@ signed-in phone they add a new number from it. If they don't, they recover here:
      old phone might not be the owner), and the owner signs in normally. Their first
      sign-in is on a new device, so it starts on probation as usual.
 
-Requests that don't vouch in RECOVERY_TTL_HOURS expire. Someone with no contacts and no
-bank KYC can't self-recover; that needs a person at the operator's back office.
+Against talking a contact into it:
+  * Vouching opens only RECOVERY_VOUCH_DELAY_MINUTES after the request. A scam call that
+    says "approve it now, quickly" can't succeed while the caller is on the line.
+  * After a recovery the account starts a 72 h risk window, exactly as after a SIM swap:
+    new sign-ins can't approve, loosen or invite, payments to new payees are held, and a
+    guardian can end it early once they have really spoken to the person.
+
+Nobody to vouch (no guardians, no wards, no earlier bank KYC): a bank can do an ASSISTED
+recovery after full KYC in person (branch or video KYC). Since nothing on record ties that
+person to the account, it is held ASSISTED_HOLD_DAYS instead of a day, and the bank's KYC
+is filed as a normal attestation that the person must approve afterwards.
+
+Requests that don't vouch in RECOVERY_TTL_HOURS expire.
 """
 
 from __future__ import annotations
 
 import sqlite3
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from .clock import iso
 from .errors import Conflict, Forbidden, Invalid, NotFound
-from .kyc import _ref_hash
-from .security import encrypt_mobile, mask_mobile, mobile_hash, new_id, new_secret, normalize_mobile, secret_hash
+from .kyc import KYC_CONSENT_DAYS, KYC_VALID_DAYS, _parse_date, _ref_hash
+from .security import (
+    _fernet, encrypt_mobile, mask_mobile, mobile_hash, new_id, new_secret, normalize_mobile, secret_hash,
+)
 
 RECOVERY_TTL_HOURS = 72
 RECOVERY_HOLD_HOURS = 24
+RECOVERY_VOUCH_DELAY_MINUTES = 60
+ASSISTED_HOLD_DAYS = 7
 OPEN = ("pending", "held")
 
 
@@ -66,7 +81,9 @@ class RecoveryMixin:
                "person_name": self._name(r["user_id"]), "new_number": r["new_mobile_masked"],
                "created_at": r["created_at"], "expires_at": r["expires_at"], "effective_at": r["effective_at"],
                "approvals": sum(v["vote"] == "approve" for v in votes), "approvals_needed": r["needed"],
-               "bank_vouched": r["bank_vouched_by"] is not None}
+               "bank_vouched": r["bank_vouched_by"] is not None, "assisted": bool(r["assisted"]),
+               "vouching_opens_at": iso(datetime.fromisoformat(r["created_at"])
+                                        + timedelta(minutes=RECOVERY_VOUCH_DELAY_MINUTES))}
         if viewer:
             mine = [v["vote"] for v in votes if v["voucher_id"] == viewer]
             out["your_vote"] = mine[0] if mine else None
@@ -139,6 +156,10 @@ class RecoveryMixin:
             raise Conflict(f"recovery is already {r['status']}")
         if approve and r["status"] != "pending":
             raise Conflict("recovery already has enough vouches")
+        opens = iso(datetime.fromisoformat(r["created_at"]) + timedelta(minutes=RECOVERY_VOUCH_DELAY_MINUTES))
+        if approve and self._now() < opens:
+            raise Conflict(f"vouching opens at {opens}. Use the time to call them yourself on a number you know; "
+                           "you can deny at any time")
         name, me = self._name(r["user_id"]), self._name(voucher_id)
         with self.db.tx() as c:
             c.execute("INSERT INTO recovery_vouches (recovery_id, voucher_id, vote, at) VALUES (?,?,?,?) "
@@ -174,32 +195,68 @@ class RecoveryMixin:
         return [self._recovery_view(r) for r in rows]
 
     # ------------------------------------------------------------- bank
-    def bank_vouch_recovery(self, participant_id: str, new_mobile: str, customer_ref: str) -> dict:
-        """A bank that KYC'd this person before has seen them (branch, video KYC) and vouches.
-        The customer id must match one the bank used in an earlier attestation."""
+    def bank_vouch_recovery(self, participant_id: str, new_mobile: str, customer_ref: str, *,
+                            assisted: bool = False, verified_on: str | None = None,
+                            date_of_birth: str | None = None) -> dict:
+        """A bank has seen this person (branch or video KYC) and vouches.
+
+        Normal: customer_ref must match one the bank used in an earlier attestation; held 24 h.
+        Assisted (assisted=True): for someone with NO contacts and NO earlier KYC at all. The
+        bank has just done full KYC (verified_on within 30 days); held ASSISTED_HOLD_DAYS and
+        the KYC is filed as an attestation the person approves after recovery."""
         self._require_participant(participant_id, "kyc_full")
         try:
             new_h = mobile_hash(new_mobile)
         except ValueError as e:
             raise Invalid(str(e)) from None
-        ref_h = _ref_hash(participant_id, (customer_ref or "").strip())
+        customer_ref = (customer_ref or "").strip()
+        ref_h = _ref_hash(participant_id, customer_ref)
         rows = self.db.all("SELECT * FROM recoveries WHERE new_mobile_hash=? AND status='pending' "
                            "AND user_id IS NOT NULL AND expires_at>?", (new_h, self._now()))
-        r = next((r for r in rows if self.db.one(
-            "SELECT 1 FROM kyc_attestations WHERE user_id=? AND participant_id=? AND customer_ref_hash=? "
-            "AND status IN ('active','expired','superseded')", (r["user_id"], participant_id, ref_h))), None)
-        if not r:
-            raise NotFound("no pending recovery for that number matches a customer you verified before")
+        if not assisted:
+            r = next((r for r in rows if self.db.one(
+                "SELECT 1 FROM kyc_attestations WHERE user_id=? AND participant_id=? AND customer_ref_hash=? "
+                "AND status IN ('active','expired','superseded')", (r["user_id"], participant_id, ref_h))), None)
+            if not r:
+                raise NotFound("no pending recovery for that number matches a customer you verified before")
+            hold, why = timedelta(hours=RECOVERY_HOLD_HOURS), "confirmed who they are"
+        else:
+            if not verified_on:
+                raise Invalid("assisted recovery needs verified_on (the in-person KYC you just did)")
+            vdate = _parse_date(verified_on, "verified_on")
+            if not 0 <= (self._today() - vdate).days <= 30:
+                raise Invalid("assisted recovery needs KYC done in the last 30 days")
+            r = next((r for r in rows if not self._contacts(r["user_id"]) and not self.db.one(
+                "SELECT 1 FROM kyc_attestations WHERE user_id=?", (r["user_id"],))), None)
+            if not r:
+                raise NotFound("no pending recovery for that number is eligible for assisted recovery "
+                               "(it is only for people with no contacts and no earlier bank KYC)")
+            hold, why = timedelta(days=ASSISTED_HOLD_DAYS), "did a full KYC check in person"
         with self.db.tx() as c:
-            c.execute("UPDATE recoveries SET bank_vouched_by=? WHERE id=?", (participant_id, r["id"]))
-            self._audit(c, participant_id, "recovery.bank_vouched", r["user_id"], recovery_id=r["id"])
+            c.execute("UPDATE recoveries SET bank_vouched_by=?, assisted=? WHERE id=?",
+                      (participant_id, 1 if assisted else 0, r["id"]))
+            self._audit(c, participant_id, "recovery.bank_vouched", r["user_id"], recovery_id=r["id"],
+                        assisted=assisted)
             bank = c.execute("SELECT name FROM participants WHERE id=?", (participant_id,)).fetchone()["name"]
-            self._hold_recovery(c, r, f"{bank} confirmed who they are")
-        return {"recovery": "held", "effective_at": self._recovery(r["id"])["effective_at"]}
+            if assisted:
+                dob_enc = None
+                if date_of_birth:
+                    dob = _parse_date(date_of_birth, "date_of_birth")
+                    dob_enc = _fernet().encrypt(dob.isoformat().encode()).decode()
+                now = self.clock.now()
+                c.execute(
+                    "INSERT INTO kyc_attestations (id, user_id, participant_id, kyc_level, dob_enc, customer_ref_hash, "
+                    "verified_on, status, created_at, consent_expires_at, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (new_id("kyc"), r["user_id"], participant_id, "full", dob_enc, ref_h, vdate.isoformat(),
+                     "pending_consent", iso(now), iso(now + hold + timedelta(days=KYC_CONSENT_DAYS)),
+                     iso(now + timedelta(days=KYC_VALID_DAYS))))
+            self._hold_recovery(c, r, f"{bank} {why}", hold=hold)
+        return {"recovery": "held", "effective_at": self._recovery(r["id"])["effective_at"], "assisted": assisted}
 
     # ------------------------------------------------------------- state changes
-    def _hold_recovery(self, c: sqlite3.Connection, r: sqlite3.Row, why: str) -> None:
-        eff = iso(self.clock.now() + timedelta(hours=RECOVERY_HOLD_HOURS))
+    def _hold_recovery(self, c: sqlite3.Connection, r: sqlite3.Row, why: str,
+                       hold: timedelta = timedelta(hours=RECOVERY_HOLD_HOURS)) -> None:
+        eff = iso(self.clock.now() + hold)
         c.execute("UPDATE recoveries SET status='held', effective_at=? WHERE id=?", (eff, r["id"]))
         self._audit(c, "recovery", "recovery.held", r["user_id"], recovery_id=r["id"], effective_at=eff)
         name = self._name(r["user_id"])
@@ -233,7 +290,11 @@ class RecoveryMixin:
         c.execute("UPDATE devices SET trusted_at=? WHERE user_id=?",  # every old device must re-earn trust
                   (iso(self.clock.now() + timedelta(hours=24)), uid))
         c.execute("DELETE FROM sim_lookups WHERE user_id=?", (uid,))
+        self._drop_push_tokens(c, uid)
         c.execute("UPDATE recoveries SET status='completed', decided_at=? WHERE id=?", (now, r["id"]))
+        # aftercare: treat the fresh account like one whose SIM just changed (see simswap.py)
+        self._open_window(c, uid, "recovery", "recovery", self.clock.now(),
+                          what="recovered their account on a new number")
         self._audit(c, "recovery", "recovery.completed", uid, recovery_id=r["id"],
                     new_mobile=r["new_mobile_masked"], sessions_revoked=n)
         name = self._name(uid)
