@@ -85,12 +85,30 @@ class TestMultiNode:
             t.join()
         assert len({o["check_id"] for o in out}) == 1
 
-    def test_schema_version_mismatch_is_refused(self, two_nodes):
+    def test_schema_versions_out_of_range_are_refused(self, two_nodes):
         node_a, _ = two_nodes
-        node_a.db.conn.execute("UPDATE gr_schema SET version = 1")
         schema = node_a.db.conn.execute("SELECT current_schema() AS s").fetchone()["s"]
-        with pytest.raises(RuntimeError, match="add a Postgres migration step"):
+        node_a.db.conn.execute("UPDATE gr_schema SET version = 1")
+        with pytest.raises(RuntimeError, match="predates portable migrations"):
             Database(PG_URL, schema=schema)
+        node_a.db.conn.execute("UPDATE gr_schema SET version = 999")
+        with pytest.raises(RuntimeError, match="newer than this code"):
+            Database(PG_URL, schema=schema)
+
+    def test_upgrade_from_v8_applies_portable_migrations(self, two_nodes):
+        node_a, _ = two_nodes
+        c = node_a.db.conn
+        schema = c.execute("SELECT current_schema() AS s").fetchone()["s"]
+        # make this database look like one created by v0.9.0 (schema v8)
+        c.execute("DROP TABLE device_keys")
+        c.execute("DROP TABLE auth_challenges")
+        c.execute("ALTER TABLE sessions DROP COLUMN device_key_id")
+        c.execute("UPDATE gr_schema SET version = 8")
+        upgraded = Database(PG_URL, schema=schema)
+        assert upgraded.one("SELECT version FROM gr_schema")["version"] == len(MIGRATIONS)
+        assert upgraded.one("SELECT COUNT(*) n FROM device_keys")["n"] == 0
+        upgraded.one("SELECT device_key_id FROM sessions LIMIT 1")
+        upgraded.close()
 
     def test_privacy_dump_works(self, two_nodes):
         node_a, _ = two_nodes

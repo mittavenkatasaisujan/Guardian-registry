@@ -89,13 +89,18 @@ class SimSwapMixin:
         reasons = []
         if r["probation_until"] and r["probation_until"] > self._now():
             reasons.append(f"new device: restricted until {r['probation_until']}")
+        key = self._key_row(r["user_id"], r["device_key_id"]) if r["device_key_id"] else None
         for ev in self._open_sim_events(r["user_id"]):
+            if key and not key["revoked_at"] and key["trusted_at"] <= ev["changed_at"]:
+                continue  # signed by a key this person trusted BEFORE the SIM changed: their own phone
             if r["created_at"] >= ev["changed_at"]:
                 reasons.append(f"signed in after a SIM change: restricted until {ev['window_ends_at']} "
                                "or until confirmed from a trusted device or by a guardian")
                 break
+        if key and key["revoked_at"]:
+            return None  # the key was revoked (lost phone, recovery): this session is over
         return {"user_id": r["user_id"], "restricted": bool(reasons), "reasons": reasons,
-                "created_at": r["created_at"]}
+                "created_at": r["created_at"], "device_proven": bool(key and key["trusted_at"] <= self._now())}
 
     def _open_window(self, c: sqlite3.Connection, uid: str, source: str, reported_by: str,
                      changed_at: datetime, what: str | None = None) -> str:
@@ -163,6 +168,7 @@ class SimSwapMixin:
             c.execute("UPDATE devices SET trusted_at=? WHERE user_id=?",  # every device must re-earn trust
                       (iso(self.clock.now() + timedelta(hours=NEW_DEVICE_PROBATION_HOURS)), user_id))
             pushes = self._drop_push_tokens(c, user_id)  # the lost phone must stop getting alerts
+            self._revoke_all_keys(c, user_id)  # ...and must not stay a "proven" device
             self._audit(c, actor_id, "sim.lost_phone", user_id, by=role, sessions_revoked=n, push_removed=pushes)
             eid = self._open_window(c, user_id, "self" if role == "principal" else "guardian", actor_id,
                                     self.clock.now())

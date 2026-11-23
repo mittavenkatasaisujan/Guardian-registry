@@ -293,6 +293,7 @@ class RecoveryMixin:
                   (iso(self.clock.now() + timedelta(hours=24)), uid))
         c.execute("DELETE FROM sim_lookups WHERE user_id=?", (uid,))
         self._drop_push_tokens(c, uid)
+        self._revoke_all_keys(c, uid)
         c.execute("UPDATE recoveries SET status='completed', decided_at=? WHERE id=?", (now, r["id"]))
         # aftercare: treat the fresh account like one whose SIM just changed (see simswap.py)
         self._open_window(c, uid, "recovery", "recovery", self.clock.now(),

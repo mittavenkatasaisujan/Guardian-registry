@@ -31,6 +31,7 @@ from .errors import RegistryError
 from .models import CHANNELS
 from .notify import Dispatcher, PushSender, SmsSender, WhatsAppSender, sms_sender_from_env
 from .participants import CAPABILITIES, PARTICIPANT_KINDS
+from .devicekeys import KeyAttestor, key_attestor_from_env
 from .simfeed import SimLookup, sim_lookup_from_env
 from .presets import PRESETS
 from .operator_auth import OidcVerifier, OperatorAuthError, oidc_from_env
@@ -52,6 +53,14 @@ class VerifyIn(BaseModel):
     display_name: str | None = Field(default=None, max_length=80)
     device_id: str | None = Field(default=None, max_length=200,
                                   description="stable app-install id; new devices start on probation")
+    device_key: str | None = Field(default=None, max_length=400,
+                                   description="base64 DER public key (EC P-256) kept in secure hardware")
+    challenge: str | None = Field(default=None, max_length=200, description="from POST /v1/auth/challenge")
+    device_proof: str | None = Field(default=None, max_length=400,
+                                     description="base64 ECDSA-SHA256 signature of 'guardian-registry/v1:'+challenge")
+    key_attestation: str | None = Field(default=None, max_length=20000,
+                                        description="Play Integrity token or App Attest object, optional")
+    platform: Literal["android", "ios", "web"] | None = None
 
 
 class SimChangeIn(BaseModel):
@@ -236,6 +245,7 @@ def create_app(
     *,
     operators: dict[str, str] | None = None,
     sim_lookup: SimLookup | None = None,
+    key_attestor: KeyAttestor | None = None,
     operator_sso: OidcVerifier | None = None,
     sms: SmsSender | None = None,
     whatsapp: WhatsAppSender | None = None,
@@ -257,6 +267,10 @@ def create_app(
         reg.sim_lookup = sim_lookup
     elif reg.sim_lookup is None:
         reg.sim_lookup = sim_lookup_from_env()
+    if key_attestor is not None:
+        reg.key_attestor = key_attestor
+    elif reg.key_attestor is None:
+        reg.key_attestor = key_attestor_from_env()
     if operators is None:
         operators = parse_operators(os.environ.get("GR_OPERATORS"))
         admin = admin_token if admin_token is not None else os.environ.get("GR_ADMIN_TOKEN")
@@ -460,10 +474,17 @@ def create_app(
             out["dev_code"] = code  # development only; refused in production
         return out
 
+    @app.post("/v1/auth/challenge", tags=["sign-in"])
+    def auth_challenge(request: Request):
+        """One-time challenge for the app's device key to sign at sign-in (valid 5 minutes)."""
+        limited(otp_limiter, "challenge:" + (request.client.host if request.client else "unknown"))
+        return reg.new_challenge()
+
     @app.post("/v1/auth/verify", tags=["sign-in"])
     def verify_otp(body: VerifyIn, request: Request):
         limited(otp_limiter, "verify:" + (request.client.host if request.client else "unknown"))
-        return reg.verify_otp(body.mobile, body.code, body.display_name, body.device_id)
+        return reg.verify_otp(body.mobile, body.code, body.display_name, body.device_id, body.device_key,
+                              body.device_proof, body.challenge, body.key_attestation, body.platform)
 
     @app.post("/v1/recovery/start", status_code=202, tags=["sign-in"])
     def recovery_start(body: RecoveryStartIn, request: Request):
@@ -598,6 +619,16 @@ def create_app(
     @app.delete("/v1/me/identity/attestations/{attestation_id}", tags=["people"])
     def withdraw_attestation(attestation_id: str, uid: User):
         return reg.withdraw_attestation(uid, attestation_id)
+
+    @app.get("/v1/me/devices", tags=["people"])
+    def my_devices(uid: User):
+        return reg.device_keys(uid)
+
+    @app.delete("/v1/me/devices/{key_id}", tags=["people"])
+    def remove_device(key_id: str, uid: TrustedUser):
+        """Revoke one device key and sign that device out. Needs a trusted session, so a thief
+        can't remove the owner's phone."""
+        return reg.revoke_device_key(uid, key_id)
 
     @app.get("/v1/me/alerts", tags=["people"])
     def my_alerts(uid: User):

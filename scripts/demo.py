@@ -19,7 +19,11 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+import base64
+
 import httpx
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 HOOK_PORT = 8799
 HOOK_SECRET = [""]
@@ -111,11 +115,29 @@ print("webhook secret issued:", hook["webhook_secret"][:8] + "...")
 step("Amma and Ravi sign in with an SMS code (server runs with GR_OTP_DEV_ECHO=1)")
 
 
+class Phone:
+    """Plays the app: a P-256 key 'in secure hardware' that signs the server's challenge."""
+
+    def __init__(self):
+        self.key = ec.generate_private_key(ec.SECP256R1())
+        self.public = base64.b64encode(self.key.public_key().public_bytes(
+            serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)).decode()
+
+    def proof(self):
+        ch = call("POST", "/v1/auth/challenge")["challenge"]
+        sig = self.key.sign(b"guardian-registry/v1:" + ch.encode(), ec.ECDSA(hashes.SHA256()))
+        return {"device_key": self.public, "challenge": ch, "device_proof": base64.b64encode(sig).decode()}
+
+
+phones = {1: Phone(), 2: Phone()}
+
+
 def sign_in(n, name):
     code = call("POST", "/v1/auth/otp", 202, json={"mobile": mobile(n)})["dev_code"]
     bad = c.post("/v1/auth/verify", json={"mobile": mobile(n), "code": "000000" if code != "000000" else "111111",
                                           "display_name": name})
-    out = call("POST", "/v1/auth/verify", json={"mobile": mobile(n), "code": code, "display_name": name})
+    out = call("POST", "/v1/auth/verify", json={"mobile": mobile(n), "code": code, "display_name": name,
+                                                **phones[n].proof()})
     print(f"{name}: wrong code -> {bad.status_code}, right code -> new_user={out['new_user']}")
     return out
 
@@ -239,6 +261,16 @@ print("thief tries to 'confirm' the SIM change ->", r.status_code)
 print("real Ravi (old phone) denies it:", call("POST", f"/v1/guardian/payments/{pending['check_id']}/deny", headers=G)["status"])
 print("risk window still open while Ravi sorts it out with his operator:",
       call("GET", "/v1/me/security", headers=G)["sim_swap_window_open"])
+
+step("DEVICE KEY: Amma's SIM is reported changed, but her own phone can still prove itself")
+call("POST", "/v1/signals/sim-change", headers=sbi, json={"mobile": mobile(1)})
+code = call("POST", "/v1/auth/otp", 202, json={"mobile": mobile(1)})["dev_code"]
+own = call("POST", "/v1/auth/verify", json={"mobile": mobile(1), "code": code, **phones[1].proof()})
+print("Amma signs in on her own phone (key signs a fresh challenge) -> proven:", own["device_proven"],
+      "| restricted:", own["restricted"])
+print("so she can confirm the change herself:",
+      call("POST", "/v1/me/security/confirm-sim-change", headers=bearer(own["token"])))
+print("(the thief above had Ravi's SIM but not his phone, so the same check kept them restricted)")
 
 step("Daily limit is shared across banks (₹60,000/day)")
 spent = 800 + 15_000

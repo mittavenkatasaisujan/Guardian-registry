@@ -339,8 +339,36 @@ CREATE TABLE push_tokens (
 CREATE INDEX ix_push_user ON push_tokens(user_id);
 """
 
-MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8]
+# v9 (first portable migration, see PORTABLE_FROM): device-bound keys. The app keeps a
+# private key in secure hardware and signs a one-time server challenge at sign-in.
+SCHEMA_V9 = """
+CREATE TABLE device_keys (
+    user_id           TEXT NOT NULL REFERENCES users(id),
+    key_id            TEXT NOT NULL,              -- SHA-256 of the public key (DER)
+    public_key        TEXT NOT NULL,              -- base64 DER SubjectPublicKeyInfo, P-256
+    platform_attested INTEGER NOT NULL DEFAULT 0, -- Play Integrity / App Attest said hardware + genuine app
+    created_at        TEXT NOT NULL,
+    trusted_at        TEXT NOT NULL,              -- after probation (first key: at once)
+    last_used_at      TEXT,
+    revoked_at        TEXT,
+    PRIMARY KEY (user_id, key_id)
+);
+CREATE TABLE auth_challenges (
+    nonce_hash TEXT PRIMARY KEY,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT
+);
+ALTER TABLE sessions ADD COLUMN device_key_id TEXT;
+"""
 
+MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8, SCHEMA_V9]
+
+
+# From this migration on (1-based), every script must be plain SQL that runs on SQLite AND
+# Postgres (CREATE TABLE / INDEX, ALTER TABLE ... ADD COLUMN, UPDATE ...). Postgres applies
+# them as they are. Earlier ones (with SQLite table rebuilds) reach Postgres only through
+# postgres_baseline().
+PORTABLE_FROM = 9
 
 PG_WRITE_LOCK = 7_240_001        # advisory lock id serializing writes across nodes
 PG_ROWID_TABLES = ("checks", "notifications")  # code orders by SQLite's rowid on these
@@ -476,7 +504,8 @@ class Database:
         return version
 
     def _migrate_postgres(self) -> int:
-        """First start: create the full schema. Later versions need a Postgres step here."""
+        """First start: create the full schema. Later starts: apply the portable migrations
+        added since, in order, in one transaction."""
         with self.tx() as c:  # the write lock also stops two nodes migrating at once
             c.execute("CREATE TABLE IF NOT EXISTS gr_schema (version INTEGER NOT NULL)")
             row = c.execute("SELECT version FROM gr_schema").fetchone()
@@ -484,10 +513,15 @@ class Database:
                 c.executescript(postgres_baseline())
                 c.execute("INSERT INTO gr_schema (version) VALUES (?)", (len(MIGRATIONS),))
                 return len(MIGRATIONS)
-            if row["version"] != len(MIGRATIONS):
-                raise RuntimeError(f"Postgres schema is v{row['version']}, code expects v{len(MIGRATIONS)}: "
-                                   "add a Postgres migration step")
-            return row["version"]
+            version = row["version"]
+            if version > len(MIGRATIONS):
+                raise RuntimeError(f"Postgres schema is v{version}, newer than this code (v{len(MIGRATIONS)})")
+            if version < PORTABLE_FROM - 1:
+                raise RuntimeError(f"Postgres schema v{version} predates portable migrations; rebuild it")
+            for target in range(version + 1, len(MIGRATIONS) + 1):
+                c.executescript(_strip_comments(MIGRATIONS[target - 1]))
+                c.execute("UPDATE gr_schema SET version=?", (target,))
+            return len(MIGRATIONS)
 
     @contextmanager
     def tx(self):

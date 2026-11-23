@@ -26,6 +26,7 @@ from .db import Database
 from .errors import Conflict, Forbidden, Invalid, NotFound, TooMany, Unauthorized
 from .kyc import KycMixin
 from .channels import ChannelMixin
+from .devicekeys import DeviceKeyMixin, KeyAttestor
 from .participants import ParticipantMixin
 from .recovery import RecoveryMixin
 from .simfeed import SimFeedMixin, SimLookup
@@ -63,12 +64,14 @@ _OUTCOME_TO_STATUS = {
 }
 
 
-class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryMixin, ChannelMixin):
+class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryMixin, ChannelMixin,
+               DeviceKeyMixin):
     def __init__(self, db: Database | None = None, clock: Clock | None = None,
-                 sim_lookup: SimLookup | None = None):
+                 sim_lookup: SimLookup | None = None, key_attestor: KeyAttestor | None = None):
         self.db = db or Database()
         self.clock = clock or Clock()
         self.sim_lookup = sim_lookup  # live operator SIM-swap check (simfeed.py); None = off
+        self.key_attestor = key_attestor  # platform evidence for device keys (devicekeys.py); None = off
 
     # ------------------------------------------------------------------ helpers
     def _now(self) -> str:
@@ -189,11 +192,12 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
 
     # ----------------------------------------------------------------- sessions
     def _insert_session(self, c: sqlite3.Connection, uid: str, token: str,
-                        device_hash: str | None = None, probation_until: str | None = None) -> None:
-        c.execute("INSERT INTO sessions (token_hash, user_id, created_at, expires_at, device_hash, probation_until) "
-                  "VALUES (?,?,?,?,?,?)",
+                        device_hash: str | None = None, probation_until: str | None = None,
+                        device_key_id: str | None = None) -> None:
+        c.execute("INSERT INTO sessions (token_hash, user_id, created_at, expires_at, device_hash, probation_until, "
+                  "device_key_id) VALUES (?,?,?,?,?,?,?)",
                   (secret_hash(token), uid, self._now(), iso(self.clock.now() + timedelta(days=SESSION_DAYS)),
-                   device_hash, probation_until))
+                   device_hash, probation_until, device_key_id))
 
     def user_by_token(self, token: str) -> str | None:
         row = self.db.one("SELECT user_id FROM sessions WHERE token_hash=? AND revoked_at IS NULL AND expires_at>?",
@@ -266,7 +270,9 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             c.execute("DELETE FROM otps WHERE mobile_hash=?", (mh,))  # single use
 
     def verify_otp(self, mobile: str, code: str, display_name: str | None = None,
-                   device_id: str | None = None) -> dict:
+                   device_id: str | None = None, device_key: str | None = None, device_proof: str | None = None,
+                   challenge: str | None = None, key_attestation: str | None = None,
+                   platform: str | None = None) -> dict:
         """Check the code. Enrolled number -> new session. New number -> enrol (needs display_name).
         `device_id` is a stable app-install id: a sign-in from a device this person hasn't used
         before starts on probation (see simswap.py)."""
@@ -274,24 +280,39 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         uid = self.user_by_mobile(mobile)
         if not uid and not (display_name or "").strip():
             raise Invalid("this number is not enrolled yet: send display_name to enrol")
+        key_id = None
+        if device_key or device_proof or challenge:
+            if not (device_key and device_proof and challenge):
+                raise Invalid("send device_key, challenge and device_proof together")
+            key_id = self._verify_proof(device_key, challenge, device_proof)  # burns the challenge
         self._consume_otp(mh)
         if uid:
             self.refresh_sim_status(uid, force=True)  # a fresh SIM change makes THIS session restricted
             token = new_secret("gut")
             with self.db.tx() as c:
                 device_hash, probation_until = self._register_device(c, uid, device_id)
-                self._insert_session(c, uid, token, device_hash, probation_until)
-                self._audit(c, uid, "session.created", uid, via="otp", new_device_probation=probation_until is not None)
+                proven = False
+                if key_id:
+                    proven, key_probation = self._register_key(c, uid, key_id, device_key, key_attestation, platform)
+                    probation_until = None if proven else (key_probation or probation_until)
+                self._insert_session(c, uid, token, device_hash, probation_until, key_id)
+                self._audit(c, uid, "session.created", uid, via="otp", new_device_probation=probation_until is not None,
+                            device_proven=proven)
                 if probation_until:
                     self._alert(c, [uid], "new_device_sign_in", "New device signed in",
                                 "Your account was signed in on a new device. For 24 hours that device can't approve "
                                 "payments or loosen protection. If this wasn't you, report a lost phone.", uid)
-            out = {"user_id": uid, "token": token, "new_user": False}
+            out = {"user_id": uid, "token": token, "new_user": False, "device_proven": proven}
             info = self.session_info(token)
             out["restricted"], out["restriction_reasons"] = info["restricted"], info["reasons"]
             return out
         uid, token = self.register_user(mobile, display_name, device_id)
-        return {"user_id": uid, "token": token, "new_user": True, "restricted": False, "restriction_reasons": []}
+        if key_id:
+            with self.db.tx() as c:
+                self._register_key(c, uid, key_id, device_key, key_attestation, platform, new_account=True)
+                c.execute("UPDATE sessions SET device_key_id=? WHERE token_hash=?", (key_id, secret_hash(token)))
+        return {"user_id": uid, "token": token, "new_user": True, "restricted": False, "restriction_reasons": [],
+                "device_proven": False}
 
     def user_by_mobile(self, mobile: str) -> str | None:
         try:
