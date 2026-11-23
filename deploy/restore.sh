@@ -1,6 +1,6 @@
 #!/bin/sh
 # Restore a backup into a NEW database (never over the live one):
-#   docker compose -f deploy/docker-compose.yml exec backup /restore.sh /backups/guardian-....dump guardian_restored
+#   docker compose -f deploy/docker-compose.yml exec backup sh /restore.sh /backups/guardian-....dump guardian_restored
 # Then point a node at it (GR_DB=postgresql://.../guardian_restored), check
 # GET /v1/admin/audit/verify, and only then switch over.
 set -eu

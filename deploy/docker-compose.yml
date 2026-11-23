@@ -79,7 +79,7 @@ services:
       - ./backup.sh:/backup.sh:ro
       - ./restore.sh:/restore.sh:ro
       - backups:/backups
-    entrypoint: ["sh", "-c", "while true; do /backup.sh; sleep $$BACKUP_EVERY_SECONDS; done"]
+    entrypoint: ["sh", "-c", "while true; do sh /backup.sh; sleep $$BACKUP_EVERY_SECONDS; done"]
     depends_on:
       db:
         condition: service_healthy

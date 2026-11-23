@@ -214,9 +214,9 @@ jobs:
         run: |
           set -e
           C="docker compose -f deploy/docker-compose.yml"
-          $C exec -T backup /backup.sh
+          $C exec -T backup sh /backup.sh
           DUMP=$($C exec -T backup sh -c 'ls -1 /backups/*.dump | tail -1')
-          $C exec -T backup /restore.sh "$DUMP" guardian_restored
+          $C exec -T backup sh /restore.sh "$DUMP" guardian_restored
           URL=$(sed 's#/guardian$#/guardian_restored#' deploy/secrets/db_url)
           $C run --rm -T --no-deps -e GR_DB_FILE= -e GR_DB="$URL" api1 python -c "import os; from guardian_registry.db import Database; from guardian_registry.service import Registry; v=Registry(Database(os.environ['GR_DB'])).verify_audit(); print('restored audit:', v); assert v.ok and v.entries > 0"
       - if: failure()
