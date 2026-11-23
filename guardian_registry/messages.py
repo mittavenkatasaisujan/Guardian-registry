@@ -161,6 +161,13 @@ FRAGMENTS_HI = {
     "no active guardian to approve, so a cooling-off delay applies instead":
         "मंज़ूरी देने के लिए कोई सक्रिय गार्डियन नहीं, इसलिए इसकी जगह प्रतीक्षा अवधि लागू है",
     "amount must be positive": "राशि शून्य से ज़्यादा होनी चाहिए",
+    "banks have confirmed fraud involving this payee": "बैंकों ने इस प्राप्तकर्ता से जुड़ी धोखाधड़ी की पुष्टि की है",
+    "a bank has reported fraud involving this payee": "एक बैंक ने इस प्राप्तकर्ता से जुड़ी धोखाधड़ी की सूचना दी है",
+    "much larger than this person's usual payments (largest in 90 days: {0})":
+        "इस व्यक्ति के सामान्य भुगतानों से बहुत बड़ा (90 दिनों में सबसे बड़ा: {0})",
+    "{0} new payees in 24 hours": "24 घंटों में {0} नए प्राप्तकर्ता",
+    "a request to loosen protection is waiting": "सुरक्षा ढीली करने का एक अनुरोध प्रतीक्षा में है",
+    "a large payment between midnight and 5 am": "आधी रात से सुबह 5 बजे के बीच बड़ा भुगतान",
     "kill switch is on: all outgoing payments are paused": "सभी भुगतान रोकने वाला बटन चालू है: सभी भुगतान रुके हुए हैं",
     "channel '{0}' is switched off": "माध्यम '{0}' बंद है",
     "amount {0} is over the per-payment limit {1}": "राशि {0} एक भुगतान की सीमा {1} से ज़्यादा है",
@@ -244,6 +251,7 @@ ERRORS_HI = {
     "wait {0} seconds before asking for another code": "दूसरा कोड माँगने से पहले {0} सेकंड रुकें",
     "too many codes requested; try again in {0} minutes": "बहुत ज़्यादा कोड माँगे गए; {0} मिनट बाद फिर कोशिश करें",
     "language must be one of {0}": "भाषा इनमें से एक होनी चाहिए: {0}",
+    "scam_signals and sim_swap_hold must be true or false": "धोखाधड़ी के संकेत और सिम-बदलाव रोक हाँ या नहीं होने चाहिए",
     "you are not an active guardian of this person": "आप इस व्यक्ति के सक्रिय गार्डियन नहीं हैं",
     "you cannot be your own guardian": "आप खुद अपने गार्डियन नहीं हो सकते",
     "{0} must be a positive whole number of paise or null": "{0} पैसों में धनात्मक पूर्ण संख्या या खाली होना चाहिए",

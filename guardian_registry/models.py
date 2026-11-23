@@ -75,6 +75,7 @@ class Rules:
     blocked_channels: list[str] = field(default_factory=list)
     require_verified_guardian: bool = False     # only bank-KYC'd guardians may approve
     sim_swap_hold: bool = True                  # extra holds while a SIM change is recent
+    scam_signals: bool = False                  # hold payments that look coached (scamsignals.py)
     kill_switch: bool = False
 
     def to_dict(self) -> dict:
@@ -113,6 +114,8 @@ class Rules:
         if self.require_verified_guardian and not new.require_verified_guardian:
             return True
         if self.sim_swap_hold and not new.sim_swap_hold:
+            return True
+        if self.scam_signals and not new.scam_signals:
             return True
         if self.kill_switch and not new.kill_switch:
             return True

@@ -177,6 +177,29 @@ async function participantsView() {
       h("div", { class: "row mt" }, h("button", { type: "submit" }, "Register")), keyBox)];
 }
 
+// ------------------------------------------------------------------ fraud payees
+async function watchlistView() {
+  const list = await api("GET", "/v1/admin/watchlist");
+  const decide = (p, what) => (e) => {
+    const why = ask(what === "confirm" ? `Confirm fraud for ${p.payee}? Payments to it will be blocked. Reason:` :
+      `Clear ${p.payee}? Earlier reports stop counting. Reason:`);
+    if (why) act(e.target, () => api("POST", `/v1/admin/watchlist/${encodeURIComponent(p.payee)}/${what}`, { reason: why }),
+      what === "confirm" ? "Confirmed: payments to it are blocked." : "Cleared.");
+  };
+  return [h("h1", {}, "Fraud payees"),
+    h("p", { class: "muted" }, "Payees banks reported after confirming a fraud. One bank's report holds payments for a guardian; two banks, or your confirmation, block them."),
+    h("section", { class: "card" }, list.length ? h("ul", { class: "list" }, list.map((p) => h("li", {},
+      h("div", { class: "row space" }, h("strong", {}, p.payee),
+        pill(p.status, p.status === "confirmed" ? "bad" : p.status === "reported" ? "warn" : "")),
+      p.reports.map((r) => h("p", { class: "small" }, `${r.name}: ${r.reason}`, r.evidence_ref ? ` (case ${r.evidence_ref})` : "",
+        h("span", { class: "muted" }, ` · ${when(r.reported_at)}`))),
+      p.operator_decision ? h("p", { class: "muted small" }, `${p.operator_decision.decision} by ${p.operator_decision.operator}: ${p.operator_decision.reason}`) : null,
+      h("div", { class: "row" },
+        p.status !== "confirmed" ? h("button", { class: "danger", onclick: decide(p, "confirm") }, "Confirm fraud") : null,
+        p.status !== "none" ? h("button", { class: "secondary", onclick: decide(p, "clear") }, "Clear (reported by mistake)") : null))))
+      : h("p", { class: "empty" }, "No payee has been reported."))];
+}
+
 // ------------------------------------------------------------------ registers
 async function registersView() {
   const [regs, feeds] = await Promise.all([api("GET", "/v1/admin/register"), api("GET", "/v1/admin/register-feeds")]);
@@ -215,7 +238,7 @@ async function systemView() {
 }
 
 // ------------------------------------------------------------------ shell
-const VIEWS = { queue: queueView, participants: participantsView, registers: registersView, system: systemView };
+const VIEWS = { queue: queueView, participants: participantsView, watchlist: watchlistView, registers: registersView, system: systemView };
 
 function show(nodes) {
   const v = document.getElementById("view");

@@ -28,6 +28,7 @@ from .kyc import KycMixin
 from .certs import CertMixin
 from .registerfeed import RegisterFeedMixin
 from .privacy import PrivacyMixin
+from .scamsignals import ScamSignalsMixin
 from .channels import ChannelMixin
 from .devicekeys import DeviceKeyMixin, KeyAttestor
 from .participants import ParticipantMixin
@@ -68,7 +69,7 @@ _OUTCOME_TO_STATUS = {
 
 
 class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryMixin, ChannelMixin,
-               DeviceKeyMixin, CertMixin, RegisterFeedMixin, PrivacyMixin):
+               DeviceKeyMixin, CertMixin, RegisterFeedMixin, PrivacyMixin, ScamSignalsMixin):
     def __init__(self, db: Database | None = None, clock: Clock | None = None,
                  sim_lookup: SimLookup | None = None, key_attestor: KeyAttestor | None = None):
         self.db = db or Database()
@@ -474,6 +475,8 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             raise Invalid("cooling_off_minutes must be between 0 and 10080")
         if not isinstance(rules.require_verified_guardian, bool):
             raise Invalid("require_verified_guardian must be true or false")
+        if not isinstance(rules.scam_signals, bool) or not isinstance(rules.sim_swap_hold, bool):
+            raise Invalid("scam_signals and sim_swap_hold must be true or false")
         if not 1 <= rules.approval_timeout_minutes <= 24 * 60:
             raise Invalid("approval_timeout_minutes must be between 1 and 1440")
         bad = set(rules.blocked_channels) - set(CHANNELS)
@@ -794,12 +797,15 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             (principal_id, day, *spend_statuses),
         ).fetchone()["s"]
         rules = self._rules_raw(principal_id)
+        known = self._payee_known(principal_id, payee)
         decision = evaluate(
             rules, Transaction(amount=amount, payee=payee, channel=channel),
             spent_today=spent,
-            payee_known=self._payee_known(principal_id, payee),
+            payee_known=known,
             sim_swap_recent=self.sim_swap_active(principal_id),
             has_active_guardian=bool(self._approver_ids(principal_id)),
+            payee_watch=self._watch(c, payee),
+            risk_signals=self._risk_signals(c, principal_id, amount, payee, known) if rules.scam_signals else [],
         )
         status = _OUTCOME_TO_STATUS[decision.outcome]
         release_at = iso(now + timedelta(minutes=decision.delay_minutes)) if decision.outcome is Outcome.DELAY else None

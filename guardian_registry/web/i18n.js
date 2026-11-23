@@ -21,6 +21,7 @@ const STRINGS = {
     "Wait time": "प्रतीक्षा समय", "Time for guardian to answer": "गार्डियन के जवाब का समय", "Blocked channels": "बंद किए गए माध्यम",
     "Only bank-verified guardians approve": "केवल बैंक-सत्यापित गार्डियन मंज़ूरी दें",
     "Hold payments after a SIM change": "सिम बदलने के बाद भुगतान रोकें",
+    "Hold payments that look like a scam": "धोखाधड़ी जैसे दिखने वाले भुगतान रोकें",
     "None": "कोई नहीं", "Yes": "हाँ", "No": "नहीं", "{m} min": "{m} मिनट",
     "Loosen payment limits": "भुगतान सीमाएँ ढीली करना", "Switch payments back on": "भुगतान फिर से चालू करें",
     "Remove a guardian": "एक गार्डियन को हटाना", "Move to a new number": "नए नंबर पर जाना",

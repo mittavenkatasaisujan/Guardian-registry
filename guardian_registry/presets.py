@@ -29,6 +29,7 @@ PRESETS: dict[str, dict] = {
             "new_payee_delay_threshold": 5_000 * R,
             "cooling_off_minutes": 60,
             "daily_limit": 1_00_000 * R,
+            "scam_signals": True,
         },
     },
     "strict": {
@@ -42,6 +43,7 @@ PRESETS: dict[str, dict] = {
             "cooling_off_minutes": 120,
             "approval_timeout_minutes": 30,
             "blocked_channels": ["rtgs"],
+            "scam_signals": True,
         },
     },
 }

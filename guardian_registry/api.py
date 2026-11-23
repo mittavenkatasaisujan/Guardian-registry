@@ -146,6 +146,16 @@ class RegisterIn(BaseModel):
     entities: list[EntityIn] = Field(min_length=1, max_length=20000)
 
 
+class FraudPayeeIn(BaseModel):
+    payee: str = Field(min_length=1, max_length=200, description="UPI ID or account reference the money went to")
+    reason: str = Field(min_length=5, max_length=500, description="what happened, in a sentence")
+    evidence_ref: str | None = Field(default=None, max_length=100, description="your case or complaint number")
+
+
+class WatchDecisionIn(BaseModel):
+    reason: str = Field(min_length=5, max_length=500)
+
+
 class ConsentIn(BaseModel):
     notice_version: str = Field(min_length=4, max_length=40, description="the version from GET /v1/privacy/notice")
 
@@ -195,6 +205,7 @@ class RulesPatch(BaseModel):
     approval_timeout_minutes: int | None = None
     blocked_channels: list[str] | None = None
     require_verified_guardian: bool | None = None
+    scam_signals: bool | None = None
 
 
 class AttestIn(BaseModel):
@@ -542,6 +553,21 @@ def create_app(
         from .secrets_store import rotate_data_key as rotate
         return rotate(reg.db, min(max(limit, 1), 10000))
 
+    @app.get("/v1/admin/watchlist", tags=["ops"])
+    def admin_watchlist(_: Operator):
+        """Payees banks have reported for fraud, with the reports and any operator decision."""
+        return reg.watchlist()
+
+    @app.post("/v1/admin/watchlist/{payee}/confirm", tags=["ops"])
+    def admin_watch_confirm(payee: str, body: WatchDecisionIn, op: Operator):
+        """Confirm fraud on one bank's report: payments to the payee are then blocked."""
+        return reg.operator_watch_decision(op, payee, "confirmed", body.reason)
+
+    @app.post("/v1/admin/watchlist/{payee}/clear", tags=["ops"])
+    def admin_watch_clear(payee: str, body: WatchDecisionIn, op: Operator):
+        """Clear a payee reported by mistake: reports made before now stop counting."""
+        return reg.operator_watch_decision(op, payee, "cleared", body.reason)
+
     @app.get("/v1/admin/register", tags=["ops"])
     def register_status(_: Operator):
         return reg.register_status()
@@ -671,6 +697,22 @@ def create_app(
         reg.logout(token, everywhere=body.everywhere)
 
     # --------------------------------------------------------- participants
+    @app.post("/v1/signals/fraud-payees", status_code=201, tags=["banks"])
+    def report_fraud_payee(body: FraudPayeeIn, pid: Participant):
+        """Report a payee after you confirmed a fraud. Every bank's protected customers are then
+        held (one bank) or blocked (two banks, or an operator's confirmation) when paying it."""
+        return reg.report_fraud_payee(pid, body.payee, body.reason, body.evidence_ref)
+
+    @app.get("/v1/signals/fraud-payees/{payee}", tags=["banks"])
+    def fraud_payee_status(payee: str, pid: Participant):
+        """Status only: none, reported or confirmed, and how many banks (never which)."""
+        reg._require_participant(pid, "checks")
+        return reg.payee_status(payee)
+
+    @app.delete("/v1/signals/fraud-payees/{payee}", tags=["banks"])
+    def withdraw_fraud_payee(payee: str, pid: Participant):
+        return reg.withdraw_fraud_report(pid, payee)
+
     @app.post("/v1/checks", tags=["banks"])
     def create_check(body: CheckIn, pid: Participant):
         limited(check_limiter, pid)

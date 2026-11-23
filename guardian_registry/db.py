@@ -454,8 +454,30 @@ SCHEMA_V15 = """
 ALTER TABLE users ADD COLUMN language TEXT;
 """
 
+# v16: shared scam signals (scamsignals.py): banks' fraud reports and operators' decisions
+SCHEMA_V16 = """
+CREATE TABLE payee_reports (
+    id             TEXT PRIMARY KEY,
+    payee          TEXT NOT NULL,
+    participant_id TEXT NOT NULL REFERENCES participants(id),
+    reason         TEXT NOT NULL,
+    evidence_ref   TEXT,
+    reported_at    TEXT NOT NULL,
+    expires_at     TEXT NOT NULL,
+    withdrawn_at   TEXT
+);
+CREATE INDEX ix_payee_reports ON payee_reports(payee);
+CREATE TABLE payee_decisions (
+    payee      TEXT PRIMARY KEY,
+    decision   TEXT NOT NULL,
+    operator   TEXT NOT NULL,
+    reason     TEXT NOT NULL,
+    decided_at TEXT NOT NULL
+);
+"""
+
 MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8, SCHEMA_V9,
-              SCHEMA_V10, SCHEMA_V11, SCHEMA_V12, SCHEMA_V13, SCHEMA_V14, SCHEMA_V15]
+              SCHEMA_V10, SCHEMA_V11, SCHEMA_V12, SCHEMA_V13, SCHEMA_V14, SCHEMA_V15, SCHEMA_V16]
 
 # Postgres-only follow-ups, run after the baseline or after the portable migration of the
 # same version. v11: audit rows get their global seq from a sequence (SQLite's INTEGER

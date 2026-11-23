@@ -184,6 +184,7 @@ const RULE_LABELS = [
   ["blocked_channels", t("Blocked channels"), (c) => (c && c.length ? c.join(", ").toUpperCase() : t("None"))],
   ["require_verified_guardian", t("Only bank-verified guardians approve"), (b) => (b ? t("Yes") : t("No"))],
   ["sim_swap_hold", t("Hold payments after a SIM change"), (b) => (b ? t("Yes") : t("No"))],
+  ["scam_signals", t("Hold payments that look like a scam"), (b) => (b ? t("Yes") : t("No"))],
 ];
 
 const CHANGE_LABELS = {
