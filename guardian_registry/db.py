@@ -428,8 +428,29 @@ SCHEMA_V13 = """
 ALTER TABLE register_feeds ADD COLUMN sheet TEXT;
 """
 
+# v14: privacy (privacy.py): consent records, held erasure requests, erased accounts
+SCHEMA_V14 = """
+CREATE TABLE consents (
+    id             TEXT PRIMARY KEY,
+    user_id        TEXT NOT NULL REFERENCES users(id),
+    notice_version TEXT NOT NULL,
+    accepted_at    TEXT NOT NULL
+);
+CREATE INDEX ix_consents_user ON consents(user_id);
+CREATE TABLE erasure_requests (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL REFERENCES users(id),
+    status       TEXT NOT NULL,
+    requested_at TEXT NOT NULL,
+    erase_at     TEXT NOT NULL,
+    decided_at   TEXT
+);
+CREATE INDEX ix_erasure_due ON erasure_requests(status, erase_at);
+ALTER TABLE users ADD COLUMN erased_at TEXT;
+"""
+
 MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8, SCHEMA_V9,
-              SCHEMA_V10, SCHEMA_V11, SCHEMA_V12, SCHEMA_V13]
+              SCHEMA_V10, SCHEMA_V11, SCHEMA_V12, SCHEMA_V13, SCHEMA_V14]
 
 # Postgres-only follow-ups, run after the baseline or after the portable migration of the
 # same version. v11: audit rows get their global seq from a sequence (SQLite's INTEGER

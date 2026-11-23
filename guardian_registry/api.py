@@ -140,6 +140,10 @@ class RegisterIn(BaseModel):
     entities: list[EntityIn] = Field(min_length=1, max_length=20000)
 
 
+class ConsentIn(BaseModel):
+    notice_version: str = Field(min_length=4, max_length=40, description="the version from GET /v1/privacy/notice")
+
+
 class FeedIn(BaseModel):
     url: str = Field(min_length=8, max_length=500, description="https URL of the published list")
     format: Literal["csv", "xlsx", "json"] = "csv"
@@ -857,6 +861,36 @@ def create_app(
     @app.get("/v1/presets", tags=["people"])
     def presets():
         return PRESETS
+
+    # --------------------------------------------------------- privacy (DPDP Act)
+    @app.get("/v1/privacy/notice", tags=["people"])
+    def privacy_notice():
+        """What we collect, why, for how long, your rights and the grievance officer."""
+        return reg.privacy_notice()
+
+    @app.get("/v1/me/consents", tags=["people"])
+    def my_consents(uid: User):
+        return reg.consents(uid)
+
+    @app.post("/v1/me/consents", tags=["people"])
+    def accept_notice(body: ConsentIn, uid: User):
+        return reg.record_consent(uid, body.notice_version)
+
+    @app.get("/v1/me/data-export", tags=["people"])
+    def data_export(uid: TrustedUser):
+        """Everything held about you, as JSON. Needs a session that isn't restricted by a SIM
+        change, since it includes your number and date of birth."""
+        return JSONResponse(reg.data_export(uid), headers={
+            "Content-Disposition": 'attachment; filename="guardian-registry-my-data.json"'})
+
+    @app.post("/v1/me/erasure", status_code=202, tags=["people"])
+    def request_erasure(uid: TrustedUser):
+        """Delete my account. Held for 7 days (your guardians are told; you can cancel)."""
+        return reg.request_erasure(uid)
+
+    @app.delete("/v1/me/erasure", tags=["people"])
+    def cancel_erasure(uid: User):
+        return reg.cancel_erasure(uid)
 
     @app.get("/v1/me/rules", tags=["people"])
     def my_rules(uid: User):

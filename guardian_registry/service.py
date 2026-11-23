@@ -27,6 +27,7 @@ from .errors import Conflict, Forbidden, Invalid, NotFound, TooMany, Unauthorize
 from .kyc import KycMixin
 from .certs import CertMixin
 from .registerfeed import RegisterFeedMixin
+from .privacy import PrivacyMixin
 from .channels import ChannelMixin
 from .devicekeys import DeviceKeyMixin, KeyAttestor
 from .participants import ParticipantMixin
@@ -67,7 +68,7 @@ _OUTCOME_TO_STATUS = {
 
 
 class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryMixin, ChannelMixin,
-               DeviceKeyMixin, CertMixin, RegisterFeedMixin):
+               DeviceKeyMixin, CertMixin, RegisterFeedMixin, PrivacyMixin):
     def __init__(self, db: Database | None = None, clock: Clock | None = None,
                  sim_lookup: SimLookup | None = None, key_attestor: KeyAttestor | None = None):
         self.db = db or Database()
@@ -958,6 +959,12 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         feeds = self.refresh_registers()
         if feeds:
             out["registers"] = feeds
+        erased = self.sweep_erasure()
+        if erased:
+            out["accounts_erased"] = erased
+        purged = self.sweep_retention()
+        if purged:
+            out["purged"] = purged
         return out
 
     # ---------------------------------------------------------- notifications

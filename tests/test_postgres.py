@@ -108,6 +108,9 @@ class TestMultiNode:
         c.execute("DROP SEQUENCE audit_log_seq")
         c.execute("DROP TABLE participant_certs")
         c.execute("DROP TABLE register_feeds")  # v12 (v13 adds a column to it)
+        c.execute("DROP TABLE consents")  # v14
+        c.execute("DROP TABLE erasure_requests")
+        c.execute("ALTER TABLE users DROP COLUMN erased_at")
         c.execute("DROP TABLE device_keys")
         c.execute("DROP TABLE auth_challenges")
         c.execute("ALTER TABLE sessions DROP COLUMN device_key_id")
