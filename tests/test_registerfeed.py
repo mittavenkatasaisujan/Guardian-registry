@@ -107,7 +107,7 @@ class TestRefresh:
         assert v["status"] == "suspended" and "no longer on the official bank register" in v["status_reason"]
         assert reg.participant_view(kept)["status"] == "active"
         hook = reg.db.one("SELECT 1 FROM notifications WHERE recipient_id=? AND kind='participant.updated' "
-                          "AND payload LIKE '%suspended%'", (gone,))
+                          "AND payload LIKE ?", (gone, "%suspended%"))
         assert hook
         assert reg.verify_audit().ok
 
