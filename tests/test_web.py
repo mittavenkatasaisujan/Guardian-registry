@@ -91,3 +91,19 @@ def test_admin_console_follows_the_same_rules(clock):
         r = c.get("/app/admin.html")
         assert r.status_code == 200 and "frame-ancestors 'none'" in r.headers["content-security-policy"]
         assert c.get("/app/admin.js").status_code == 200
+
+
+def test_every_interface_string_has_hindi():
+    """Every t("...") in the web app has a Hindi entry, and no sentence is left untranslated."""
+    js = (WEB_DIR / "app.js").read_text(encoding="utf-8")
+    table = (WEB_DIR / "i18n.js").read_text(encoding="utf-8").split("hi: {", 1)[1]
+    keys = set(re.findall(r'"((?:[^"\\]|\\.)*)":', table))
+    used = set(re.findall(r'\bt\("((?:[^"\\]|\\.)*)"', js))
+    assert used and not sorted(used - keys), sorted(used - keys)
+    left = [m.group(1) for m in re.finditer(r'"((?:[^"\\\n]|\\.)*)"', js)
+            if " " in m.group(1) and m.group(1)[:1].isupper() and js[max(0, m.start() - 2):m.start()] != "t("]
+    assert not left, left
+    html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+    assert html.index('src="i18n.js"') < html.index('src="app.js"')   # t() exists before app.js runs
+    for label in re.findall(r'data-i18n="([^"]+)"', html):
+        assert label in keys, label

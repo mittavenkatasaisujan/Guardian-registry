@@ -46,13 +46,13 @@ function toast(msg, ms = 4000) {
 }
 
 function rupees(paise) {
-  if (paise === null || paise === undefined) return "No limit";
-  return (paise / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
+  if (paise === null || paise === undefined) return t("No limit");
+  return (paise / 100).toLocaleString(LANG === "hi" ? "hi-IN" : "en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 }
 
 function when(isoText) {
   if (!isoText) return "";
-  return new Date(isoText).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  return new Date(isoText).toLocaleString(LANG === "hi" ? "hi-IN" : "en-IN", { dateStyle: "medium", timeStyle: "short" });
 }
 
 // ------------------------------------------------------------------ API
@@ -97,7 +97,7 @@ async function act(button, fn, okMessage) {
     await refresh();
     return out;
   } catch (e) {
-    toast(e.message || "Something went wrong", 7000);
+    toast(e.message || t("Something went wrong"), 7000);
   } finally {
     button.disabled = false;
   }
@@ -175,29 +175,29 @@ function rawToDer(raw) {
 
 // ------------------------------------------------------------------ labels
 const RULE_LABELS = [
-  ["per_txn_limit", "Most per payment", rupees],
-  ["daily_limit", "Most per day (all banks)", rupees],
-  ["approval_threshold", "Guardian approves from", rupees],
-  ["new_payee_delay_threshold", "Wait on new payees from", rupees],
-  ["cooling_off_minutes", "Wait time", (m) => `${m} min`],
-  ["approval_timeout_minutes", "Time for guardian to answer", (m) => `${m} min`],
-  ["blocked_channels", "Blocked channels", (c) => (c && c.length ? c.join(", ").toUpperCase() : "None")],
-  ["require_verified_guardian", "Only bank-verified guardians approve", (b) => (b ? "Yes" : "No")],
-  ["sim_swap_hold", "Hold payments after a SIM change", (b) => (b ? "Yes" : "No")],
+  ["per_txn_limit", t("Most per payment"), rupees],
+  ["daily_limit", t("Most per day (all banks)"), rupees],
+  ["approval_threshold", t("Guardian approves from"), rupees],
+  ["new_payee_delay_threshold", t("Wait on new payees from"), rupees],
+  ["cooling_off_minutes", t("Wait time"), (m) => t("{m} min", { m })],
+  ["approval_timeout_minutes", t("Time for guardian to answer"), (m) => t("{m} min", { m })],
+  ["blocked_channels", t("Blocked channels"), (c) => (c && c.length ? c.join(", ").toUpperCase() : t("None"))],
+  ["require_verified_guardian", t("Only bank-verified guardians approve"), (b) => (b ? t("Yes") : t("No"))],
+  ["sim_swap_hold", t("Hold payments after a SIM change"), (b) => (b ? t("Yes") : t("No"))],
 ];
 
 const CHANGE_LABELS = {
-  update_rules: "Loosen payment limits",
-  kill_switch_off: "Switch payments back on",
-  remove_guardian: "Remove a guardian",
-  change_mobile: "Move to a new number",
+  update_rules: t("Loosen payment limits"),
+  kill_switch_off: t("Switch payments back on"),
+  remove_guardian: t("Remove a guardian"),
+  change_mobile: t("Move to a new number"),
 };
 
 const STATUS = {
-  allowed: ["Allowed", "ok"], approved: ["Approved", "ok"], released: ["Released", "ok"],
-  pending_approval: ["Waiting for approval", "warn"], cooling_off: ["On hold", "warn"],
-  blocked: ["Blocked", "bad"], denied: ["Denied", "bad"], expired: ["Expired", "bad"],
-  cancelled: ["Cancelled", ""], failed: ["Failed", ""],
+  allowed: [t("Allowed"), "ok"], approved: [t("Approved"), "ok"], released: [t("Released"), "ok"],
+  pending_approval: [t("Waiting for approval"), "warn"], cooling_off: [t("On hold"), "warn"],
+  blocked: [t("Blocked"), "bad"], denied: [t("Denied"), "bad"], expired: [t("Expired"), "bad"],
+  cancelled: [t("Cancelled"), ""], failed: [t("Failed"), ""],
 };
 
 function statusPill(status) {
@@ -214,8 +214,8 @@ function signInView() {
 
   const step1 = () => {
     root.replaceChildren(
-      h("h1", {}, "Sign in"),
-      h("p", { class: "muted" }, "We'll send a 6-digit code to your mobile number."),
+      h("h1", {}, t("Sign in")),
+      h("p", { class: "muted" }, t("We'll send a 6-digit code to your mobile number.")),
       h("form", { onsubmit: async (e) => {
         e.preventDefault();
         const btn = e.target.querySelector("button");
@@ -230,18 +230,18 @@ function signInView() {
           btn.disabled = false;
         }
       } },
-        h("label", { for: "mobile" }, "Mobile number"),
+        h("label", { for: "mobile" }, t("Mobile number")),
         h("input", { id: "mobile", name: "mobile", type: "tel", inputmode: "tel", autocomplete: "tel",
                      placeholder: "98765 43210", required: true }),
-        h("div", { class: "row mt" }, h("button", { type: "submit" }, "Send code"))));
+        h("div", { class: "row mt" }, h("button", { type: "submit" }, t("Send code")))));
     root.querySelector("input").focus();
   };
 
   const step2 = (devCode) => {
     root.replaceChildren(
-      h("h1", {}, "Enter the code"),
-      h("p", { class: "muted" }, `Sent to ${state.mobile}. It works for 5 minutes.`),
-      devCode ? h("p", { class: "pill warn" }, `Development mode code: ${devCode}`) : null,
+      h("h1", {}, t("Enter the code")),
+      h("p", { class: "muted" }, t("Sent to {mobile}. It works for 5 minutes.", { mobile: state.mobile })),
+      devCode ? h("p", { class: "pill warn" }, t("Development mode code: {code}", { code: devCode })) : null,
       h("form", { onsubmit: async (e) => {
         e.preventDefault();
         const f = e.target;
@@ -254,15 +254,15 @@ function signInView() {
             display_name: f.name && f.name.value.trim() ? f.name.value.trim() : null, ...proof,
           });
           localStorage.setItem(TOKEN_KEY, out.token);
-          if (out.new_user) toast("Welcome! Your account is set up.");
-          else if (out.restricted) toast("Signed in. This device is restricted for now; see the note at the top.", 7000);
+          if (out.new_user) toast(t("Welcome! Your account is set up."));
+          else if (out.restricted) toast(t("Signed in. This device is restricted for now; see the note at the top."), 7000);
           location.hash = "#me";
           route();
         } catch (err) {
           if (/send display_name/.test(err.message)) {
             state.needName = true;
             step2(devCode);
-            toast("This number is new here. Add your name to create your account.", 7000);
+            toast(t("This number is new here. Add your name to create your account."), 7000);
           } else {
             toast(err.message, 7000);
           }
@@ -270,24 +270,24 @@ function signInView() {
           btn.disabled = false;
         }
       } },
-        h("label", { for: "code" }, "6-digit code"),
+        h("label", { for: "code" }, t("6-digit code")),
         h("input", { id: "code", name: "code", class: "code", inputmode: "numeric", autocomplete: "one-time-code",
                      maxlength: 6, required: true, value: devCode || "" }),
         state.needName ? [
-          h("label", { for: "name" }, "Your name"),
+          h("label", { for: "name" }, t("Your name")),
           h("input", { id: "name", name: "name", autocomplete: "name", required: true, maxlength: 80 }),
         ] : null,
         h("div", { class: "row mt" },
-          h("button", { type: "submit" }, state.needName ? "Create account" : "Sign in"),
-          h("button", { type: "button", class: "secondary", onclick: step1 }, "Use another number"))));
+          h("button", { type: "submit" }, state.needName ? t("Create account") : t("Sign in")),
+          h("button", { type: "button", class: "secondary", onclick: step1 }, t("Use another number")))));
     root.querySelector(state.needName ? "#name" : "#code").focus();
   };
 
   step1();
   return [
-    h("h1", {}, "Protect payments for the people you care about"),
+    h("h1", {}, t("Protect payments for the people you care about")),
     h("p", { class: "muted" },
-      "Set limits once and every bank checks them. Ask someone you trust to approve large payments."),
+      t("Set limits once and every bank checks them. Ask someone you trust to approve large payments.")),
     root,
   ];
 }
@@ -305,91 +305,91 @@ async function meView() {
 
   const killButton = paused
     ? h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("POST", "/v1/me/kill-switch/off"),
-        (out) => (out.applied ? "Payments are back on." : "Your request is held for 24 hours. Your guardians can approve it sooner.")) },
-        "Switch payments back on")
+        (out) => (out.applied ? t("Payments are back on.") : t("Your request is held for 24 hours. Your guardians can approve it sooner."))) },
+        t("Switch payments back on"))
     : h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", "/v1/me/kill-switch/on"),
-        "All payments are paused.") }, "Pause all payments");
+        t("All payments are paused.")) }, t("Pause all payments"));
 
-  const presetSelect = h("select", { id: "preset", "aria-label": "Preset" },
+  const presetSelect = h("select", { id: "preset", "aria-label": t("Preset") },
     Object.entries(presets).map(([name, p]) => h("option", { value: name }, p.label)));
 
   const inviteForm = h("form", { onsubmit: (e) => {
     e.preventDefault();
     const mobile = e.target.gmobile.value.trim();
     act(e.target.querySelector("button"), () => api("POST", "/v1/me/guardians", { mobile }),
-      "Invitation sent. They need to accept it in their app.").then(() => { e.target.reset(); });
+      t("Invitation sent. They need to accept it in their app.")).then(() => { e.target.reset(); });
   } },
-    h("label", { for: "gmobile" }, "Invite a guardian by mobile number"),
+    h("label", { for: "gmobile" }, t("Invite a guardian by mobile number")),
     h("div", { class: "row" },
       h("input", { id: "gmobile", name: "gmobile", type: "tel", required: true, class: "grow" }),
-      h("button", { type: "submit" }, "Invite")));
+      h("button", { type: "submit" }, t("Invite"))));
 
   return [
-    h("h1", {}, `Hello, ${me.display_name}`),
-    h("p", { class: "muted small" }, `Identity: ${identityText(me.identity_level)}`),
+    h("h1", {}, t("Hello, {name}", { name: me.display_name })),
+    h("p", { class: "muted small" }, t("Identity: {level}", { level: identityText(me.identity_level) })),
 
     h("section", { class: `card ${paused ? "alert-bad" : "alert-ok"}` },
       h("div", { class: "big-status" }, h("span", { class: `dot ${paused ? "bad" : "ok"}` }),
-        paused ? "Payments are paused" : "Payments are on"),
+        paused ? t("Payments are paused") : t("Payments are on")),
       h("p", { class: "muted" }, paused
-        ? "No bank will send money from your accounts until payments are switched back on."
-        : "If someone is pressuring you to pay, pause everything. You can switch back on later."),
+        ? t("No bank will send money from your accounts until payments are switched back on.")
+        : t("If someone is pressuring you to pay, pause everything. You can switch back on later.")),
       h("div", { class: "row" }, killButton)),
 
     security.sim_swap_window_open ? h("section", { class: "card alert-warn" },
-      h("h2", {}, "Your SIM card was reported changed"),
-      h("p", {}, `Until ${when(security.window_ends_at)}, larger payments are held and new sign-ins can't approve anything.`),
-      h("p", { class: "muted" }, "If you changed your SIM yourself, confirm it from this phone. If you didn't, call your mobile operator now."),
+      h("h2", {}, t("Your SIM card was reported changed")),
+      h("p", {}, t("Until {time}, larger payments are held and new sign-ins can't approve anything.", { time: when(security.window_ends_at) })),
+      h("p", { class: "muted" }, t("If you changed your SIM yourself, confirm it from this phone. If you didn't, call your mobile operator now.")),
       h("div", { class: "row" },
         h("button", { onclick: (e) => act(e.target, () => api("POST", "/v1/me/security/confirm-sim-change"),
-          "Thanks. Normal protection applies again.") }, "Yes, I changed my SIM"))) : null,
+          t("Thanks. Normal protection applies again.")) }, t("Yes, I changed my SIM")))) : null,
 
     pending.length ? h("section", { class: "card alert-warn" },
-      h("h2", {}, "Changes waiting"),
+      h("h2", {}, t("Changes waiting")),
       h("ul", { class: "list" }, pending.map((c) => h("li", {},
         h("strong", {}, CHANGE_LABELS[c.kind] || c.kind),
-        h("p", { class: "muted small" }, `Takes effect ${when(c.effective_at)} unless a guardian stops it.`))))) : null,
+        h("p", { class: "muted small" }, t("Takes effect {time} unless a guardian stops it.", { time: when(c.effective_at) })))))) : null,
 
     h("section", { class: "card" },
-      h("h2", {}, "My rules"),
+      h("h2", {}, t("My rules")),
       h("dl", { class: "rules" }, RULE_LABELS.map(([k, label, fmt]) => [h("dt", {}, label), h("dd", {}, fmt(rules[k]))])),
-      h("label", { for: "preset" }, "Use a ready-made set"),
+      h("label", { for: "preset" }, t("Use a ready-made set")),
       h("div", { class: "row" }, presetSelect,
         h("button", { class: "secondary", onclick: (e) => act(e.target,
           () => api("POST", `/v1/me/rules/preset/${encodeURIComponent(presetSelect.value)}`),
-          (out) => (out.held ? "Stricter parts apply now; looser parts wait 24 hours." : "Applied.")) }, "Apply")),
-      h("p", { class: "muted small" }, "Making rules stricter works at once. Loosening them waits 24 hours, and your guardians can stop it.")),
+          (out) => (out.held ? t("Stricter parts apply now; looser parts wait 24 hours.") : t("Applied."))) }, t("Apply"))),
+      h("p", { class: "muted small" }, t("Making rules stricter works at once. Loosening them waits 24 hours, and your guardians can stop it."))),
 
     h("section", { class: "card" },
-      h("h2", {}, "My guardians"),
+      h("h2", {}, t("My guardians")),
       guardians.length ? h("ul", { class: "list" }, guardians.map((g) => h("li", { class: "row space" },
         h("span", {}, h("strong", {}, g.guardian_name), " ", h("span", { class: "muted small" }, identityText(g.guardian_identity_level))),
-        h("span", { class: `pill ${g.status === "active" ? "ok" : g.status === "invited" ? "warn" : ""}` }, g.status))))
-        : h("p", { class: "muted" }, "No guardians yet. A guardian can approve large payments and pause payments for you."),
+        h("span", { class: `pill ${g.status === "active" ? "ok" : g.status === "invited" ? "warn" : ""}` }, t(g.status)))))
+        : h("p", { class: "muted" }, t("No guardians yet. A guardian can approve large payments and pause payments for you.")),
       inviteForm),
 
     h("section", { class: "card" },
-      h("h2", {}, "Recent payments"),
-      payments.length ? h("ul", { class: "list" }, payments.map(paymentItem)) : h("p", { class: "empty" }, "No payments checked yet.")),
+      h("h2", {}, t("Recent payments")),
+      payments.length ? h("ul", { class: "list" }, payments.map(paymentItem)) : h("p", { class: "empty" }, t("No payments checked yet."))),
 
     h("section", { class: "card" },
-      h("h2", {}, "Lost your phone?"),
-      h("p", { class: "muted" }, "This signs you out everywhere and holds larger payments for 72 hours."),
+      h("h2", {}, t("Lost your phone?")),
+      h("p", { class: "muted" }, t("This signs you out everywhere and holds larger payments for 72 hours.")),
       h("button", { class: "danger", onclick: (e) => {
-        if (!confirm("Sign out of every device and hold larger payments for 72 hours?")) return;
-        act(e.target, () => api("POST", "/v1/me/security/lost-phone"), "Done. Every device is signed out.");
-      } }, "Report lost phone")),
+        if (!confirm(t("Sign out of every device and hold larger payments for 72 hours?"))) return;
+        act(e.target, () => api("POST", "/v1/me/security/lost-phone"), t("Done. Every device is signed out."));
+      } }, t("Report lost phone"))),
   ];
 }
 
 function identityText(level) {
-  return { bank_verified: "verified by a bank", bank_min_kyc: "basic bank check", otp: "phone number only" }[level] || level;
+  return { bank_verified: t("verified by a bank"), bank_min_kyc: t("basic bank check"), otp: t("phone number only") }[level] || level;
 }
 
 function paymentItem(p, extra) {
   return h("li", {},
     h("div", { class: "row space" }, h("span", { class: "amount" }, rupees(p.amount)), statusPill(p.status)),
-    h("p", {}, `To ${p.payee}`, extra ? [" · ", extra] : null),
+    h("p", {}, t("To {payee}", { payee: p.payee }), extra ? [" · ", extra] : null),
     h("p", { class: "muted small" }, when(p.created_at), p.reasons && p.reasons.length ? ` · ${p.reasons.join("; ")}` : ""));
 }
 
@@ -398,61 +398,61 @@ async function guardianView() {
   const [inbox, wards] = await Promise.all([api("GET", "/v1/guardian/inbox"), api("GET", "/v1/guardian/wards")]);
   const names = Object.fromEntries(wards.map((w) => [w.principal_id, w.principal_name]));
   const active = wards.filter((w) => w.status === "active");
-  const out = [h("h1", {}, "People I protect")];
+  const out = [h("h1", {}, t("People I protect"))];
 
   if (inbox.invitations.length) {
-    out.push(h("section", { class: "card alert-warn" }, h("h2", {}, "Guardian requests"),
+    out.push(h("section", { class: "card alert-warn" }, h("h2", {}, t("Guardian requests")),
       h("ul", { class: "list" }, inbox.invitations.map((g) => h("li", {},
-        h("p", {}, h("strong", {}, g.principal_name), " asked you to be their payment guardian."),
+        h("p", {}, t("{name} asked you to be their payment guardian.", { name: g.principal_name })),
         h("div", { class: "row" },
-          h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/invitations/${g.id}/accept`), `You now protect ${g.principal_name}.`) }, "Accept"),
-          h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/invitations/${g.id}/decline`), "Declined.") }, "Decline")))))));
+          h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/invitations/${g.id}/accept`), t("You now protect {name}.", { name: g.principal_name })) }, t("Accept")),
+          h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/invitations/${g.id}/decline`), t("Declined.")) }, t("Decline"))))))));
   }
 
   const waiting = inbox.held_payments;
-  out.push(h("section", { class: `card ${waiting.length ? "alert-warn" : ""}` }, h("h2", {}, "Payments waiting"),
+  out.push(h("section", { class: `card ${waiting.length ? "alert-warn" : ""}` }, h("h2", {}, t("Payments waiting")),
     waiting.length ? h("ul", { class: "list" }, waiting.map((p) => {
-      const li = paymentItem(p, names[p.principal_id] ? `from ${names[p.principal_id]}` : null);
+      const li = paymentItem(p, names[p.principal_id] ? t("from {name}", { name: names[p.principal_id] }) : null);
       const buttons = p.status === "pending_approval"
-        ? [h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/payments/${p.check_id}/approve`), "Approved.") }, "Approve"),
-           h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/payments/${p.check_id}/deny`), "Denied. The payment will not go through.") }, "Deny")]
-        : [h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/payments/${p.check_id}/cancel`), "Cancelled.") }, "Stop this payment")];
-      if (p.approval_expires_at) li.append(h("p", { class: "muted small" }, `Answer by ${when(p.approval_expires_at)}`));
-      if (p.release_at) li.append(h("p", { class: "muted small" }, `Goes through at ${when(p.release_at)} unless stopped`));
-      li.append(h("p", { class: "muted small" }, "Not sure? Call them on a number you know before approving."), h("div", { class: "row" }, buttons));
+        ? [h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/payments/${p.check_id}/approve`), t("Approved.")) }, t("Approve")),
+           h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/payments/${p.check_id}/deny`), t("Denied. The payment will not go through.")) }, t("Deny"))]
+        : [h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/payments/${p.check_id}/cancel`), t("Cancelled.")) }, t("Stop this payment"))];
+      if (p.approval_expires_at) li.append(h("p", { class: "muted small" }, t("Answer by {time}", { time: when(p.approval_expires_at) })));
+      if (p.release_at) li.append(h("p", { class: "muted small" }, t("Goes through at {time} unless stopped", { time: when(p.release_at) })));
+      li.append(h("p", { class: "muted small" }, t("Not sure? Call them on a number you know before approving.")), h("div", { class: "row" }, buttons));
       return li;
-    })) : h("p", { class: "empty" }, "Nothing is waiting for you.")));
+    })) : h("p", { class: "empty" }, t("Nothing is waiting for you."))));
 
   if (inbox.pending_changes.length) {
-    out.push(h("section", { class: "card alert-warn" }, h("h2", {}, "Protection changes waiting"),
+    out.push(h("section", { class: "card alert-warn" }, h("h2", {}, t("Protection changes waiting")),
       h("ul", { class: "list" }, inbox.pending_changes.map((c) => h("li", {},
-        h("p", {}, h("strong", {}, names[c.principal_id] || "Someone"), ` wants to: ${CHANGE_LABELS[c.kind] || c.kind}`),
-        h("p", { class: "muted small" }, `Happens ${when(c.effective_at)} unless you stop it. Scammers often ask people to do this.`),
+        h("p", {}, t("{name} wants to: {what}", { name: names[c.principal_id] || t("Someone"), what: CHANGE_LABELS[c.kind] || c.kind })),
+        h("p", { class: "muted small" }, t("Happens {time} unless you stop it. Scammers often ask people to do this.", { time: when(c.effective_at) })),
         h("div", { class: "row" },
-          h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/changes/${c.id}/veto`), "Stopped.") }, "Stop it"),
-          h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/changes/${c.id}/approve`), "Approved.") }, "Approve now")))))));
+          h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/changes/${c.id}/veto`), t("Stopped.")) }, t("Stop it")),
+          h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/changes/${c.id}/approve`), t("Approved.")) }, t("Approve now"))))))));
   }
 
   if (inbox.recoveries && inbox.recoveries.length) {
-    out.push(h("section", { class: "card alert-bad" }, h("h2", {}, "Account recovery requests"),
+    out.push(h("section", { class: "card alert-bad" }, h("h2", {}, t("Account recovery requests")),
       h("ul", { class: "list" }, inbox.recoveries.map((r) => h("li", {},
-        h("p", {}, h("strong", {}, r.person_name), ` wants to move their account to ${r.new_number}.`),
-        h("p", { class: "muted small" }, "Only approve if you have spoken to them yourself, on a call YOU placed or in person. If in doubt, deny."),
+        h("p", {}, t("{name} wants to move their account to {number}.", { name: r.person_name, number: r.new_number })),
+        h("p", { class: "muted small" }, t("Only approve if you have spoken to them yourself, on a call YOU placed or in person. If in doubt, deny.")),
         r.status === "pending" && new Date(r.vouching_opens_at) > new Date()
-          ? h("p", { class: "muted small" }, `You can approve from ${when(r.vouching_opens_at)}.`) : null,
+          ? h("p", { class: "muted small" }, t("You can approve from {time}.", { time: when(r.vouching_opens_at) })) : null,
         h("div", { class: "row" },
-          r.status === "pending" ? h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/recoveries/${r.recovery_id}/approve`), "Thank you. Your vouch is recorded.") }, "I spoke to them: approve") : null,
-          h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/recoveries/${r.recovery_id}/deny`), "Stopped.") }, "Deny")))))));
+          r.status === "pending" ? h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/recoveries/${r.recovery_id}/approve`), t("Thank you. Your vouch is recorded.")) }, t("I spoke to them: approve")) : null,
+          h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/recoveries/${r.recovery_id}/deny`), t("Stopped.")) }, t("Deny"))))))));
   }
 
-  out.push(h("section", { class: "card" }, h("h2", {}, "People I protect"),
+  out.push(h("section", { class: "card" }, h("h2", {}, t("People I protect")),
     active.length ? h("ul", { class: "list" }, active.map((w) => h("li", { class: "row space" },
       h("strong", {}, w.principal_name),
       h("button", { class: "danger", onclick: (e) => {
-        if (!confirm(`Pause all payments for ${w.principal_name}?`)) return;
-        act(e.target, () => api("POST", `/v1/guardian/wards/${w.principal_id}/kill-switch/on`), `Payments paused for ${w.principal_name}.`);
-      } }, "Pause their payments"))))
-      : h("p", { class: "muted" }, "You don't protect anyone yet. Someone has to invite you from their app.")));
+        if (!confirm(t("Pause all payments for {name}?", { name: w.principal_name }))) return;
+        act(e.target, () => api("POST", `/v1/guardian/wards/${w.principal_id}/kill-switch/on`), t("Payments paused for {name}.", { name: w.principal_name }));
+      } }, t("Pause their payments")))))
+      : h("p", { class: "muted" }, t("You don't protect anyone yet. Someone has to invite you from their app."))));
   return out;
 }
 
@@ -461,12 +461,12 @@ async function alertsView() {
   const items = await api("GET", "/v1/me/notifications?limit=50");
   const unread = items.filter((n) => !n.read).length;
   return [
-    h("div", { class: "row space" }, h("h1", {}, "Alerts"),
-      unread ? h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("POST", "/v1/me/notifications/read", {}), "All marked as read.") }, "Mark all read") : null),
+    h("div", { class: "row space" }, h("h1", {}, t("Alerts")),
+      unread ? h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("POST", "/v1/me/notifications/read", {}), t("All marked as read.")) }, t("Mark all read")) : null),
     h("section", { class: "card" }, items.length ? h("ul", { class: "list" }, items.map((n) => h("li", {},
-      h("div", { class: "row space" }, h("strong", {}, n.title), n.read ? null : h("span", { class: "pill warn" }, "New")),
+      h("div", { class: "row space" }, h("strong", {}, n.title), n.read ? null : h("span", { class: "pill warn" }, t("New"))),
       h("p", {}, n.body),
-      h("p", { class: "muted small" }, when(n.created_at))))) : h("p", { class: "empty" }, "No alerts yet.")),
+      h("p", { class: "muted small" }, when(n.created_at))))) : h("p", { class: "empty" }, t("No alerts yet."))),
   ];
 }
 
@@ -475,22 +475,22 @@ async function devicesView() {
   const [devices, security, mine] = await Promise.all([api("GET", "/v1/me/devices"), api("GET", "/v1/me/security"), DeviceKey.keyId()]);
   setBanner(security.this_session);
   return [
-    h("h1", {}, "Devices"),
+    h("h1", {}, t("Devices")),
     h("section", { class: "card" },
-      h("p", { class: "muted" }, "Each phone or browser you sign in on has its own key. A new one can't approve payments for 24 hours."),
+      h("p", { class: "muted" }, t("Each phone or browser you sign in on has its own key. A new one can't approve payments for 24 hours.")),
       devices.length ? h("ul", { class: "list" }, devices.map((d) => h("li", { class: "row space" },
-        h("span", {}, h("strong", {}, d.key_id === mine ? "This device" : `Device ${d.key_id.slice(0, 8)}`),
-          h("br"), h("span", { class: "muted small" }, `Added ${when(d.created_at)}${d.last_used_at ? ` · last used ${when(d.last_used_at)}` : ""}`)),
+        h("span", {}, h("strong", {}, d.key_id === mine ? t("This device") : t("Device {id}", { id: d.key_id.slice(0, 8) })),
+          h("br"), h("span", { class: "muted small" }, t("Added {time}", { time: when(d.created_at) }) + (d.last_used_at ? t(" · last used {time}", { time: when(d.last_used_at) }) : ""))),
         h("span", { class: "row" },
-          h("span", { class: `pill ${d.status === "trusted" ? "ok" : d.status === "probation" ? "warn" : ""}` }, d.status),
+          h("span", { class: `pill ${d.status === "trusted" ? "ok" : d.status === "probation" ? "warn" : ""}` }, t(d.status)),
           d.status !== "revoked" && d.key_id !== mine
-            ? h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("DELETE", `/v1/me/devices/${d.key_id}`), "Removed and signed out.") }, "Remove")
+            ? h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("DELETE", `/v1/me/devices/${d.key_id}`), t("Removed and signed out.")) }, t("Remove"))
             : null))))
-        : h("p", { class: "empty" }, "No device keys yet.")),
-    h("section", { class: "card" }, h("h2", {}, "Sign out"),
+        : h("p", { class: "empty" }, t("No device keys yet."))),
+    h("section", { class: "card" }, h("h2", {}, t("Sign out")),
       h("div", { class: "row" },
-        h("button", { class: "secondary", onclick: () => signOut(false) }, "Sign out here"),
-        h("button", { class: "secondary", onclick: () => signOut(true) }, "Sign out everywhere"))),
+        h("button", { class: "secondary", onclick: () => signOut(false) }, t("Sign out here")),
+        h("button", { class: "secondary", onclick: () => signOut(true) }, t("Sign out everywhere")))),
   ];
 }
 
@@ -505,8 +505,8 @@ async function signOut(everywhere) {
 function setBanner(session) {
   const b = $("#banner");
   if (session && session.restricted) {
-    b.textContent = "This sign-in is restricted for now: " + session.reasons.join("; ") +
-      ". You can still pause payments, deny or stop payments, and make rules stricter.";
+    b.textContent = t("This sign-in is restricted for now: {reasons}. You can still pause payments, deny or stop payments, and make rules stricter.",
+      { reasons: session.reasons.join("; ") });
     b.hidden = false;
   } else {
     b.hidden = true;
@@ -535,7 +535,7 @@ async function route() {
   const tab = (location.hash || "#me").slice(1);
   const render = VIEWS[tab] || meView;
   document.querySelectorAll("#nav a").forEach((a) => a.toggleAttribute("aria-current", a.dataset.tab === tab));
-  if (route.current !== tab) { route.current = tab; view().replaceChildren(h("p", { class: "empty" }, "Loading…")); }
+  if (route.current !== tab) { route.current = tab; view().replaceChildren(h("p", { class: "empty" }, t("Loading…"))); }
   try {
     view().replaceChildren(...nodes(await render()));
   } catch (e) {
