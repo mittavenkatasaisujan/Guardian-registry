@@ -12,18 +12,20 @@ Three kinds of caller:
 Run:  uvicorn guardian_registry.api:create_app --factory --port 8000
 """
 
+import hmac
 import logging
 import math
 import os
 from pathlib import Path
 import secrets
 import threading
+import time
 from contextlib import asynccontextmanager
 from typing import Annotated, Literal
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -227,18 +229,23 @@ class OutcomeIn(BaseModel):
 class Worker(threading.Thread):
     """Background loop: move time-based state forward, then deliver alerts and webhooks."""
 
-    def __init__(self, registry: Registry, dispatcher: Dispatcher, interval: float):
+    def __init__(self, registry: Registry, dispatcher: Dispatcher, interval: float, metrics=None):
         super().__init__(name="guardian-registry-worker", daemon=True)
         self.registry, self.dispatcher, self.interval = registry, dispatcher, interval
+        self.metrics = metrics
         self.stop_event = threading.Event()
 
     def run(self) -> None:
         while not self.stop_event.is_set():
+            outcome = "ok"
             try:
                 self.registry.sweep()
                 self.dispatcher.run_once()
             except Exception:  # noqa: BLE001 - keep the loop alive, log and continue
+                outcome = "error"
                 log.exception("worker iteration failed")
+            if self.metrics:
+                self.metrics.inc("gr_worker_iterations_total", {"outcome": outcome})
             self.stop_event.wait(self.interval)
 
     def stop(self) -> None:
@@ -282,12 +289,22 @@ def create_app(
     otp_rate: str | None = None,
 ) -> FastAPI:
     check_production_config()
+    from .observability import JsonFormatter, RequestIdFilter, business_gauges, clean_request_id, new_metrics
+    from .observability import request_id as current_request_id
     pkg_log = logging.getLogger("guardian_registry")
     if not pkg_log.handlers:  # make dev SMS / worker messages visible next to uvicorn's own logs
         handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter("%(levelname)s:     %(name)s: %(message)s"))
+        if os.environ.get("GR_LOG_FORMAT", "text") == "json":
+            handler.setFormatter(JsonFormatter())
+        else:
+            handler.setFormatter(logging.Formatter("%(levelname)s:     %(name)s [%(request_id)s]: %(message)s"))
+        handler.addFilter(RequestIdFilter())
         pkg_log.addHandler(handler)
         pkg_log.setLevel(logging.INFO)
+    metrics = new_metrics()
+    metrics_token = os.environ.get("GR_METRICS_TOKEN")
+    from .secrets_store import load_secret_files
+    load_secret_files()  # GR_X_FILE -> GR_X, before anything reads a secret
     reg = registry or Registry(Database(os.environ.get("GR_DB", "guardian_registry.db")))
     if sim_lookup is not None:
         reg.sim_lookup = sim_lookup
@@ -323,7 +340,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        worker = Worker(reg, dispatcher, worker_interval) if run_worker else None
+        worker = Worker(reg, dispatcher, worker_interval, metrics) if run_worker else None
         if worker:
             worker.start()
         try:
@@ -337,6 +354,27 @@ def create_app(
                   description="Cross-bank trusted-person and payment-protection registry.")
     app.state.registry = reg
     app.state.dispatcher = dispatcher
+    app.state.metrics = metrics
+
+    @app.middleware("http")
+    async def observe(request: Request, call_next):
+        rid = clean_request_id(request.headers.get("x-request-id"))
+        token = current_request_id.set(rid)
+        started = time.perf_counter()
+        status = 500
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            response.headers["X-Request-ID"] = rid
+            return response
+        finally:
+            route = request.scope.get("route")
+            template = getattr(route, "path", None) or ("/app" if request.url.path.startswith("/app") else "unmatched")
+            if template != "/metrics":
+                metrics.inc("gr_http_requests_total", {"method": request.method, "route": template,
+                                                       "status": str(status)})
+                metrics.observe("gr_http_request_seconds", time.perf_counter() - started, {"route": template})
+            current_request_id.reset(token)
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
@@ -450,6 +488,29 @@ def create_app(
     def healthz():
         return {"ok": True, "version": __version__}
 
+    @app.get("/readyz", tags=["ops"])
+    def readyz():
+        """Ready for traffic: the database answers and its schema is the one this code expects."""
+        from .db import MIGRATIONS
+        try:
+            version = reg.db.schema_version()
+        except Exception as e:  # noqa: BLE001
+            return JSONResponse(status_code=503, content={"ready": False, "reason": f"database: {type(e).__name__}"})
+        if version != len(MIGRATIONS):
+            return JSONResponse(status_code=503, content={"ready": False,
+                                                          "reason": f"schema v{version}, code expects v{len(MIGRATIONS)}"})
+        return {"ready": True, "schema": version}
+
+    @app.get("/metrics", include_in_schema=False)
+    def prometheus(authorization: Annotated[str | None, Header()] = None):
+        if metrics_token:
+            if not authorization or not hmac.compare_digest(authorization, f"Bearer {metrics_token}"):
+                raise HTTPException(401, "metrics need Authorization: Bearer <GR_METRICS_TOKEN>")
+        elif is_production():
+            raise HTTPException(404, "set GR_METRICS_TOKEN to enable /metrics in production")
+        return PlainTextResponse(metrics.render(business_gauges(reg.db, __version__)),
+                                 media_type="text/plain; version=0.0.4")
+
     @app.post("/v1/admin/participants", status_code=201, tags=["ops"])
     def add_participant(body: ParticipantIn, op: Operator):
         """Register a participant. It starts `pending` until a second operator approves it
@@ -486,6 +547,13 @@ def create_app(
         """Replace the official register for one kind (RBI / NPCI / DoT published list)."""
         return reg.load_regulated_entities(op, kind, body.source, body.as_of,
                                            [e.model_dump() for e in body.entities])
+
+    @app.post("/v1/admin/data-key/rotate", tags=["ops"])
+    def rotate_data_key(_: Operator, limit: int = 1000):
+        """Re-encrypt stored secrets under the first key in GR_DATA_KEY. Repeat until
+        remaining is 0, then remove the old key from GR_DATA_KEY."""
+        from .secrets_store import rotate_data_key as rotate
+        return rotate(reg.db, min(max(limit, 1), 10000))
 
     @app.get("/v1/admin/register", tags=["ops"])
     def register_status(_: Operator):
@@ -616,7 +684,9 @@ def create_app(
     @app.post("/v1/checks", tags=["banks"])
     def create_check(body: CheckIn, pid: Participant):
         limited(check_limiter, pid)
-        return reg.check(pid, body.mobile, body.participant_txn_id, body.amount, body.payee, body.channel)
+        out = reg.check(pid, body.mobile, body.participant_txn_id, body.amount, body.payee, body.channel)
+        metrics.inc("gr_checks_total", {"status": str(out.get("status"))})
+        return out
 
     @app.get("/v1/checks/{check_id}", tags=["banks"])
     def read_check(check_id: str, pid: Participant):

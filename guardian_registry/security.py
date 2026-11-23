@@ -16,7 +16,7 @@ import os
 import re
 import secrets
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, MultiFernet
 
 _DEV_PEPPER = "dev-only-pepper-change-me"
 _DEV_DATA_KEY = base64.urlsafe_b64encode(hashlib.sha256(b"dev-only-data-key").digest()).decode()
@@ -33,8 +33,8 @@ def check_production_config() -> None:
     problems = []
     if os.environ.get("GR_PEPPER", _DEV_PEPPER) == _DEV_PEPPER:
         problems.append("GR_PEPPER must be set")
-    if os.environ.get("GR_DATA_KEY", _DEV_DATA_KEY) == _DEV_DATA_KEY:
-        problems.append("GR_DATA_KEY must be set")
+    if _DEV_DATA_KEY in data_keys():
+        problems.append("GR_DATA_KEY must be set (and must not include the development key)")
     if os.environ.get("GR_OTP_DEV_ECHO") == "1":
         problems.append("GR_OTP_DEV_ECHO must not be enabled")
     if not (os.environ.get("GR_SMS_URL") or os.environ.get("GR_SMS_PROVIDER")):
@@ -48,8 +48,15 @@ def pepper() -> bytes:
     return os.environ.get("GR_PEPPER", _DEV_PEPPER).encode()
 
 
-def _fernet() -> Fernet:
-    return Fernet(os.environ.get("GR_DATA_KEY", _DEV_DATA_KEY).encode())
+def data_keys() -> list[str]:
+    """GR_DATA_KEY: one Fernet key, or several separated by commas (first encrypts, all
+    decrypt) while rotating; see secrets_store.py."""
+    keys = [k.strip() for k in os.environ.get("GR_DATA_KEY", _DEV_DATA_KEY).split(",") if k.strip()]
+    return keys or [_DEV_DATA_KEY]
+
+
+def _fernet() -> MultiFernet:
+    return MultiFernet([Fernet(k.encode()) for k in data_keys()])
 
 
 def normalize_mobile(mobile: str) -> str:

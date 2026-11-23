@@ -653,6 +653,11 @@ class Database:
                     self._scope = None
                     self.conn.execute("COMMIT")
 
+    def schema_version(self) -> int:
+        if self.backend == "postgres":
+            return self.one("SELECT version FROM gr_schema")["version"]
+        return self.conn.execute("PRAGMA user_version").fetchone()[0]
+
     def require_scope(self, key: str) -> None:
         """Raise unless the current transaction may write state belonging to `key`."""
         if self._depth and self._scope is not None and key not in self._scope:
