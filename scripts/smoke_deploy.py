@@ -11,6 +11,7 @@ audit chain, and that both API nodes answered.
 
 from __future__ import annotations
 
+import ssl
 import sys
 import time
 import uuid
@@ -28,9 +29,11 @@ def main(base: str) -> int:
     ops = dict(x.split(":", 1) for x in (sec / "operators").read_text().strip().split(","))
     alice, bob = {"X-Admin-Token": ops["alice"]}, {"X-Admin-Token": ops["bob"]}
     ca = str(certs / "ca.pem")
-    plain = httpx.Client(base_url=base, verify=ca, timeout=20)
-    bank_tls = httpx.Client(base_url=base, verify=ca, timeout=20,
-                            cert=(str(certs / "bank.pem"), str(certs / "bank-key.pem")))
+    trust = ssl.create_default_context(cafile=ca)
+    plain = httpx.Client(base_url=base, verify=trust, timeout=20)
+    with_cert = ssl.create_default_context(cafile=ca)  # the bank's side: presents its client certificate
+    with_cert.load_cert_chain(str(certs / "bank.pem"), str(certs / "bank-key.pem"))
+    bank_tls = httpx.Client(base_url=base, verify=with_cert, timeout=20)
 
     def ok(r, code=200):
         if r.status_code != code:
