@@ -47,6 +47,9 @@ class MainActivity : Activity() {
     private val tabButtons = HashMap<String, Button>()
     private var insetTop = 0
 
+    /** Something typed into a form and not saved yet: the 15-second refresh waits. */
+    private var formDirty = false
+
     /** This sign-in is restricted (new device, or after a SIM change): the registry refuses
      *  approvals and other high-trust actions, so those buttons become a note instead. */
     private var restricted = false
@@ -61,7 +64,8 @@ class MainActivity : Activity() {
 
     private val refresher = object : Runnable {
         override fun run() {
-            if (resumed && store.token != null && !dialogOpen && currentFocus !is EditText) render(quiet = true)
+            // never redraw over something the person is typing or has typed and not saved yet
+            if (resumed && store.token != null && !dialogOpen && !formDirty && currentFocus !is EditText) render(quiet = true)
             main.postDelayed(this, REFRESH_MS)
         }
     }
@@ -266,6 +270,7 @@ class MainActivity : Activity() {
             val y = scroll.scrollY
             restricted = data.security?.optJSONObject("this_session")?.optBoolean("restricted") == true
             root.removeAllViews()
+            formDirty = false
             when (which) {
                 "guardian" -> guardianView(data)
                 "alerts" -> alertsView(data)
@@ -839,6 +844,11 @@ class MainActivity : Activity() {
 
     private fun input(parent: LinearLayout, hint: String, type: Int, value: String?): EditText = EditText(this).apply {
         this.hint = hint; inputType = type; setText(value ?: ""); textSize = 18f
+        addTextChangedListener(object : android.text.TextWatcher {   // after setText: only the person's typing counts
+            override fun afterTextChanged(e: android.text.Editable?) { formDirty = true }
+            override fun beforeTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
+        })
         parent.addView(this, LinearLayout.LayoutParams(-1, -2))
     }
 

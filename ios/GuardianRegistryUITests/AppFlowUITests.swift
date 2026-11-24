@@ -162,7 +162,11 @@ final class AppFlowUITests: XCTestCase {
                 if try cond() { return }
                 Thread.sleep(forTimeInterval: 0.3)
             }
-            if attempt == 2 { XCTFail("timed out waiting for: \(what)") }
+            if attempt == 2 {
+                let toast = app.staticTexts["toast"]
+                shot("failed-\(what.replacingOccurrences(of: " ", with: "-"))")
+                XCTFail("timed out waiting for: \(what)" + (toast.exists ? " (app said: \(toast.label))" : ""))
+            }
         }
     }
 
@@ -395,6 +399,7 @@ final class AppFlowUITests: XCTestCase {
             f.tap()
             f.typeText(value)
         }
+        shot("ios-13a-nominee-filled")
         try tapUntil(app, button: "Save nominee", "nominee") {
             (try obj("/v1/me/nominee", token: p)["nominee"] as? [String: Any]) != nil
         }
