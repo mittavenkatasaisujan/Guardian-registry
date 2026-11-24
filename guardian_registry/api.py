@@ -1100,6 +1100,7 @@ def create_app(
         return reg.get_rules(uid).to_dict()
 
     @app.patch("/v1/me/rules", tags=["people"])
+    @app.put("/v1/me/rules", tags=["people"], summary="Patch Rules (for clients that can't send PATCH)")
     def patch_rules(body: RulesPatch, info: Session):
         changes = body.model_dump(exclude_unset=True)
         if info["restricted"] and reg.would_loosen(info["user_id"], changes):

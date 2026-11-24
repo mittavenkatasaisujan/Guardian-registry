@@ -112,6 +112,17 @@ class AppFlowTest {
         onView(inContent(withText(text))).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
     }
 
+    /** The first view a matcher finds, for texts that rightly appear more than once on a screen. */
+    private fun <T> first(m: Matcher<T>): Matcher<T> = object : org.hamcrest.BaseMatcher<T>() {
+        private var found = false
+        override fun matches(item: Any?): Boolean = if (!found && m.matches(item)) { found = true; true } else false
+        override fun describeTo(d: org.hamcrest.Description) { d.appendText("first "); m.describeTo(d) }
+    }
+
+    private fun seeFirst(text: String) = eventually {
+        onView(first(inContent(withText(text)))).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+    }
+
     private fun seeNo(text: String) = eventually {
         onView(inContent(withText(text))).check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist())
     }
@@ -398,7 +409,7 @@ class AppFlowTest {
         }
         shot("11-restricted-sign-in")
         tab(R.string.tab_me)
-        see(s(R.string.restricted_action))                // no invite form on a restricted sign-in
+        seeFirst(s(R.string.restricted_action))           // no invite form (or nominee form) on a restricted sign-in
         app.close()
     }
 

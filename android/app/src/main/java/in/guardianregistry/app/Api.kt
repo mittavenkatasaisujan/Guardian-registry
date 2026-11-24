@@ -15,8 +15,6 @@ class Api(private val base: String, var token: String?, private val headers: Map
     fun post(path: String, body: JSONObject? = JSONObject()): Any = call("POST", path, body)
     fun delete(path: String): Any = call("DELETE", path, null)
     fun put(path: String, body: JSONObject): Any = call("PUT", path, body)
-    /** Android's HttpURLConnection (OkHttp inside) allows PATCH; desktop Java's doesn't. */
-    fun patch(path: String, body: JSONObject): Any = call("PATCH", path, body)
 
     fun obj(path: String) = get(path) as JSONObject
     fun arr(path: String) = get(path) as JSONArray

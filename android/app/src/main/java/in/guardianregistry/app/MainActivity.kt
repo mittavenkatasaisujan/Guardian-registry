@@ -443,7 +443,7 @@ class MainActivity : Activity() {
                     body.put(key, rupees * 100)
                 }
             }
-            act(b, { api().patch("/v1/me/rules", body) as JSONObject }) {
+            act(b, { api().put("/v1/me/rules", body) as JSONObject }) {   // PUT: same as PATCH on the server
                 if (it.isNull("held")) getString(R.string.saved) else getString(R.string.preset_held)
             }
         }
