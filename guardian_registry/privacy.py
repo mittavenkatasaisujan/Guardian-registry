@@ -33,9 +33,9 @@ from datetime import timedelta
 from . import notify
 from .clock import iso
 from .errors import Conflict, Invalid, NotFound
-from .security import _fernet, decrypt_mobile, new_id
+from .security import _fernet, decrypt_mobile, encrypt_mobile, new_id, normalize_mobile
 
-NOTICE_VERSION = "2026-11-23"
+NOTICE_VERSION = "2026-11-25"
 ERASURE_HOLD_DAYS = 7
 
 NOTICE = {
@@ -57,7 +57,12 @@ NOTICE = {
     "who_sees_it": [
         "your guardians see your rules and payments; banks see only the decision for the payment they asked "
         "about, never who your guardians are",
+        "messaging services that carry codes and alerts to your phone (an SMS provider, Google or Apple for app "
+        "notifications, and WhatsApp if you choose it) receive your number or app id and the message; some of "
+        "them are outside India. Outside the app, alerts can be sent without payment details (see alert detail)",
     ],
+    "who_can_use_it": ["adults (18 or older); a child's data needs a parent's verifiable consent, which this "
+                       "service does not collect, so children must not enrol"],
     "how_long": [
         "while your account exists; alerts are deleted after 180 days and old sign-ins after 90",
         "payment check records and the tamper-evident audit trail are kept after an account is erased, "
@@ -65,7 +70,8 @@ NOTICE = {
     ],
     "your_rights": [
         "see everything we hold about you (data export)",
-        "correct your name and rules in the app",
+        "correct your name (PUT /v1/me/name) and your rules in the app",
+        "nominate someone to exercise these rights if you die or can't act yourself (PUT /v1/me/nominee)",
         "erase your account (held 7 days so nobody can pressure you into removing your protection at once)",
         "complain to our grievance officer, and then to the Data Protection Board of India",
     ],
@@ -106,6 +112,48 @@ class PrivacyMixin:
                 "accepted": [dict(r) for r in rows]}
 
     # ------------------------------------------------------------- access
+    # ------------------------------------------------------------- correction and nomination
+    def set_display_name(self, uid: str, name: str) -> dict:
+        """DPDP Act s.12: correct your name."""
+        name = (name or "").strip()
+        if not 1 <= len(name) <= 80:
+            raise Invalid("your name must be 1 to 80 characters")
+        with self.db.tx(uid) as c:
+            c.execute("UPDATE users SET display_name=? WHERE id=?", (name, uid))
+            self._audit(c, uid, "privacy.name_corrected", uid)
+        return {"display_name": name}
+
+    def nominee(self, uid: str) -> dict | None:
+        r = self.db.one("SELECT name, relation, mobile_enc, created_at FROM nominees WHERE user_id=?", (uid,))
+        if not r:
+            return None
+        return {"name": r["name"], "relation": r["relation"], "mobile": decrypt_mobile(r["mobile_enc"]),
+                "nominated_at": r["created_at"]}
+
+    def set_nominee(self, uid: str, name: str, relation: str, mobile: str) -> dict:
+        """DPDP Act s.14: someone who may exercise your data rights if you die or can't act. It gives
+        them no access to the account and no say over payments; the grievance officer handles their
+        requests after checking the death or incapacity."""
+        name, relation = (name or "").strip(), (relation or "").strip()
+        if not 1 <= len(name) <= 80 or not 1 <= len(relation) <= 40:
+            raise Invalid("the nominee needs a name (up to 80 characters) and a relation (up to 40)")
+        try:
+            mobile = normalize_mobile(mobile)
+        except ValueError:
+            raise Invalid("the nominee's mobile must be a valid Indian mobile number") from None
+        with self.db.tx(uid) as c:
+            c.execute("INSERT INTO nominees (user_id, name, relation, mobile_enc, created_at) VALUES (?,?,?,?,?) "
+                      "ON CONFLICT(user_id) DO UPDATE SET name=excluded.name, relation=excluded.relation, "
+                      "mobile_enc=excluded.mobile_enc, created_at=excluded.created_at",
+                      (uid, name, relation, encrypt_mobile(mobile), self._now()))
+            self._audit(c, uid, "privacy.nominee_set", uid)
+        return self.nominee(uid)
+
+    def remove_nominee(self, uid: str) -> None:
+        with self.db.tx(uid) as c:
+            if c.execute("DELETE FROM nominees WHERE user_id=?", (uid,)).rowcount:
+                self._audit(c, uid, "privacy.nominee_removed", uid)
+
     def data_export(self, uid: str) -> dict:
         u = self._user(uid)
 
@@ -154,6 +202,7 @@ class PrivacyMixin:
             "recoveries": rows("SELECT id, new_mobile_masked, status, created_at, decided_at FROM recoveries "
                                "WHERE user_id=?", uid),
             "consents": self.consents(uid)["accepted"],
+            "nominee": self.nominee(uid),
             "erasure": self._erasure_view(uid),
             "audit_trail": audit_rows,
         }
@@ -218,7 +267,7 @@ class PrivacyMixin:
         c.execute("UPDATE recoveries SET new_mobile_enc='', new_mobile_masked='(erased)' WHERE user_id=?", (uid,))
         for table, col in (("sessions", "user_id"), ("push_tokens", "user_id"), ("device_keys", "user_id"),
                            ("devices", "user_id"), ("trusted_payees", "principal_id"), ("consents", "user_id"),
-                           ("sim_events", "user_id")):
+                           ("sim_events", "user_id"), ("nominees", "user_id")):
             c.execute(f"DELETE FROM {table} WHERE {col}=?", (uid,))  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
         c.execute("DELETE FROM notifications WHERE recipient_type='user' AND recipient_id=?", (uid,))
         c.execute("UPDATE pending_changes SET status='cancelled' WHERE principal_id=? AND status='pending'", (uid,))

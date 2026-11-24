@@ -36,6 +36,18 @@ from .security import decrypt_mobile, decrypt_text, mask_mobile, new_id, sign_we
 
 log = logging.getLogger("guardian_registry.notify")
 
+MINIMAL_BODY = "Open Guardian Registry to see the details."
+
+
+def alert_detail() -> str:
+    """GR_ALERT_DETAIL: "full" (names, amounts and payees in push/SMS/WhatsApp) or "minimal" (a
+    pointer to the app). Default: minimal in production, full elsewhere."""
+    v = os.environ.get("GR_ALERT_DETAIL", "").strip().lower()
+    if v in ("full", "minimal"):
+        return v
+    from .security import is_production
+    return "minimal" if is_production() else "full"
+
 MAX_ATTEMPTS = 6
 LEASE_SECONDS = 60
 BACKOFF_SECONDS = [30, 120, 600, 1800, 3600]
@@ -289,6 +301,17 @@ class Dispatcher:
                 stats.skipped += 1
         return stats
 
+    def _outside_body(self, n: sqlite3.Row) -> str:
+        """The body sent through outside services (push, SMS, WhatsApp). With GR_ALERT_DETAIL=minimal
+        (the default in production) it carries no names, amounts or payees, only a pointer to the app:
+        the services are run by others, some outside India (RBI keeps payment data in India). The
+        in-app alert always has the full text."""
+        if alert_detail() == "full":
+            return n["body"]
+        u = self.db.one("SELECT language FROM users WHERE id=?", (n["recipient_id"],)) if n["recipient_type"] == "user" else None
+        lang = u["language"] if u and u["language"] in messages.enabled_languages() else "en"
+        return messages.alert(MINIMAL_BODY, lang)
+
     def _deliver(self, n: sqlite3.Row) -> bool:
         if n["channel"] == "push":
             if self.push is None:
@@ -299,7 +322,7 @@ class Dispatcher:
             delivered, errors = 0, []
             for t in tokens:  # one install failing must not re-send to the others on retry
                 try:
-                    self.push.send(decrypt_text(t["token_enc"]), t["platform"], n["title"], n["body"],
+                    self.push.send(decrypt_text(t["token_enc"]), t["platform"], n["title"], self._outside_body(n),
                                    {"kind": n["kind"], "id": n["id"]})
                     delivered += 1
                 except DeadToken:
@@ -321,21 +344,22 @@ class Dispatcher:
             if swapped:
                 return False  # the number may be in an attacker's hands: in-app only until cleared
             to = decrypt_mobile(u["mobile_enc"])
+            body = self._outside_body(n)
             if n["channel"] == "whatsapp" and self.whatsapp is not None:
                 send_in = getattr(self.whatsapp, "send_in", None)
                 if send_in:
-                    send_in(to, n["title"], n["body"], lang)
+                    send_in(to, n["title"], body, lang)
                 else:
-                    self.whatsapp.send(to, n["title"], n["body"])
+                    self.whatsapp.send(to, n["title"], body)
             else:  # SMS, or WhatsApp chosen but no provider configured
                 send_alert_in = getattr(self.sms, "send_alert_in", None)
                 send_alert = getattr(self.sms, "send_alert", None)
                 if send_alert_in:
-                    send_alert_in(to, n["title"], n["body"], lang)
+                    send_alert_in(to, n["title"], body, lang)
                 elif send_alert:
-                    send_alert(to, n["title"], n["body"])
+                    send_alert(to, n["title"], body)
                 else:
-                    self.sms.send(to, f"{n['title']}: {n['body']}")
+                    self.sms.send(to, f"{n['title']}: {body}")
             return True
         if n["channel"] == "webhook":
             p = self.db.one("SELECT webhook_url, webhook_secret FROM participants WHERE id=?", (n["recipient_id"],))

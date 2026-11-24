@@ -24,6 +24,7 @@ from pathlib import Path
 
 # --------------------------------------------------------------------------- alerts
 ALERTS_HI = {
+    "Open Guardian Registry to see the details.": "पूरी जानकारी के लिए Guardian Registry खोलें।",
     "A recovery to the number {0} was started. If this isn't you, cancel it here.":
         "नंबर {0} पर खाता वापसी शुरू की गई है। अगर यह आप नहीं हैं, तो इसे यहाँ रद्द करें।",
     "Account deletion requested": "खाता हटाने का अनुरोध",
@@ -253,6 +254,10 @@ ERRORS_HI = {
     "recovery is already {0}": "खाता वापसी पहले से {0} है",
     "recovery not found": "खाता वापसी नहीं मिली",
     "require_verified_guardian must be true or false": "'केवल बैंक-सत्यापित गार्डियन' हाँ या नहीं होना चाहिए",
+    "your name must be 1 to 80 characters": "आपका नाम 1 से 80 अक्षरों का होना चाहिए",
+    "the nominee needs a name (up to 80 characters) and a relation (up to 40)":
+        "नामित व्यक्ति का नाम (80 अक्षरों तक) और रिश्ता (40 अक्षरों तक) ज़रूरी है",
+    "the nominee's mobile must be a valid Indian mobile number": "नामित व्यक्ति का मोबाइल एक सही भारतीय मोबाइल नंबर होना चाहिए",
     "a new guardian can approve payments only after the waiting period set in this person's rules":
         "नया गार्डियन इस व्यक्ति के नियमों में तय प्रतीक्षा अवधि के बाद ही भुगतान मंज़ूर कर सकता है",
     "approval_scope must be all or rbi": "मंज़ूरी का दायरा 'सभी' या 'RBI' होना चाहिए",

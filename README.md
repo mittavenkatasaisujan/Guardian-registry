@@ -285,6 +285,9 @@ ios/            iOS app (SwiftUI, XcodeGen project.yml): Secure Enclave key, App
 
 Everything that can be built in code is built. What is left needs people, accounts or decisions outside it:
 
+Reviews done on 25 November 2026 (RBI rules, security, translations, data protection law), with what
+each changed and what is left for the people who must sign off: [docs/reviews](docs/reviews/README.md).
+
 - **Provider accounts and keys:**
   - Twilio or MSG91, with DLT-registered templates (one for codes, one for alerts);
   - a WhatsApp Business account with an approved template;
@@ -299,7 +302,7 @@ Everything that can be built in code is built. What is left needs people, accoun
   - an independent security audit and penetration test;
   - a data-protection review of the notice, the retention periods and the lawful basis for each purpose under the DPDP Act and its rules, plus a breach-response process;
   - a legal entity to act as the data fiduciary, and agreements with partner banks.
-- **RBI's final rules:** the liability directions take effect on 1 January 2027, but the trusted-person approval this registry implements is still only in the April 2026 discussion paper. Presets ([presets.py](guardian_registry/presets.py)) and the age cut-off (`SENIOR_AGE` in [kyc.py](guardian_registry/kyc.py)) can follow the final text.
+- **RBI's final rules:** RBI's November 2026 **draft** directions (trusted person mechanism, Stop Switch, customer limits; to apply from 1 July 2027) are followed by the `rbi_trusted_person` preset and the rules `approval_scope`, `new_guardian_wait_hours`, `per_payee_daily_limit` and `channel_daily_limits` ([docs/reviews/rbi-alignment.md](docs/reviews/rbi-alignment.md)). When the final text is published, compare it row by row and adjust the presets.
 - **Register sources:** `.github/workflows/registers.yml` rebuilds and signs the mirrors every month and holds any list that would lose more than 5%. You add the `MIRROR_SIGNING_KEY` secret and the regulators' current download links in [deploy/register-sources.json](deploy/register-sources.json). For PDF-only lists, `scripts/pdf_to_table.py` drafts the table, and a person checks its report against the PDF.
 - **Native review of translations:** Hindi is on and Tamil, Telugu, Bengali and Marathi are drafted, but all of them were written by me, not by native speakers. A native reviewer for each should check them, especially the safety messages, before the drafts are switched on. Hindi and regional SMS also need DLT templates in those languages.
 - **Social engineering:** the hour's wait before vouching, the holds, the coaching-pattern signals and the shared fraud-payee list make a coached payment or recovery much harder, but a patient scammer who talks both a person and their guardian round can still succeed. The signal thresholds start as guesses; the tuning report replaces them with evidence once partner banks label outcomes (20+ confirmed frauds).

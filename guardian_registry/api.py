@@ -253,6 +253,16 @@ class RulesPatch(BaseModel):
     new_guardian_wait_hours: int | None = None
 
 
+class NameIn(BaseModel):
+    display_name: str = Field(min_length=1, max_length=80)
+
+
+class NomineeIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    relation: str = Field(min_length=1, max_length=40, description="e.g. son, daughter, spouse")
+    mobile: str
+
+
 class AttestIn(BaseModel):
     """A bank vouches that it has KYC'd this registry user. The customer must approve it."""
     mobile: str
@@ -1035,6 +1045,26 @@ def create_app(
         """Languages for alerts, SMS and messages. Drafts appear only once reviewed and enabled."""
         meta = messages.language_meta()
         return [{"code": c, "name": meta[c]["name"]} for c in messages.enabled_languages()]
+
+    @app.put("/v1/me/name", tags=["people"])
+    def correct_name(body: NameIn, uid: User):
+        """Correct the name you're shown by (DPDP Act s.12)."""
+        return reg.set_display_name(uid, body.display_name)
+
+    @app.get("/v1/me/nominee", tags=["people"])
+    def get_nominee(uid: User):
+        return {"nominee": reg.nominee(uid)}
+
+    @app.put("/v1/me/nominee", tags=["people"])
+    def put_nominee(body: NomineeIn, uid: TrustedUser):
+        """Nominate someone to exercise your data rights if you die or can't act (DPDP Act s.14). It gives
+        them no access to your account and no say over payments."""
+        return {"nominee": reg.set_nominee(uid, body.name, body.relation, body.mobile)}
+
+    @app.delete("/v1/me/nominee", tags=["people"])
+    def delete_nominee(uid: TrustedUser):
+        reg.remove_nominee(uid)
+        return {"nominee": None}
 
     @app.get("/v1/privacy/notice", tags=["people"])
     def privacy_notice():

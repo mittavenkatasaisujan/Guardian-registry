@@ -1414,6 +1414,12 @@
    "server:error"
   ]
  },
+ "a75957e55b": {
+  "en": "Open Guardian Registry to see the details.",
+  "where": [
+   "server:alert"
+  ]
+ },
  "5edad0b497": {
   "en": "Pause all payments",
   "where": [
@@ -2067,6 +2073,18 @@
    "server:error"
   ]
  },
+ "ecc92ba107": {
+  "en": "the nominee needs a name (up to 80 characters) and a relation (up to 40)",
+  "where": [
+   "server:error"
+  ]
+ },
+ "4b4d4d5916": {
+  "en": "the nominee's mobile must be a valid Indian mobile number",
+  "where": [
+   "server:error"
+  ]
+ },
  "b3934a84b4": {
   "en": "The requested change ({0}) for {1} is now in effect.",
   "where": [
@@ -2548,6 +2566,12 @@
   "where": [
    "android:your_name_first",
    "ios"
+  ]
+ },
+ "52f08b24e3": {
+  "en": "your name must be 1 to 80 characters",
+  "where": [
+   "server:error"
   ]
  },
  "96b62c13a3": {

@@ -528,9 +528,20 @@ SCHEMA_V19 = """
 ALTER TABLE checks ADD COLUMN kind TEXT NOT NULL DEFAULT 'transfer';
 """
 
+SCHEMA_V20 = """
+-- DPDP Act s.14: a person may nominate someone to exercise their rights on death or incapacity
+CREATE TABLE nominees (
+    user_id     TEXT PRIMARY KEY REFERENCES users(id),
+    name        TEXT NOT NULL,
+    relation    TEXT NOT NULL,
+    mobile_enc  TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
+"""
+
 MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8, SCHEMA_V9,
               SCHEMA_V10, SCHEMA_V11, SCHEMA_V12, SCHEMA_V13, SCHEMA_V14, SCHEMA_V15, SCHEMA_V16, SCHEMA_V17,
-              SCHEMA_V18, SCHEMA_V19]
+              SCHEMA_V18, SCHEMA_V19, SCHEMA_V20]
 
 # Postgres-only follow-ups, run after the baseline or after the portable migration of the
 # same version. v11: audit rows get their global seq from a sequence (SQLite's INTEGER
