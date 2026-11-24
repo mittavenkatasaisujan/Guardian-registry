@@ -127,6 +127,15 @@ struct RestrictedSection: View {
     }
 }
 
+/// A section heading as written (the web app's headings), not in capitals.
+struct Heading: View {
+    let key: LocalizedStringKey
+    init(_ key: LocalizedStringKey) { self.key = key }
+    var body: some View {
+        Text(key).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).textCase(nil)
+    }
+}
+
 /// In place of an action the registry would refuse on a restricted sign-in.
 struct RestrictedNote: View {
     var body: some View {
@@ -288,7 +297,7 @@ struct MyProtectionView: View {
             }
             .padding(.vertical, 6)
         } header: {
-            Text(verbatim: L("Identity: %@", Words.identity(model.me["identity_level"] as? String ?? "")))
+            Text(verbatim: L("Identity: %@", Words.identity(model.me["identity_level"] as? String ?? ""))).textCase(nil)
         }
     }
 
@@ -306,14 +315,14 @@ struct MyProtectionView: View {
                         model.act("/v1/me/security/confirm-sim-change", done: L("Thanks. Normal protection applies again."))
                     }
                 }
-            } header: { Text("Your SIM card was reported changed") }
+            } header: { Heading("Your SIM card was reported changed") }
         }
     }
 
     @ViewBuilder private var changesWaiting: some View {
         let pending = model.changes.filter { $0["status"] as? String == "pending" }
         if !pending.isEmpty {
-            Section("Changes waiting") {
+            Section(header: Heading("Changes waiting")) {
                 ForEach(pending.indices, id: \.self) { i in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(verbatim: Words.change(pending[i]["kind"] as? String ?? "")).bold()
@@ -348,14 +357,14 @@ struct MyProtectionView: View {
             .onAppear { if preset.isEmpty { preset = model.presets.first?.id ?? "" } }
             Button("Apply") { model.applyPreset(preset) }.disabled(preset.isEmpty)
         } header: {
-            Text("My rules")
+            Heading("My rules")
         } footer: {
             Text("Making rules stricter works at once. Loosening them waits 24 hours, and your guardians can stop it.")
         }
     }
 
     private var guardians: some View {
-        Section("My guardians") {
+        Section(header: Heading("My guardians")) {
             if model.guardians.isEmpty {
                 Text("No guardians yet. A guardian can approve large payments and pause payments for you.").foregroundStyle(.secondary)
             }
@@ -386,7 +395,7 @@ struct MyProtectionView: View {
     }
 
     private var recent: some View {
-        Section("Recent payments") {
+        Section(header: Heading("Recent payments")) {
             if model.payments.isEmpty { Text("No payments checked yet.").foregroundStyle(.secondary) }
             ForEach(model.payments.indices, id: \.self) { i in PaymentInfo(p: model.payments[i], from: nil) }
         }
@@ -396,7 +405,7 @@ struct MyProtectionView: View {
         Section {
             Text("This signs you out everywhere and holds larger payments for 72 hours.").foregroundStyle(.secondary)
             Button("Report lost phone", role: .destructive) { confirmLost = true }
-        } header: { Text("Lost your phone?") }
+        } header: { Heading("Lost your phone?") }
     }
 }
 
@@ -416,7 +425,7 @@ struct GuardianView: View {
         List {
             RestrictedSection()
             if !invites.isEmpty {
-                Section("Guardian requests") {
+                Section(header: Heading("Guardian requests")) {
                     ForEach(invites.indices, id: \.self) { i in
                         let g = invites[i]
                         let id = g["id"] as? String ?? ""
@@ -438,7 +447,7 @@ struct GuardianView: View {
                 }
             }
 
-            Section("Payments waiting") {
+            Section(header: Heading("Payments waiting")) {
                 if held.isEmpty { Text("Nothing is waiting for you.").foregroundStyle(.secondary) }
                 ForEach(held.indices, id: \.self) { i in
                     let p = held[i]
@@ -475,7 +484,7 @@ struct GuardianView: View {
             }
 
             if !changes.isEmpty {
-                Section("Protection changes waiting") {
+                Section(header: Heading("Protection changes waiting")) {
                     ForEach(changes.indices, id: \.self) { i in
                         let c = changes[i]
                         let id = c["id"] as? String ?? ""
@@ -503,7 +512,7 @@ struct GuardianView: View {
             }
 
             if !recoveries.isEmpty {
-                Section("Account recovery requests") {
+                Section(header: Heading("Account recovery requests")) {
                     ForEach(recoveries.indices, id: \.self) { i in
                         let r = recoveries[i]
                         let id = r["recovery_id"] as? String ?? ""
@@ -536,7 +545,7 @@ struct GuardianView: View {
                 }
             }
 
-            Section("People I protect") {
+            Section(header: Heading("People I protect")) {
                 if active.isEmpty {
                     Text("You don't protect anyone yet. Someone has to invite you from their app.").foregroundStyle(.secondary)
                 }
@@ -635,7 +644,7 @@ struct DevicesView: View {
                     }
                 }
             }
-            Section("Sign out") {
+            Section(header: Heading("Sign out")) {
                 Button("Sign out here") { model.signOut(everywhere: false) }
                 Button("Sign out everywhere", role: .destructive) { model.signOut(everywhere: true) }
             }

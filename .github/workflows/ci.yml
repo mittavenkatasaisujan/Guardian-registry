@@ -151,8 +151,13 @@ jobs:
           SIM=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in sorted(d.items(), reverse=True) if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
           echo "simulator $SIM"
           mkdir -p ios-screens
+          set +e
           TEST_RUNNER_GR_SHOTS="$PWD/ios-screens" xcodebuild test -project ios/GuardianRegistry.xcodeproj -scheme GuardianRegistry \
-            -destination "id=$SIM" -resultBundlePath ios-tests.xcresult | tail -80
+            -destination "id=$SIM" -resultBundlePath ios-tests.xcresult > xcodebuild-test.log 2>&1
+          status=$?
+          # every test's result and every failure message (with file:line), not just the tail
+          grep -E "error:|Test Case .*(passed|failed)|TEST (SUCCEEDED|FAILED)|Failing tests|^\s+[A-Za-z]+\.test" xcodebuild-test.log | tail -150
+          exit $status
       - name: Keep the screenshots of every screen
         if: always()
         uses: actions/upload-artifact@v4

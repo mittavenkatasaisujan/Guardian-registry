@@ -135,6 +135,20 @@ final class AppFlowUITests: XCTestCase {
         see(app, app.buttons[label].firstMatch, "button \(label)").tap()
     }
 
+    /// Tap, then wait for the registry to show the effect; if the tap landed while the list
+    /// was redrawing and nothing arrived, tap once more.
+    private func tapUntil(_ app: XCUIApplication, button label: String, _ what: String, _ cond: () throws -> Bool) throws {
+        for attempt in 0..<3 {
+            tap(app, button: label)
+            let end = Date().addingTimeInterval(8)
+            while Date() < end {
+                if try cond() { return }
+                Thread.sleep(forTimeInterval: 0.3)
+            }
+            if attempt == 2 { XCTFail("timed out waiting for: \(what)") }
+        }
+    }
+
     private func tab(_ app: XCUIApplication, _ index: Int) {
         let b = app.tabBars.buttons.element(boundBy: index)
         XCTAssertTrue(b.waitForExistence(timeout: 10))
@@ -185,15 +199,17 @@ final class AppFlowUITests: XCTestCase {
         shot("ios-01-my-protection")
 
         let before = try obj("/v1/me/rules", token: p)
-        tap(app, button: "Apply")   // the first ready-made set
-        try until("preset applied") { NSDictionary(dictionary: try obj("/v1/me/rules", token: p)) != NSDictionary(dictionary: before) }
+        try tapUntil(app, button: "Apply", "preset applied") {   // the first ready-made set
+            NSDictionary(dictionary: try obj("/v1/me/rules", token: p)) != NSDictionary(dictionary: before)
+        }
         try call("POST", "/v1/me/rules/preset/senior_with_guardian", token: p)   // guardian approves from ₹10,000
 
         app.swipeDown(velocity: .fast); app.swipeDown(velocity: .fast)
-        tap(app, button: "Pause all payments")
+        try tapUntil(app, button: "Pause all payments", "paused") { try obj("/v1/me/rules", token: p)["kill_switch"] as? Bool == true }
         see(app, text(app, "Payments are paused"), "paused")
-        XCTAssertEqual(try obj("/v1/me/rules", token: p)["kill_switch"] as? Bool, true)
-        tap(app, button: "Switch payments back on")
+        try tapUntil(app, button: "Switch payments back on", "change held") {
+            (try call("GET", "/v1/me/changes", token: p) as? [[String: Any]] ?? []).contains { $0["status"] as? String == "pending" }
+        }
         see(app, text(app, "Changes waiting"), "held change")
         shot("ios-02-paused-change-waiting")
         XCTAssertEqual(try obj("/v1/me/rules", token: p)["kill_switch"] as? Bool, true, "still paused until a guardian approves")
@@ -216,8 +232,7 @@ final class AppFlowUITests: XCTestCase {
         see(app, text(app, "Protection changes waiting"), "change waiting")
         see(app, text(app, "Asha \(run) wants to: Switch payments back on"), "who wants what")
         shot("ios-04-guardian-change-waiting")
-        tap(app, button: "Approve now")
-        try until("payments back on") { try obj("/v1/me/rules", token: p)["kill_switch"] as? Bool == false }
+        try tapUntil(app, button: "Approve now", "payments back on") { try obj("/v1/me/rules", token: p)["kill_switch"] as? Bool == false }
 
         let c1 = try check(bank, pm, "big", rupees: 20_000)
         XCTAssertEqual(c1["status"] as? String, "pending_approval")
@@ -232,8 +247,7 @@ final class AppFlowUITests: XCTestCase {
         let c2 = try check(bank, pm, "deny", rupees: 15_000)
         reloadTab(app, 1)
         see(app, text(app, "Waiting for approval"), "second payment")
-        tap(app, button: "Deny")
-        try until("denied") { try obj("/v1/checks/\(c2["check_id"] as? String ?? "")", headers: bank)["status"] as? String == "denied" }
+        try tapUntil(app, button: "Deny", "denied") { try obj("/v1/checks/\(c2["check_id"] as? String ?? "")", headers: bank)["status"] as? String == "denied" }
         see(app, text(app, "Nothing is waiting for you."), "nothing waiting")
 
         tap(app, button: "Pause their payments")
@@ -255,8 +269,7 @@ final class AppFlowUITests: XCTestCase {
         tab(app, 2)
         see(app, app.buttons["Mark all read"], "mark all read")
         shot("ios-08-alerts")
-        tap(app, button: "Mark all read")
-        try until("alerts read") { (try call("GET", "/v1/me/notifications?unread_only=true&limit=100", token: p) as? [Any] ?? [1]).isEmpty }
+        try tapUntil(app, button: "Mark all read", "alerts read") { (try call("GET", "/v1/me/notifications?unread_only=true&limit=100", token: p) as? [Any] ?? [1]).isEmpty }
         tab(app, 0)
         tap(app, button: "Report lost phone")
         confirm(app, "Report lost phone")

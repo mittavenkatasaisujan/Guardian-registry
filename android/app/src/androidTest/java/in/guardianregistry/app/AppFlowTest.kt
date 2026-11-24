@@ -120,6 +120,21 @@ class AppFlowTest {
         onView(inContent(allOf(withText(text), isAssignableFrom(Button::class.java)))).perform(scrollTo(), click())
     }
 
+    /** Tap, then wait for the registry to show the effect. A screen can redraw (its 15-second
+     *  refresh, or the previous action's reload) just as a tap lands on the old button, so if
+     *  nothing reached the registry, tap once more. */
+    private fun tapUntil(text: String, what: String, cond: () -> Boolean) {
+        repeat(3) { attempt ->
+            tap(text)
+            val end = SystemClock.uptimeMillis() + 8_000
+            while (SystemClock.uptimeMillis() < end) {
+                if (cond()) return
+                Thread.sleep(300)
+            }
+            if (attempt == 2) throw AssertionError("timed out waiting for: $what")
+        }
+    }
+
     private fun tab(label: Int) = eventually {
         onView(allOf(isAssignableFrom(Button::class.java), withText(startsWith(s(label))),
             not(isDescendantOfA(isAssignableFrom(android.widget.ScrollView::class.java))))).perform(click())
@@ -192,10 +207,11 @@ class AppFlowTest {
         until(what = "preset applied") { P.obj("/v1/me/rules").optLong("approval_threshold") == 10_000L * 100 }
 
         // pause, then ask to switch back on: held for the guardian
-        tap(s(R.string.pause_all_payments))
+        tapUntil(s(R.string.pause_all_payments), "paused") { P.obj("/v1/me/rules").getBoolean("kill_switch") }
         see(s(R.string.payments_paused))
-        assertTrue(P.obj("/v1/me/rules").getBoolean("kill_switch"))
-        tap(s(R.string.switch_back_on))
+        tapUntil(s(R.string.switch_back_on), "change held") {
+            (0 until P.arr("/v1/me/changes").length()).any { P.arr("/v1/me/changes").getJSONObject(it).optString("status") == "pending" }
+        }
         see(s(R.string.changes_waiting))
         shot("02-paused-change-waiting")
         assertTrue("still paused until a guardian approves", P.obj("/v1/me/rules").getBoolean("kill_switch"))
@@ -215,8 +231,7 @@ class AppFlowTest {
         see(s(R.string.changes_waiting_g))
         see(s(R.string.wants_to, "Asha $run", s(R.string.switch_back_on)))
         shot("04-guardian-change-waiting")
-        tap(s(R.string.approve_now))
-        until(what = "payments back on") { !P.obj("/v1/me/rules").getBoolean("kill_switch") }
+        tapUntil(s(R.string.approve_now), "payments back on") { !P.obj("/v1/me/rules").getBoolean("kill_switch") }
         seeNo(s(R.string.changes_waiting_g))
 
         // a bank asks about a large payment: the guardian approves it
@@ -232,8 +247,7 @@ class AppFlowTest {
         // and denies the next one
         val c2 = check(bank, pm, "deny", 15_000)
         tab(R.string.tab_guardian)
-        tap(s(R.string.deny))
-        until(what = "denied") { bank.obj("/v1/checks/${c2.getString("check_id")}").getString("status") == "denied" }
+        tapUntil(s(R.string.deny), "denied") { bank.obj("/v1/checks/${c2.getString("check_id")}").getString("status") == "denied" }
         see(s(R.string.nothing_waiting))
 
         // pause the person's payments from the guardian's phone
@@ -258,8 +272,7 @@ class AppFlowTest {
         tab(R.string.alerts)
         see(s(R.string.mark_all_read))
         shot("08-alerts")
-        tap(s(R.string.mark_all_read))
-        until(what = "alerts read") { P.arr("/v1/me/notifications?unread_only=true&limit=100").length() == 0 }
+        tapUntil(s(R.string.mark_all_read), "alerts read") { P.arr("/v1/me/notifications?unread_only=true&limit=100").length() == 0 }
         see(s(R.string.alerts))
         tab(R.string.tab_me)
         tap(s(R.string.report_lost))
