@@ -132,7 +132,7 @@ struct Heading: View {
     let key: LocalizedStringKey
     init(_ key: LocalizedStringKey) { self.key = key }
     var body: some View {
-        Text(key).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).textCase(nil)
+        Text(key).textCase(nil)
     }
 }
 
@@ -261,6 +261,7 @@ struct MyProtectionView: View {
             }
         }
         .textCase(nil)
+        .headerProminence(.increased)   // headings in normal case and a little larger, like the web app
         .navigationTitle(Text(verbatim: model.loaded ? L("Hello, %@", model.me["display_name"] as? String ?? "") : L("My protection")))
         .refreshable { await model.refresh() }
         .confirmationDialog("Sign out of every device and hold larger payments for 72 hours?",
@@ -297,7 +298,8 @@ struct MyProtectionView: View {
             }
             .padding(.vertical, 6)
         } header: {
-            Text(verbatim: L("Identity: %@", Words.identity(model.me["identity_level"] as? String ?? ""))).textCase(nil)
+            Text(verbatim: L("Identity: %@", Words.identity(model.me["identity_level"] as? String ?? "")))
+                .font(.footnote).fontWeight(.regular).foregroundStyle(.secondary).textCase(nil)
         }
     }
 
@@ -383,13 +385,18 @@ struct MyProtectionView: View {
             if model.restricted {
                 RestrictedNote()
             } else {
-                TextField("Invite a guardian by mobile number", text: $invite).keyboardType(.phonePad)
-                Button("Invite") {
-                    let m = invite.trimmingCharacters(in: .whitespaces)
-                    invite = ""
-                    model.act("/v1/me/guardians", ["mobile": m], done: L("Invitation sent. They need to accept it in their app."))
+                // the number and its button side by side, like the web app: the button stays above the keyboard
+                HStack(spacing: 12) {
+                    TextField("Invite a guardian by mobile number", text: $invite)
+                        .keyboardType(.phonePad).textContentType(.telephoneNumber)
+                    Button("Invite") {
+                        let m = invite.trimmingCharacters(in: .whitespaces)
+                        invite = ""
+                        model.act("/v1/me/guardians", ["mobile": m], done: L("Invitation sent. They need to accept it in their app."))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(invite.trimmingCharacters(in: .whitespaces).count < 10)
                 }
-                .disabled(invite.trimmingCharacters(in: .whitespaces).count < 10)
             }
         }
     }
@@ -560,6 +567,7 @@ struct GuardianView: View {
             }
         }
         .textCase(nil)
+        .headerProminence(.increased)   // headings in normal case and a little larger, like the web app
         .navigationTitle("People I protect")
         .refreshable { await model.refresh() }
         .confirmationDialog("Approve this payment?", isPresented: Binding(get: { approvePayment != nil }, set: { if !$0 { approvePayment = nil } }),
@@ -610,6 +618,7 @@ struct AlertsView: View {
             }
         }
         .textCase(nil)
+        .headerProminence(.increased)   // headings in normal case and a little larger, like the web app
         .navigationTitle("Alerts")
         .refreshable { await model.refresh() }
     }
@@ -650,6 +659,7 @@ struct DevicesView: View {
             }
         }
         .textCase(nil)
+        .headerProminence(.increased)   // headings in normal case and a little larger, like the web app
         .navigationTitle("Devices")
         .refreshable { await model.refresh() }
     }
