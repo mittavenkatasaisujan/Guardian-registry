@@ -105,6 +105,12 @@ async function act(button, fn, okMessage) {
 
 // ------------------------------------------------------------------ device key
 const DeviceKey = {
+  /** Web Crypto exists only on secure pages (https:// or localhost). On a plain http:// address,
+   *  such as a test server on the local network, sign-in goes ahead without a device key. */
+  available() {
+    return !!(window.isSecureContext && window.crypto && crypto.subtle && window.indexedDB);
+  },
+
   async open() {
     return new Promise((resolve, reject) => {
       const req = indexedDB.open("guardian-registry", 1);
@@ -138,6 +144,7 @@ const DeviceKey = {
   },
 
   async keyId() {
+    if (!this.available()) return null;
     const spki = await crypto.subtle.exportKey("spki", (await this.get()).publicKey);
     const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", spki));
     return [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -145,6 +152,7 @@ const DeviceKey = {
 
   /** Sign 'guardian-registry/v1:' + challenge; the registry expects a DER signature. */
   async prove() {
+    if (!this.available()) return {};
     const { challenge } = await api("POST", "/v1/auth/challenge");
     const pair = await this.get();
     const msg = new TextEncoder().encode("guardian-registry/v1:" + challenge);
