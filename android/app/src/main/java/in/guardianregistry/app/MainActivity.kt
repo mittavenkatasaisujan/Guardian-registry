@@ -85,6 +85,19 @@ class MainActivity : Activity() {
         scroll = ScrollView(this).apply { addView(root); setBackgroundColor(PAGE) }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            setBackgroundColor(BRAND)
+            // Android 15 draws apps edge to edge: keep the tabs below the status bar and the
+            // content above the navigation bar.
+            setOnApplyWindowInsetsListener { v, insets ->
+                if (Build.VERSION.SDK_INT >= 30) {
+                    val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.ime())
+                    v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+                } else {
+                    @Suppress("DEPRECATION")
+                    v.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
+                }
+                insets
+            }
             addView(tabs, LinearLayout.LayoutParams(-1, -2))
             addView(banner, LinearLayout.LayoutParams(-1, -2))
             addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -662,13 +675,13 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(8); bottomMargin = dp(8) })
     }
 
-    private fun bigStatus(parent: LinearLayout, text: String, color: Int) = parent.addView(TextView(this).apply {
-        this.text = "●  $text"; textSize = 20f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK)
-        setPadding(0, 0, 0, dp(4))
-        val span = android.text.SpannableString(this.text)
-        span.setSpan(android.text.style.ForegroundColorSpan(color), 0, 1, 0)
-        this.text = span
-    })
+    /** "● Payments are on": a coloured dot, then the status as its own text. */
+    private fun bigStatus(parent: LinearLayout, text: String, color: Int) {
+        val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, 0, 0, dp(4)) }
+        r.addView(View(this).apply { background = rounded(color, radius = 999) }, LinearLayout.LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(10) })
+        r.addView(TextView(this).apply { this.text = text; textSize = 20f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK) })
+        parent.addView(r)
+    }
 
     private fun keyValue(parent: LinearLayout, k: String, v: String) {
         val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(4), 0, dp(4)) }
@@ -721,9 +734,10 @@ class MainActivity : Activity() {
     private fun action(label: String, style: Style, onClick: (Button) -> Unit) = Triple(label, style, onClick)
 
     private fun row(parent: LinearLayout, vararg buttons: Triple<String, Style, (Button) -> Unit>) {
-        val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
         buttons.forEachIndexed { i, (label, style, onClick) ->
-            r.addView(styled(label, style, onClick), LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = if (i > 0) dp(8) else 0 })
+            // same height side by side, even when one label wraps
+            r.addView(styled(label, style, onClick), LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = if (i > 0) dp(8) else 0 })
         }
         parent.addView(r, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
     }
