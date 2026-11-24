@@ -38,6 +38,7 @@ final class AppModel: ObservableObject {
     @Published var unread = 0
     @Published var devices: [[String: Any]] = []
     @Published var myKeyId: String?
+    @Published var nominee: [String: Any]?
 
     init() {
         #if DEBUG
@@ -192,8 +193,10 @@ final class AppModel: ObservableObject {
             async let c = a.list("/v1/me/changes")
             async let p = a.list("/v1/me/payments?limit=10")
             async let pr = a.object("/v1/presets")
-            let (mm, rr, gg, cc, pp, ps) = try await (m, r, g, c, p, pr)
+            async let nm = a.object("/v1/me/nominee")
+            let (mm, rr, gg, cc, pp, ps, nn) = try await (m, r, g, c, p, pr, nm)
             me = mm; rules = rr; guardians = gg; changes = cc; payments = pp
+            nominee = nn["nominee"] as? [String: Any]
             presets = ps.keys.sorted().map { k in Preset(id: k, label: (ps[k] as? [String: Any])?["label"] as? String ?? k) }
         case .guardian:
             wards = try await a.list("/v1/guardian/wards")
@@ -232,6 +235,57 @@ final class AppModel: ObservableObject {
             let out = try await self.api.call("POST", "/v1/me/rules/preset/\(name)") as? [String: Any]
             try await self.load()
             self.message = (out?["held"] as? [String: Any]) != nil ? L("Stricter parts apply now; looser parts wait 24 hours.") : L("Applied.")
+        }
+    }
+
+    /// The person's own limits, in whole rupees ("" = no limit). Stricter ones apply now; looser ones wait.
+    func saveLimits(_ rupees: [String: String]) {
+        var body: [String: Any] = [:]
+        for (key, text) in rupees {
+            let t = text.replacingOccurrences(of: ",", with: "").replacingOccurrences(of: "₹", with: "")
+                .trimmingCharacters(in: .whitespaces)
+            if t.isEmpty {
+                body[key] = NSNull()
+            } else if let v = Int(t), v > 0 {
+                body[key] = v * 100
+            } else {
+                message = L("Enter amounts in whole rupees, or leave empty for no limit.")
+                return
+            }
+        }
+        run {
+            let out = try await self.api.call("PATCH", "/v1/me/rules", body) as? [String: Any]
+            try await self.load()
+            self.message = (out?["held"] as? [String: Any]) != nil ? L("Stricter parts apply now; looser parts wait 24 hours.") : L("Saved.")
+        }
+    }
+
+    func saveName(_ name: String) {
+        run {
+            try await self.api.call("PUT", "/v1/me/name", ["display_name": name.trimmingCharacters(in: .whitespaces)])
+            try await self.load()
+            self.message = L("Name saved.")
+        }
+    }
+
+    func saveNominee(name: String, relation: String, mobile: String) {
+        let parts = [name, relation, mobile].map { $0.trimmingCharacters(in: .whitespaces) }
+        if parts.contains(where: \.isEmpty) {
+            message = L("Fill in the nominee's name, relation and mobile number.")
+            return
+        }
+        run {
+            try await self.api.call("PUT", "/v1/me/nominee", ["name": parts[0], "relation": parts[1], "mobile": parts[2]])
+            try await self.load()
+            self.message = L("Nominee saved.")
+        }
+    }
+
+    func removeNominee() {
+        run {
+            try await self.api.call("DELETE", "/v1/me/nominee")
+            try await self.load()
+            self.message = L("Nominee removed.")
         }
     }
 

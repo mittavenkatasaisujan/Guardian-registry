@@ -29,6 +29,12 @@
    "android:asked_guardian"
   ]
  },
+ "bec0ee6fd2": {
+  "en": "%1$s hours",
+  "where": [
+   "android:hours"
+  ]
+ },
  "5c8f84a116": {
   "en": "%1$s min",
   "where": [
@@ -49,6 +55,12 @@
  },
  "3b33e45d3f": {
   "en": "%@ asked you to be their payment guardian.",
+  "where": [
+   "ios"
+  ]
+ },
+ "a84bd6abf5": {
+  "en": "%@ hours",
   "where": [
    "ios"
   ]
@@ -194,6 +206,14 @@
   "where": [
    "web",
    "android:all_read",
+   "ios"
+  ]
+ },
+ "e314eea614": {
+  "en": "All payments",
+  "where": [
+   "web",
+   "android:scope_all",
    "ios"
   ]
  },
@@ -480,6 +500,14 @@
    "server:error"
   ]
  },
+ "18fc357173": {
+  "en": "Change my limits",
+  "where": [
+   "web",
+   "android:change_limits",
+   "ios"
+  ]
+ },
  "949f32dce6": {
   "en": "change not found",
   "where": [
@@ -582,6 +610,14 @@
   "en": "daily limit {0} would be exceeded ({1} left today)",
   "where": [
    "server:phrase"
+  ]
+ },
+ "09faf6df9d": {
+  "en": "Daily limits by channel",
+  "where": [
+   "web",
+   "android:rule_channel_limits",
+   "ios"
   ]
  },
  "b6a73b7fda": {
@@ -743,6 +779,14 @@
    "web"
   ]
  },
+ "77f138f1e4": {
+  "en": "Enter amounts in whole rupees, or leave empty for no limit.",
+  "where": [
+   "web",
+   "android:amount_invalid",
+   "ios"
+  ]
+ },
  "705d8e0e5c": {
   "en": "Enter the code",
   "where": [
@@ -782,6 +826,14 @@
   "where": [
    "web",
    "android:st_failed",
+   "ios"
+  ]
+ },
+ "a81a10bdb3": {
+  "en": "Fill in the nominee's name, relation and mobile number.",
+  "where": [
+   "web",
+   "android:nominee_fill",
    "ios"
   ]
  },
@@ -844,6 +896,14 @@
   "where": [
    "web",
    "android:rule_approval",
+   "ios"
+  ]
+ },
+ "7def0d231c": {
+  "en": "Guardian approves from (₹)",
+  "where": [
+   "web",
+   "android:lim_approve",
    "ios"
   ]
  },
@@ -1091,6 +1151,14 @@
    "server:error"
   ]
  },
+ "3d9794697a": {
+  "en": "Leave a box empty for no limit. Stricter limits apply at once; looser ones wait 24 hours and your guardians can stop them.",
+  "where": [
+   "web",
+   "android:limits_note",
+   "ios"
+  ]
+ },
  "33ce417454": {
   "en": "Loading…",
   "where": [
@@ -1158,11 +1226,43 @@
    "ios"
   ]
  },
+ "31344e8eb3": {
+  "en": "Most per day, all banks (₹)",
+  "where": [
+   "web",
+   "android:lim_day",
+   "ios"
+  ]
+ },
+ "e14c02955e": {
+  "en": "Most per payee per day",
+  "where": [
+   "web",
+   "android:rule_payee",
+   "ios"
+  ]
+ },
+ "a06974ef6d": {
+  "en": "Most per payee per day (₹)",
+  "where": [
+   "web",
+   "android:lim_payee",
+   "ios"
+  ]
+ },
  "cca76e4ecc": {
   "en": "Most per payment",
   "where": [
    "web",
    "android:rule_per_txn",
+   "ios"
+  ]
+ },
+ "68cb6e085d": {
+  "en": "Most per payment (₹)",
+  "where": [
+   "web",
+   "android:lim_txn",
    "ios"
   ]
  },
@@ -1216,6 +1316,14 @@
    "ios"
   ]
  },
+ "6a910de58d": {
+  "en": "Name saved.",
+  "where": [
+   "web",
+   "android:name_saved",
+   "ios"
+  ]
+ },
  "89c67bd02b": {
   "en": "never confirm your date of birth to a caller",
   "where": [
@@ -1246,6 +1354,14 @@
   "en": "new device: restricted until {0}",
   "where": [
    "server:error-phrase"
+  ]
+ },
+ "78662bf42b": {
+  "en": "New guardian can approve after",
+  "where": [
+   "web",
+   "android:rule_wait",
+   "ios"
   ]
  },
  "ec9f8ae33a": {
@@ -1320,6 +1436,14 @@
    "ios"
   ]
  },
+ "94a61792f4": {
+  "en": "No nominee yet.",
+  "where": [
+   "web",
+   "android:no_nominee",
+   "ios"
+  ]
+ },
  "3894b08988": {
   "en": "no open SIM-change window",
   "where": [
@@ -1331,6 +1455,46 @@
   "where": [
    "web",
    "android:no_payments",
+   "ios"
+  ]
+ },
+ "d3486f7093": {
+  "en": "Nominee",
+  "where": [
+   "web",
+   "android:nominee",
+   "ios"
+  ]
+ },
+ "85f9ebb376": {
+  "en": "Nominee removed.",
+  "where": [
+   "web",
+   "android:nominee_removed",
+   "ios"
+  ]
+ },
+ "04e046b290": {
+  "en": "Nominee saved.",
+  "where": [
+   "web",
+   "android:nominee_saved",
+   "ios"
+  ]
+ },
+ "dd2068d009": {
+  "en": "Nominee's mobile number",
+  "where": [
+   "web",
+   "android:nominee_mobile",
+   "ios"
+  ]
+ },
+ "e5c8ca171d": {
+  "en": "Nominee's name",
+  "where": [
+   "web",
+   "android:nominee_name",
    "ios"
   ]
  },
@@ -1713,6 +1877,14 @@
    "server:error-phrase"
   ]
  },
+ "90acd2550a": {
+  "en": "Relation (for example, son)",
+  "where": [
+   "web",
+   "android:nominee_relation",
+   "ios"
+  ]
+ },
  "6cab07fc46": {
   "en": "released",
   "where": [
@@ -1746,6 +1918,14 @@
   "where": [
    "web",
    "android:change_remove_guardian",
+   "ios"
+  ]
+ },
+ "eb49469fd5": {
+  "en": "Remove nominee",
+  "where": [
+   "web",
+   "android:remove_nominee",
    "ios"
   ]
  },
@@ -1783,6 +1963,46 @@
    "server:error-phrase",
    "web",
    "android:w_revoked",
+   "ios"
+  ]
+ },
+ "efac6f456a": {
+  "en": "Right away",
+  "where": [
+   "web",
+   "android:right_away",
+   "ios"
+  ]
+ },
+ "6231c5bdce": {
+  "en": "Save limits",
+  "where": [
+   "web",
+   "android:save_limits",
+   "ios"
+  ]
+ },
+ "8ce686405a": {
+  "en": "Save name",
+  "where": [
+   "web",
+   "android:save_name",
+   "ios"
+  ]
+ },
+ "fcc609e0e7": {
+  "en": "Save nominee",
+  "where": [
+   "web",
+   "android:save_nominee",
+   "ios"
+  ]
+ },
+ "9d4af6906a": {
+  "en": "Saved.",
+  "where": [
+   "web",
+   "android:saved",
    "ios"
   ]
  },
@@ -1943,6 +2163,14 @@
   "en": "Someone is trying to recover {0}'s account on a new number {1}. Only approve if you have spoken to {2} yourself, on a call YOU placed or in person. If in doubt, deny.",
   "where": [
    "server:alert"
+  ]
+ },
+ "77e27fa2a0": {
+  "en": "Someone who can use your data rights if you die or can't act yourself. They get no access to your account or payments.",
+  "where": [
+   "web",
+   "android:nominee_explain",
+   "ios"
   ]
  },
  "8d886c0ba6": {
@@ -2223,6 +2451,14 @@
    "server:error"
   ]
  },
+ "115297f07a": {
+  "en": "Transfers only (not UPI, shops or recurring)",
+  "where": [
+   "web",
+   "android:scope_rbi",
+   "ios"
+  ]
+ },
  "ac946ad589": {
   "en": "trusted",
   "where": [
@@ -2241,6 +2477,14 @@
   "en": "Trusted person approves large transfers (RBI draft rules)",
   "where": [
    "server:phrase"
+  ]
+ },
+ "9e576280fe": {
+  "en": "Trusted person checks",
+  "where": [
+   "web",
+   "android:rule_scope",
+   "ios"
   ]
  },
  "ce635edc08": {
@@ -2519,6 +2763,14 @@
    "server:phrase"
   ]
  },
+ "a6252b6690": {
+  "en": "Your details",
+  "where": [
+   "web",
+   "android:your_details",
+   "ios"
+  ]
+ },
  "44dd039bb6": {
   "en": "Your Guardian Registry account will be deleted on {0}, and your guardians will stop protecting your payments. If you didn't ask for this, or someone told you to, cancel it in the app.",
   "where": [
@@ -2558,7 +2810,9 @@
  "ab42293e29": {
   "en": "Your name",
   "where": [
-   "web"
+   "web",
+   "android:your_name",
+   "ios"
   ]
  },
  "a1367ab8e0": {
@@ -2792,6 +3046,12 @@
   "en": "{0}. {1}'s account moves to {2} at {3} unless someone stops it.",
   "where": [
    "server:alert"
+  ]
+ },
+ "e4ca3962a9": {
+  "en": "{h} hours",
+  "where": [
+   "web"
   ]
  },
  "a47d8efbcf": {

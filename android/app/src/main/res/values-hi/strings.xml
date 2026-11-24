@@ -149,4 +149,36 @@
     <string name="sign_out_here">यहाँ साइन आउट करें</string>
     <string name="sign_out_everywhere">हर जगह साइन आउट करें</string>
     <string name="restricted_action">इस साइन-इन पर अभी नहीं: यह सीमित है (ऊपर की सूचना देखें)।</string>
+    <string name="rule_payee">हर प्राप्तकर्ता को रोज़ अधिकतम</string>
+    <string name="rule_channel_limits">माध्यम के अनुसार दैनिक सीमाएँ</string>
+    <string name="rule_scope">भरोसेमंद व्यक्ति की जाँच</string>
+    <string name="scope_rbi">सिर्फ़ ट्रांसफ़र (UPI, दुकानें या नियमित भुगतान नहीं)</string>
+    <string name="scope_all">सभी भुगतान</string>
+    <string name="rule_wait">नया गार्डियन मंज़ूरी दे सकता है</string>
+    <string name="hours" formatted="true">%1$s घंटे बाद</string>
+    <string name="right_away">तुरंत</string>
+    <string name="amount_invalid">राशि पूरे रुपयों में लिखें, या कोई सीमा न रखने के लिए खाली छोड़ें।</string>
+    <string name="lim_txn">एक भुगतान में अधिकतम (₹)</string>
+    <string name="lim_day">एक दिन में अधिकतम, सभी बैंक (₹)</string>
+    <string name="lim_payee">हर प्राप्तकर्ता को रोज़ अधिकतम (₹)</string>
+    <string name="lim_approve">गार्डियन मंज़ूरी इससे ऊपर (₹)</string>
+    <string name="save_limits">सीमाएँ सहेजें</string>
+    <string name="saved">सहेज लिया।</string>
+    <string name="change_limits">मेरी सीमाएँ बदलें</string>
+    <string name="limits_note">कोई सीमा न रखने के लिए खाना खाली छोड़ें। सख़्त सीमाएँ तुरंत लागू होती हैं; ढीली सीमाएँ 24 घंटे रुकती हैं और आपके गार्डियन उन्हें रोक सकते हैं।</string>
+    <string name="save_name">नाम सहेजें</string>
+    <string name="name_saved">नाम सहेज लिया।</string>
+    <string name="nominee_name">नामित व्यक्ति का नाम</string>
+    <string name="nominee_relation">रिश्ता (जैसे, बेटा)</string>
+    <string name="nominee_mobile">नामित व्यक्ति का मोबाइल नंबर</string>
+    <string name="save_nominee">नामित व्यक्ति सहेजें</string>
+    <string name="nominee_saved">नामित व्यक्ति सहेज लिया।</string>
+    <string name="your_details">आपकी जानकारी</string>
+    <string name="nominee">नामित व्यक्ति</string>
+    <string name="nominee_explain">कोई ऐसा व्यक्ति जो आपकी मृत्यु या असमर्थता की स्थिति में आपके डेटा अधिकारों का इस्तेमाल कर सके। उन्हें आपके खाते या भुगतानों तक कोई पहुँच नहीं मिलती।</string>
+    <string name="nominee_removed">नामित व्यक्ति हटा दिया।</string>
+    <string name="remove_nominee">नामित व्यक्ति हटाएँ</string>
+    <string name="no_nominee">अभी कोई नामित व्यक्ति नहीं।</string>
+    <string name="your_name">आपका नाम</string>
+    <string name="nominee_fill">नामित व्यक्ति का नाम, रिश्ता और मोबाइल नंबर भरें।</string>
 </resources>

@@ -283,7 +283,7 @@ class MainActivity : Activity() {
         val me: JSONObject? = null, val rules: JSONObject? = null, val guardians: JSONArray? = null,
         val changes: JSONArray? = null, val payments: JSONArray? = null, val presets: JSONObject? = null,
         val wards: JSONArray? = null, val alerts: JSONArray? = null, val devices: JSONArray? = null,
-        val myKeyId: String? = null,
+        val myKeyId: String? = null, val nominee: JSONObject? = null,
     )
 
     private fun load(which: String): Data {
@@ -298,7 +298,7 @@ class MainActivity : Activity() {
             else -> Data(inbox, unread, security = a.obj("/v1/me/security"), me = a.obj("/v1/me"),
                           rules = a.obj("/v1/me/rules"), guardians = a.arr("/v1/me/guardians"),
                           changes = a.arr("/v1/me/changes"), payments = a.arr("/v1/me/payments?limit=10"),
-                          presets = a.obj("/v1/presets"))
+                          presets = a.obj("/v1/presets"), nominee = a.obj("/v1/me/nominee").optJSONObject("nominee"))
         }
     }
 
@@ -381,6 +381,15 @@ class MainActivity : Activity() {
             R.string.rule_verified to yesNo(rules.optBoolean("require_verified_guardian")),
             R.string.rule_sim to yesNo(rules.optBoolean("sim_swap_hold")),
             R.string.rule_scam to yesNo(rules.optBoolean("scam_signals")),
+            R.string.rule_payee to money(rules, "per_payee_daily_limit"),
+            R.string.rule_channel_limits to (rules.optJSONObject("channel_daily_limits")?.let { m ->
+                m.keys().asSequence().toList().sorted().joinToString(" · ") { "${it.uppercase()} ${Wire.rupees(m.optLong(it))}" }
+                    .ifEmpty { null }
+            } ?: getString(R.string.none)),
+            R.string.rule_scope to getString(if (rules.str("approval_scope") == "rbi") R.string.scope_rbi else R.string.scope_all),
+            R.string.rule_wait to rules.optInt("new_guardian_wait_hours").let {
+                if (it > 0) getString(R.string.hours, it.toString()) else getString(R.string.right_away)
+            },
         )
         for ((label, value) in rows) keyValue(r, getString(label), value)
         para(r, getString(R.string.preset_label), bold = true).apply { setPadding(0, dp(14), 0, dp(4)) }
@@ -409,6 +418,36 @@ class MainActivity : Activity() {
         }
         para(r, getString(R.string.rules_note), MUTED, 13f)
 
+        // the person's own limits (RBI's draft calls these customer-induced controls)
+        val lc = card()
+        heading(lc, getString(R.string.change_limits))
+        para(lc, getString(R.string.limits_note), MUTED, 13f)
+        val limitFields = listOf(
+            Triple("per_txn_limit", R.string.lim_txn, rules), Triple("daily_limit", R.string.lim_day, rules),
+            Triple("per_payee_daily_limit", R.string.lim_payee, rules), Triple("approval_threshold", R.string.lim_approve, rules),
+        ).map { (key, label, rs) ->
+            para(lc, getString(label), bold = true).apply { setPadding(0, dp(10), 0, 0) }
+            key to input(lc, getString(R.string.no_limit), InputType.TYPE_CLASS_NUMBER,
+                if (rs.isNull(key) || !rs.has(key)) null else (rs.optLong(key) / 100).toString())
+                .apply { contentDescription = getString(label) }   // screen readers name each box
+        }
+        button(lc, getString(R.string.save_limits), style = Style.SECONDARY) { b ->
+            val body = JSONObject()
+            for ((key, field) in limitFields) {
+                val text = field.text.toString().replace(",", "").replace("₹", "").trim()
+                if (text.isEmpty()) {
+                    body.put(key, JSONObject.NULL)
+                } else {
+                    val rupees = text.toLongOrNull()
+                    if (rupees == null || rupees <= 0) { toast(getString(R.string.amount_invalid)); field.requestFocus(); return@button }
+                    body.put(key, rupees * 100)
+                }
+            }
+            act(b, { api().patch("/v1/me/rules", body) as JSONObject }) {
+                if (it.isNull("held")) getString(R.string.saved) else getString(R.string.preset_held)
+            }
+        }
+
         val g = card()
         heading(g, getString(R.string.my_guardians))
         val guardians = d.guardians!!.objects()
@@ -436,6 +475,44 @@ class MainActivity : Activity() {
         val payments = d.payments!!.objects()
         if (payments.isEmpty()) para(p, getString(R.string.no_payments), MUTED)
         for (x in payments) paymentItem(p, x, null)
+
+        // DPDP Act: correct your name (s.12), nominate someone (s.14)
+        val yd = card()
+        heading(yd, getString(R.string.your_details))
+        para(yd, getString(R.string.your_name), bold = true)
+        val nameField = input(yd, getString(R.string.your_name), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS,
+            me.str("display_name"))
+        button(yd, getString(R.string.save_name), style = Style.SECONDARY) { b ->
+            val n = nameField.text.toString().trim()
+            if (n.isEmpty()) { nameField.requestFocus(); return@button }
+            act(b, { api().put("/v1/me/name", JSONObject().put("display_name", n)) }) { getString(R.string.name_saved) }
+        }
+        para(yd, getString(R.string.nominee), bold = true).apply { textSize = 16f; setPadding(0, dp(16), 0, dp(2)) }
+        para(yd, getString(R.string.nominee_explain), MUTED, 13f)
+        val nom = d.nominee
+        if (nom != null) {
+            rowWithPill(yd, nom.str("name"), nom.str("relation") + " · " + nom.str("mobile"), null, MUTED)
+            if (restricted) restrictedNote(yd) else button(yd, getString(R.string.remove_nominee), style = Style.SECONDARY) { b ->
+                act(b, { api().delete("/v1/me/nominee") }) { getString(R.string.nominee_removed) }
+            }
+        } else {
+            para(yd, getString(R.string.no_nominee), MUTED)
+            if (restricted) {
+                restrictedNote(yd)
+            } else {
+                val nn = input(yd, getString(R.string.nominee_name), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS, null)
+                val nr = input(yd, getString(R.string.nominee_relation), InputType.TYPE_CLASS_TEXT, null)
+                val nm = input(yd, getString(R.string.nominee_mobile), InputType.TYPE_CLASS_PHONE, null)
+                button(yd, getString(R.string.save_nominee), style = Style.SECONDARY) { b ->
+                    val body = JSONObject().put("name", nn.text.toString().trim()).put("relation", nr.text.toString().trim())
+                        .put("mobile", nm.text.toString().trim())
+                    if (body.getString("name").isEmpty() || body.getString("relation").isEmpty() || body.getString("mobile").isEmpty()) {
+                        toast(getString(R.string.nominee_fill)); return@button
+                    }
+                    act(b, { api().put("/v1/me/nominee", body) }) { getString(R.string.nominee_saved) }
+                }
+            }
+        }
 
         val l = card()
         heading(l, getString(R.string.lost_title))

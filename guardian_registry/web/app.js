@@ -193,7 +193,24 @@ const RULE_LABELS = [
   ["require_verified_guardian", t("Only bank-verified guardians approve"), (b) => (b ? t("Yes") : t("No"))],
   ["sim_swap_hold", t("Hold payments after a SIM change"), (b) => (b ? t("Yes") : t("No"))],
   ["scam_signals", t("Hold payments that look like a scam"), (b) => (b ? t("Yes") : t("No"))],
+  ["per_payee_daily_limit", t("Most per payee per day"), rupees],
+  ["channel_daily_limits", t("Daily limits by channel"), (m) => {
+    const parts = Object.entries(m || {}).map(([ch, v]) => `${ch.toUpperCase()} ${rupees(v)}`);
+    return parts.length ? parts.join(" · ") : t("None");
+  }],
+  ["approval_scope", t("Trusted person checks"),
+    (s) => (s === "rbi" ? t("Transfers only (not UPI, shops or recurring)") : t("All payments"))],
+  ["new_guardian_wait_hours", t("New guardian can approve after"),
+    (h) => (h ? t("{h} hours", { h }) : t("Right away"))],
 ];
+
+/** Rupees typed in a form -> paise for the API; empty means no limit (null). */
+function paiseFrom(text) {
+  const v = String(text || "").replace(/[,\s₹]/g, "");
+  if (!v) return null;
+  if (!/^\d+$/.test(v) || Number(v) <= 0) throw new Error(t("Enter amounts in whole rupees, or leave empty for no limit."));
+  return Number(v) * 100;
+}
 
 const CHANGE_LABELS = {
   update_rules: t("Loosen payment limits"),
@@ -303,11 +320,12 @@ function signInView() {
 
 // ------------------------------------------------------------------ my protection
 async function meView() {
-  const [me, rules, security, guardians, changes, payments, presets] = await Promise.all([
+  const [me, rules, security, guardians, changes, payments, presets, nom] = await Promise.all([
     api("GET", "/v1/me"), api("GET", "/v1/me/rules"), api("GET", "/v1/me/security"),
     api("GET", "/v1/me/guardians"), api("GET", "/v1/me/changes"), api("GET", "/v1/me/payments?limit=10"),
-    api("GET", "/v1/presets"),
+    api("GET", "/v1/presets"), api("GET", "/v1/me/nominee"),
   ]);
+  const nominee = nom && nom.nominee;
   setBanner(security.this_session);
   const paused = rules.kill_switch;
   const pending = changes.filter((c) => c.status === "pending");
@@ -332,6 +350,58 @@ async function meView() {
     h("div", { class: "row" },
       h("input", { id: "gmobile", name: "gmobile", type: "tel", required: true, class: "grow" }),
       h("button", { type: "submit" }, t("Invite"))));
+
+  const rupeeValue = (paise) => (paise === null || paise === undefined ? "" : String(Math.round(paise / 100)));
+  const limitField = (id, label, paise) => [
+    h("label", { for: id }, label),
+    h("input", { id, name: id, inputmode: "numeric", placeholder: t("No limit"), value: rupeeValue(paise) }),
+  ];
+  const limitsForm = h("form", { onsubmit: (e) => {
+    e.preventDefault();
+    const f = e.target;
+    let changes;
+    try {
+      changes = {
+        per_txn_limit: paiseFrom(f.lim_txn.value), daily_limit: paiseFrom(f.lim_day.value),
+        per_payee_daily_limit: paiseFrom(f.lim_payee.value), approval_threshold: paiseFrom(f.lim_approve.value),
+      };
+    } catch (err) {
+      toast(err.message, 7000);
+      return;
+    }
+    act(f.querySelector("button"), () => api("PATCH", "/v1/me/rules", changes),
+      (out) => (out.held ? t("Stricter parts apply now; looser parts wait 24 hours.") : t("Saved.")));
+  } },
+    limitField("lim_txn", t("Most per payment (₹)"), rules.per_txn_limit),
+    limitField("lim_day", t("Most per day, all banks (₹)"), rules.daily_limit),
+    limitField("lim_payee", t("Most per payee per day (₹)"), rules.per_payee_daily_limit),
+    limitField("lim_approve", t("Guardian approves from (₹)"), rules.approval_threshold),
+    h("div", { class: "row mt" }, h("button", { type: "submit", class: "secondary" }, t("Save limits"))));
+
+  const nameForm = h("form", { onsubmit: (e) => {
+    e.preventDefault();
+    act(e.target.querySelector("button"), () => api("PUT", "/v1/me/name", { display_name: e.target.myname.value.trim() }),
+      t("Name saved."));
+  } },
+    h("label", { for: "myname" }, t("Your name")),
+    h("div", { class: "row" },
+      h("input", { id: "myname", name: "myname", class: "grow", maxlength: 80, required: true, value: me.display_name }),
+      h("button", { type: "submit", class: "secondary" }, t("Save name"))));
+
+  const nomineeForm = h("form", { onsubmit: (e) => {
+    e.preventDefault();
+    const f = e.target;
+    act(f.querySelector("button"), () => api("PUT", "/v1/me/nominee",
+      { name: f.nom_name.value.trim(), relation: f.nom_rel.value.trim(), mobile: f.nom_mobile.value.trim() }),
+      t("Nominee saved."));
+  } },
+    h("label", { for: "nom_name" }, t("Nominee's name")),
+    h("input", { id: "nom_name", name: "nom_name", maxlength: 80, required: true }),
+    h("label", { for: "nom_rel" }, t("Relation (for example, son)")),
+    h("input", { id: "nom_rel", name: "nom_rel", maxlength: 40, required: true }),
+    h("label", { for: "nom_mobile" }, t("Nominee's mobile number")),
+    h("input", { id: "nom_mobile", name: "nom_mobile", type: "tel", inputmode: "tel", required: true }),
+    h("div", { class: "row mt" }, h("button", { type: "submit", class: "secondary" }, t("Save nominee"))));
 
   return [
     h("h1", {}, t("Hello, {name}", { name: me.display_name })),
@@ -370,6 +440,11 @@ async function meView() {
       h("p", { class: "muted small" }, t("Making rules stricter works at once. Loosening them waits 24 hours, and your guardians can stop it."))),
 
     h("section", { class: "card" },
+      h("h2", {}, t("Change my limits")),
+      h("p", { class: "muted small" }, t("Leave a box empty for no limit. Stricter limits apply at once; looser ones wait 24 hours and your guardians can stop them.")),
+      limitsForm),
+
+    h("section", { class: "card" },
       h("h2", {}, t("My guardians")),
       guardians.length ? h("ul", { class: "list" }, guardians.map((g) => h("li", { class: "row space" },
         h("span", {}, h("strong", {}, g.guardian_name), " ", h("span", { class: "muted small" }, identityText(g.guardian_identity_level))),
@@ -380,6 +455,18 @@ async function meView() {
     h("section", { class: "card" },
       h("h2", {}, t("Recent payments")),
       payments.length ? h("ul", { class: "list" }, payments.map(paymentItem)) : h("p", { class: "empty" }, t("No payments checked yet."))),
+
+    h("section", { class: "card" },
+      h("h2", {}, t("Your details")),
+      nameForm,
+      h("h3", {}, t("Nominee")),
+      h("p", { class: "muted small" }, t("Someone who can use your data rights if you die or can't act yourself. They get no access to your account or payments.")),
+      nominee
+        ? h("div", { class: "row space" },
+            h("span", {}, h("strong", {}, nominee.name), " ", h("span", { class: "muted small" }, `${nominee.relation} · ${nominee.mobile}`)),
+            trusted(h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("DELETE", "/v1/me/nominee"),
+              t("Nominee removed.")) }, t("Remove nominee"))))
+        : [h("p", { class: "empty" }, t("No nominee yet.")), RESTRICTED ? h("p", { class: "muted small" }, t("Not on this sign-in yet: it is restricted (see the note at the top).")) : nomineeForm]),
 
     h("section", { class: "card" },
       h("h2", {}, t("Lost your phone?")),

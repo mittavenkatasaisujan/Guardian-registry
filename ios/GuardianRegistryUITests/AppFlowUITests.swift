@@ -364,4 +364,42 @@ final class AppFlowUITests: XCTestCase {
         shot("ios-hi-02-i-protect")
         app.terminate()
     }
+
+    /// The person's own limits, name correction and nominee, through the screens.
+    func testLimitsNameAndNominee() throws {
+        let p = try person(mobile(), "Lata \(run)")
+        let app = launch(token: p)
+        see(app, text(app, "Hello, Lata \(run)"), "greeting")
+
+        let payee = see(app, app.textFields["limit-per_payee_daily_limit"], "per-payee limit field")
+        payee.tap()
+        payee.typeText("20000")
+        try tapUntil(app, button: "Save limits", "per-payee limit") {
+            (try obj("/v1/me/rules", token: p)["per_payee_daily_limit"] as? Int) == 20_000 * 100
+        }
+        see(app, text(app, "Most per payee per day"), "rule row")
+        shot("ios-12-limits")
+
+        let name = see(app, app.textFields["Your name"], "name field")
+        name.tap()
+        let current = name.value as? String ?? ""
+        name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count + 2))
+        name.typeText("Lata Devi \(run)")
+        try tapUntil(app, button: "Save name", "name") {
+            (try obj("/v1/me", token: p)["display_name"] as? String) == "Lata Devi \(run)"
+        }
+
+        for (field, value) in [("Nominee's name", "Kumar"), ("Relation (for example, son)", "son"),
+                               ("Nominee's mobile number", "9876543210")] {
+            let f = see(app, app.textFields[field], field)
+            f.tap()
+            f.typeText(value)
+        }
+        try tapUntil(app, button: "Save nominee", "nominee") {
+            (try obj("/v1/me/nominee", token: p)["nominee"] as? [String: Any]) != nil
+        }
+        see(app, app.buttons["Remove nominee"], "nominee shown")
+        shot("ios-13-your-details")
+        app.terminate()
+    }
 }

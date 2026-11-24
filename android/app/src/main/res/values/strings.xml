@@ -150,4 +150,36 @@
     <string name="sign_out_here">Sign out here</string>
     <string name="sign_out_everywhere">Sign out everywhere</string>
     <string name="restricted_action">Not on this sign-in yet: it is restricted (see the note at the top).</string>
+    <string name="rule_payee">Most per payee per day</string>
+    <string name="rule_channel_limits">Daily limits by channel</string>
+    <string name="rule_scope">Trusted person checks</string>
+    <string name="scope_rbi">Transfers only (not UPI, shops or recurring)</string>
+    <string name="scope_all">All payments</string>
+    <string name="rule_wait">New guardian can approve after</string>
+    <string name="hours" formatted="true">%1$s hours</string>
+    <string name="right_away">Right away</string>
+    <string name="amount_invalid">Enter amounts in whole rupees, or leave empty for no limit.</string>
+    <string name="lim_txn">Most per payment (₹)</string>
+    <string name="lim_day">Most per day, all banks (₹)</string>
+    <string name="lim_payee">Most per payee per day (₹)</string>
+    <string name="lim_approve">Guardian approves from (₹)</string>
+    <string name="save_limits">Save limits</string>
+    <string name="saved">Saved.</string>
+    <string name="change_limits">Change my limits</string>
+    <string name="limits_note">Leave a box empty for no limit. Stricter limits apply at once; looser ones wait 24 hours and your guardians can stop them.</string>
+    <string name="save_name">Save name</string>
+    <string name="name_saved">Name saved.</string>
+    <string name="nominee_name">Nominee\'s name</string>
+    <string name="nominee_relation">Relation (for example, son)</string>
+    <string name="nominee_mobile">Nominee\'s mobile number</string>
+    <string name="save_nominee">Save nominee</string>
+    <string name="nominee_saved">Nominee saved.</string>
+    <string name="your_details">Your details</string>
+    <string name="nominee">Nominee</string>
+    <string name="nominee_explain">Someone who can use your data rights if you die or can\'t act yourself. They get no access to your account or payments.</string>
+    <string name="nominee_removed">Nominee removed.</string>
+    <string name="remove_nominee">Remove nominee</string>
+    <string name="no_nominee">No nominee yet.</string>
+    <string name="your_name">Your name</string>
+    <string name="nominee_fill">Fill in the nominee\'s name, relation and mobile number.</string>
 </resources>

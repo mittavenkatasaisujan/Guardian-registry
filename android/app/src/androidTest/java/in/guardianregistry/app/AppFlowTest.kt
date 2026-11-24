@@ -401,4 +401,33 @@ class AppFlowTest {
         see(s(R.string.restricted_action))                // no invite form on a restricted sign-in
         app.close()
     }
+
+    /** The person's own limits, name correction and nominee, through the screens. */
+    @Test
+    fun limitsNameAndNominee() {
+        val p = person(mobile(), "Lata $run")
+        val P = Api(base, p)
+        val app = launchAs(p)
+        see(s(R.string.change_limits))
+        eventually {
+            onView(withContentDescription(s(R.string.lim_payee))).perform(scrollTo(), replaceText("20000"), closeSoftKeyboard())
+        }
+        tapUntil(s(R.string.save_limits), "per-payee limit") { P.obj("/v1/me/rules").optLong("per_payee_daily_limit") == 20_000L * 100 }
+        see(s(R.string.rule_payee))
+        shot("12-limits")
+
+        eventually { onView(inContent(withHint(s(R.string.your_name)))).perform(scrollTo(), replaceText("Lata Devi $run"), closeSoftKeyboard()) }
+        tapUntil(s(R.string.save_name), "name") { P.obj("/v1/me").getString("display_name") == "Lata Devi $run" }
+        see(s(R.string.hello, "Lata Devi $run"))
+
+        eventually { onView(inContent(withHint(s(R.string.nominee_name)))).perform(scrollTo(), replaceText("Kumar"), closeSoftKeyboard()) }
+        onView(inContent(withHint(s(R.string.nominee_relation)))).perform(scrollTo(), replaceText("son"), closeSoftKeyboard())
+        onView(inContent(withHint(s(R.string.nominee_mobile)))).perform(scrollTo(), replaceText("9876543210"), closeSoftKeyboard())
+        tapUntil(s(R.string.save_nominee), "nominee") { !P.obj("/v1/me/nominee").isNull("nominee") }
+        see(s(R.string.remove_nominee))
+        shot("13-your-details")
+        tapUntil(s(R.string.remove_nominee), "nominee removed") { P.obj("/v1/me/nominee").isNull("nominee") }
+        see(s(R.string.no_nominee))
+        app.close()
+    }
 }

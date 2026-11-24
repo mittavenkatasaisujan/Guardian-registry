@@ -246,6 +246,12 @@ struct MyProtectionView: View {
     @State private var preset = ""
     @State private var invite = ""
     @State private var confirmLost = false
+    @State private var limits: [String: String] = [:]
+    @State private var limitsLoaded = false
+    @State private var newName = ""
+    @State private var nomName = ""
+    @State private var nomRelation = ""
+    @State private var nomMobile = ""
 
     var body: some View {
         List {
@@ -255,8 +261,10 @@ struct MyProtectionView: View {
                 simWindow
                 changesWaiting
                 rules
+                limitsForm
                 guardians
                 recent
+                details
                 lost
             }
         }
@@ -352,6 +360,18 @@ struct MyProtectionView: View {
             RuleRow(label: "Only bank-verified guardians approve", value: yesNo("require_verified_guardian"))
             RuleRow(label: "Hold payments after a SIM change", value: yesNo("sim_swap_hold"))
             RuleRow(label: "Hold payments that look like a scam", value: yesNo("scam_signals"))
+            RuleRow(label: "Most per payee per day", value: Words.money(r, "per_payee_daily_limit"))
+            RuleRow(label: "Daily limits by channel", value: {
+                let m = r["channel_daily_limits"] as? [String: Int] ?? [:]
+                return m.isEmpty ? L("None") : m.keys.sorted().map { "\($0.uppercased()) \(Wire.rupees(paise: m[$0] ?? 0))" }
+                    .joined(separator: " · ")
+            }())
+            RuleRow(label: "Trusted person checks", value: (r["approval_scope"] as? String) == "rbi"
+                    ? L("Transfers only (not UPI, shops or recurring)") : L("All payments"))
+            RuleRow(label: "New guardian can approve after", value: {
+                let h = r["new_guardian_wait_hours"] as? Int ?? 0
+                return h > 0 ? L("%@ hours", String(h)) : L("Right away")
+            }())
             Picker("Use a ready-made set", selection: $preset) {
                 ForEach(model.presets) { p in Text(verbatim: p.label).tag(p.id) }
             }
@@ -362,6 +382,86 @@ struct MyProtectionView: View {
             Heading("My rules")
         } footer: {
             Text("Making rules stricter works at once. Loosening them waits 24 hours, and your guardians can stop it.")
+        }
+    }
+
+    private struct LimitField: Identifiable {
+        let id: String
+        let label: LocalizedStringKey
+    }
+
+    private static let limitKeys = [
+        LimitField(id: "per_txn_limit", label: "Most per payment (₹)"),
+        LimitField(id: "daily_limit", label: "Most per day, all banks (₹)"),
+        LimitField(id: "per_payee_daily_limit", label: "Most per payee per day (₹)"),
+        LimitField(id: "approval_threshold", label: "Guardian approves from (₹)"),
+    ]
+
+    private var limitsForm: some View {
+        Section {
+            ForEach(Self.limitKeys) { field in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(field.label).font(.subheadline.bold())
+                    TextField("No limit", text: Binding(get: { limits[field.id] ?? "" }, set: { limits[field.id] = $0 }))
+                        .keyboardType(.numberPad)
+                        .accessibilityIdentifier("limit-\(field.id)")
+                }
+            }
+            Button("Save limits") { model.saveLimits(limits) }
+        } header: {
+            Heading("Change my limits")
+        } footer: {
+            Text("Leave a box empty for no limit. Stricter limits apply at once; looser ones wait 24 hours and your guardians can stop them.")
+        }
+        .onAppear {
+            guard !limitsLoaded else { return }
+            limitsLoaded = true
+            for field in Self.limitKeys {
+                if let v = model.rules[field.id] as? Int { limits[field.id] = String(v / 100) }
+            }
+        }
+    }
+
+    private var details: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Your name").font(.subheadline.bold())
+                HStack(spacing: 12) {
+                    TextField("Your name", text: $newName).textContentType(.name)
+                        .onAppear { if newName.isEmpty { newName = model.me["display_name"] as? String ?? "" } }
+                    Button("Save name") { model.saveName(newName) }
+                        .buttonStyle(.bordered).disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Nominee").font(.headline)
+                Text("Someone who can use your data rights if you die or can't act yourself. They get no access to your account or payments.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            if let n = model.nominee {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: n["name"] as? String ?? "").bold()
+                    Text(verbatim: "\(n["relation"] as? String ?? "") · \(n["mobile"] as? String ?? "")")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                if model.restricted {
+                    RestrictedNote()
+                } else {
+                    Button("Remove nominee", role: .destructive) { model.removeNominee() }
+                }
+            } else {
+                Text("No nominee yet.").foregroundStyle(.secondary)
+                if model.restricted {
+                    RestrictedNote()
+                } else {
+                    TextField("Nominee's name", text: $nomName).textContentType(.name)
+                    TextField("Relation (for example, son)", text: $nomRelation)
+                    TextField("Nominee's mobile number", text: $nomMobile).keyboardType(.phonePad)
+                    Button("Save nominee") { model.saveNominee(name: nomName, relation: nomRelation, mobile: nomMobile) }
+                }
+            }
+        } header: {
+            Heading("Your details")
         }
     }
 
