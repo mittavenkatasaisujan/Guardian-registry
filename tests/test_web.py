@@ -28,6 +28,8 @@ def test_app_is_served_with_strict_headers(clock):
         assert part in csp
     assert "unsafe-inline" not in csp
     assert r.headers["x-frame-options"] == "DENY" and r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["cross-origin-embedder-policy"] == "require-corp"
+    assert r.headers["cross-origin-opener-policy"] == "same-origin" and r.headers["cross-origin-resource-policy"] == "same-origin"
     for f in ("app.js", "app.css", "manifest.json"):
         assert c.get(f"/app/{f}").status_code == 200
     assert c.get("/", follow_redirects=False).headers["location"] == "/app/"

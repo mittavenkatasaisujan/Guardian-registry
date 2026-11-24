@@ -27,3 +27,4 @@ deploy/.env
 sdk/java/build/
 sdk/java/.gradle/
 sdk/python/*.egg-info/
+dist/

@@ -178,7 +178,11 @@ class EdgeMiddleware:
                 h["X-Request-ID"] = rid
                 h.setdefault("X-Content-Type-Options", "nosniff")
                 h.setdefault("Referrer-Policy", "no-referrer")
+                # Browsers on other sites can't read or embed our responses (cross-origin isolation).
+                h.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+                h.setdefault("Cross-Origin-Opener-Policy", "same-origin")
                 if path.startswith(self.prefix):
+                    h["Cross-Origin-Embedder-Policy"] = "require-corp"
                     h["Content-Security-Policy"] = self.csp
                     h["X-Frame-Options"] = "DENY"
                     h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
