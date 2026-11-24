@@ -1026,8 +1026,8 @@ def create_app(
         return {"marked": reg.mark_read(uid, body.ids)}
 
     @app.get("/v1/presets", tags=["people"])
-    def presets():
-        return PRESETS
+    def presets(request: Request):
+        return messages.preset_labels(PRESETS, screen_lang(request))
 
     # --------------------------------------------------------- privacy (DPDP Act)
     @app.get("/v1/languages", tags=["people"])

@@ -92,7 +92,7 @@ const STRINGS = {
     "Account recovery requests": "खाता वापसी के अनुरोध",
     "{name} wants to move their account to {number}.": "{name} अपना खाता {number} पर ले जाना चाहते हैं।",
     "Only approve if you have spoken to them yourself, on a call YOU placed or in person. If in doubt, deny.":
-      "तभी मंज़ूर करें जब आपने खुद उनसे बात की हो, अपनी की हुई कॉल पर या आमने-सामने। शक हो तो अस्वीकार करें।",
+      "तभी मंज़ूर करें जब आपने खुद उनसे बात की हो, ऐसी कॉल पर जो आपने ख़ुद की हो, या आमने-सामने। शक हो तो अस्वीकार करें।",
     "You can approve from {time}.": "आप {time} से मंज़ूर कर सकते हैं।", "Thank you. Your vouch is recorded.": "धन्यवाद। आपकी पुष्टि दर्ज कर ली गई है।",
     "I spoke to them: approve": "मैंने उनसे बात की: मंज़ूर करें", "Pause all payments for {name}?": "{name} के सभी भुगतान रोकें?",
     "Payments paused for {name}.": "{name} के भुगतान रोक दिए गए।", "Pause their payments": "उनके भुगतान रोकें",

@@ -59,6 +59,12 @@
    "ios"
   ]
  },
+ "68fa4cf1e1": {
+  "en": "1-hour wait on high-value payments to new payees",
+  "where": [
+   "server:phrase"
+  ]
+ },
  "0c52ea2c40": {
   "en": "6-digit code",
   "where": [
@@ -1963,6 +1969,12 @@
    "ios"
   ]
  },
+ "ea64686cfa": {
+  "en": "Strict: low limits, no RTGS",
+  "where": [
+   "server:phrase"
+  ]
+ },
  "79845f4030": {
   "en": "Stricter parts apply now; looser parts wait 24 hours.",
   "where": [
@@ -2199,6 +2211,18 @@
    "web",
    "android:w_trusted",
    "ios"
+  ]
+ },
+ "94035205fb": {
+  "en": "Trusted person approves large payments",
+  "where": [
+   "server:phrase"
+  ]
+ },
+ "bb67c4b961": {
+  "en": "Trusted person approves large transfers (RBI draft rules)",
+  "where": [
+   "server:phrase"
   ]
  },
  "ce635edc08": {

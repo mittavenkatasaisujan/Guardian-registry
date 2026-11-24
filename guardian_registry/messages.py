@@ -65,7 +65,7 @@ ALERTS_HI = {
     "Someone is trying to recover {0}'s account on a new number {1}. Only approve if you have spoken to {2} "
     "yourself, on a call YOU placed or in person. If in doubt, deny.":
         "कोई {0} का खाता नए नंबर {1} पर वापस पाने की कोशिश कर रहा है। तभी मंज़ूर करें जब आपने खुद {2} से बात की हो, "
-        "अपनी की हुई कॉल पर या आमने-सामने। शक हो तो अस्वीकार करें।",
+        "ऐसी कॉल पर जो आपने ख़ुद की हो, या आमने-सामने। शक हो तो अस्वीकार करें।",
     "The requested change ({0}) for {1} is now in effect.": "{1} के लिए माँगा गया बदलाव ({0}) अब लागू है।",
     "The waiting period for {0} to {1} is over.": "{1} को {0} के भुगतान की प्रतीक्षा अवधि पूरी हो गई है।",
     "Two banks reported different dates of birth, so we can't confirm your age. Ask one of them to correct their record.":
@@ -182,6 +182,11 @@ FRAGMENTS_HI = {
     "channel '{0}' is switched off": "माध्यम '{0}' बंद है",
     "amount {0} is over the per-payment limit {1}": "राशि {0} एक भुगतान की सीमा {1} से ज़्यादा है",
     "daily limit {0} would be exceeded ({1} left today)": "दैनिक सीमा {0} पार हो जाएगी (आज {1} बाकी)",
+    # ready-made rule sets (presets.py), shown in the apps
+    "1-hour wait on high-value payments to new payees": "नए प्राप्तकर्ताओं को बड़े भुगतान पर 1 घंटे की प्रतीक्षा",
+    "Trusted person approves large transfers (RBI draft rules)": "भरोसेमंद व्यक्ति बड़े ट्रांसफ़र मंज़ूर करे (RBI के मसौदा नियम)",
+    "Trusted person approves large payments": "भरोसेमंद व्यक्ति बड़े भुगतान मंज़ूर करे",
+    "Strict: low limits, no RTGS": "सख़्त: कम सीमाएँ, RTGS बंद",
     # protection changes (service.py)
     "loosen their payment limits ({0})": "अपनी भुगतान सीमाएँ ढीली करना ({0})",
     "switch payments back on": "भुगतान फिर से चालू करना",
@@ -425,6 +430,13 @@ def phrase(text: str, lang: str) -> str:
     if not text or lang == "en" or not _known(lang):
         return text
     return _value(text, 2, lang=lang)
+
+
+def preset_labels(presets: dict, lang: str) -> dict:
+    """The ready-made rule sets with their labels in `lang` (the rules themselves unchanged)."""
+    if lang == "en" or not _known(lang):
+        return presets
+    return {k: {**p, "label": phrase(p["label"], lang)} for k, p in presets.items()}
 
 
 def restriction(text: str, lang: str) -> str:

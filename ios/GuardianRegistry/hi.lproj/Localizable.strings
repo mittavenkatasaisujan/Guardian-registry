@@ -80,7 +80,7 @@
 "Not sure? Call them on a number you know before approving." = "पक्का नहीं? मंज़ूरी से पहले उन्हें किसी जाने-पहचाने नंबर पर कॉल करें।";
 "Nothing is waiting for you." = "आपके लिए कुछ भी प्रतीक्षा में नहीं है।";
 "On hold" = "रोका गया";
-"Only approve if you have spoken to them yourself, on a call YOU placed or in person. If in doubt, deny." = "तभी मंज़ूर करें जब आपने खुद उनसे बात की हो, अपनी की हुई कॉल पर या आमने-सामने। शक हो तो अस्वीकार करें।";
+"Only approve if you have spoken to them yourself, on a call YOU placed or in person. If in doubt, deny." = "तभी मंज़ूर करें जब आपने खुद उनसे बात की हो, ऐसी कॉल पर जो आपने ख़ुद की हो, या आमने-सामने। शक हो तो अस्वीकार करें।";
 "Only bank-verified guardians approve" = "केवल बैंक-सत्यापित गार्डियन मंज़ूरी दें";
 "Pause all payments" = "सभी भुगतान रोकें";
 "Pause all payments for %@?" = "%@ के सभी भुगतान रोकें?";

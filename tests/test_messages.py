@@ -193,3 +193,14 @@ def test_restriction_reasons_in_hindi():
     out = messages.restriction("new device: restricted until 2026-11-25T15:23:36+00:00", "hi")
     assert out == "नया डिवाइस: 2026-11-25T15:23:36+00:00 तक सीमित"
     assert messages.restriction("new device: restricted until x", "en") == "new device: restricted until x"
+
+
+def test_ready_made_sets_are_named_in_the_readers_language(reg):
+    from guardian_registry.api import create_app
+    with TestClient(create_app(reg, run_worker=False)) as c:
+        hi = c.get("/v1/presets", headers={"Accept-Language": "hi"}).json()
+        en = c.get("/v1/presets").json()
+    assert hi["strict"]["label"] == "सख़्त: कम सीमाएँ, RTGS बंद"
+    assert hi["strict"]["rules"] == en["strict"]["rules"]
+    assert en["strict"]["label"] == "Strict: low limits, no RTGS"
+    assert all(not _english_left(p["label"]) for p in hi.values()), hi

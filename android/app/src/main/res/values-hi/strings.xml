@@ -127,7 +127,7 @@
     <string name="stopped">रोक दिया।</string>
     <string name="recoveries">खाता वापसी के अनुरोध</string>
     <string name="recovery_wants" formatted="true">%1$s अपना खाता %2$s पर ले जाना चाहते हैं।</string>
-    <string name="recovery_warn">तभी मंज़ूर करें जब आपने खुद उनसे बात की हो, अपनी की हुई कॉल पर या आमने-सामने। शक हो तो अस्वीकार करें।</string>
+    <string name="recovery_warn">तभी मंज़ूर करें जब आपने खुद उनसे बात की हो, ऐसी कॉल पर जो आपने ख़ुद की हो, या आमने-सामने। शक हो तो अस्वीकार करें।</string>
     <string name="recovery_from" formatted="true">आप %1$s से मंज़ूर कर सकते हैं।</string>
     <string name="recovery_approve">मैंने उनसे बात की: मंज़ूर करें</string>
     <string name="recovery_done">धन्यवाद। आपकी पुष्टि दर्ज कर ली गई है।</string>
