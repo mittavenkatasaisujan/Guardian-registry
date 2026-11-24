@@ -18,8 +18,27 @@ db = Path(os.environ.get("GR_DB", "webdev.db"))
 for suffix in ("", "-wal", "-shm"):
     Path(str(db) + suffix).unlink(missing_ok=True)
 
+# --real: real SMS (Twilio trial) and push (Firebase) from local-secrets/real.env, which is
+# git-ignored. Codes then arrive by SMS instead of being shown on screen. See docs/free-testing.md.
+real = "--real" in sys.argv
+if real:
+    env_file = Path(__file__).resolve().parent.parent / "local-secrets" / "real.env"
+    if not env_file.exists():
+        sys.exit(f"--real needs {env_file} (see docs/free-testing.md)")
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            v = v.strip()
+            if k.strip().endswith("_FILE") and not os.path.isabs(v):   # paths relative to the repository
+                v = str(env_file.parent.parent / v)
+            os.environ.setdefault(k.strip(), v)
+    for k, v in os.environ.items():
+        if k.endswith("_FILE") and k.startswith("GR_") and not os.path.exists(v):
+            sys.exit(f"{k} points to {v}, which doesn't exist yet")
+
 os.environ.setdefault("GR_DB", str(db))
-os.environ.setdefault("GR_OTP_DEV_ECHO", "1")
+os.environ.setdefault("GR_OTP_DEV_ECHO", "0" if real else "1")
 os.environ.setdefault("GR_ADMIN_TOKEN", "dev-admin")
 os.environ.setdefault("GR_WORKER_INTERVAL", "2")
 

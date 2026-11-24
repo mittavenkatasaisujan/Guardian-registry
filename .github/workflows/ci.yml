@@ -109,7 +109,17 @@ jobs:
         with:
           gradle-version: "8.11.1"
       - name: Build the Android app and run its unit tests
-        run: gradle -p android :app:assembleDebug :app:testDebugUnitTest --no-daemon
+        # Push (Firebase) is on when the repository has the GR_FCM_* secrets; without them the app
+        # builds and runs without push.
+        env:
+          FCM_PROJECT_ID: ${{ secrets.GR_FCM_PROJECT_ID }}
+          FCM_APP_ID: ${{ secrets.GR_FCM_APP_ID }}
+          FCM_API_KEY: ${{ secrets.GR_FCM_API_KEY }}
+          FCM_SENDER_ID: ${{ secrets.GR_FCM_SENDER_ID }}
+        run: |
+          gradle -p android :app:assembleDebug :app:testDebugUnitTest --no-daemon \
+            -PgrFcmProjectId="$FCM_PROJECT_ID" -PgrFcmAppId="$FCM_APP_ID" \
+            -PgrFcmApiKey="$FCM_API_KEY" -PgrFcmSenderId="$FCM_SENDER_ID"
       - name: Keep the debug APK (install it on a test phone)
         uses: actions/upload-artifact@v4
         with:
