@@ -308,10 +308,10 @@ class AppFlowTest {
         val inv = P.post("/v1/me/guardians", JSONObject().put("mobile", gm)) as JSONObject
         G.post("/v1/guardian/invitations/${inv.getString("id")}/accept")
         P.post("/v1/me/rules/preset/senior_with_guardian")
+        val bank = bank()
+        check(bank, pm, "hi", 20_000)   // before pausing: a paused person's payments are blocked, not held
         P.post("/v1/me/kill-switch/on")
         P.post("/v1/me/kill-switch/off")
-        val bank = bank()
-        check(bank, pm, "hi", 20_000)
 
         val locales = ctx.getSystemService(android.app.LocaleManager::class.java)
         locales.applicationLocales = android.os.LocaleList.forLanguageTags("hi")

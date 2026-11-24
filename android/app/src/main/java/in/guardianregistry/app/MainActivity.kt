@@ -184,7 +184,7 @@ class MainActivity : Activity() {
             bg({ Api(store.apiBase, null).post("/v1/auth/otp", JSONObject().put("mobile", m).put("language", Wire.language())) as JSONObject },
                failed = { idle(b) }) {
                 store.mobile = m
-                showCode(m, it.optString("dev_code").ifBlank { null })
+                showCode(m, it.str("dev_code").ifBlank { null })
             }
         }
     }
@@ -318,8 +318,8 @@ class MainActivity : Activity() {
         val me = d.me!!
         val rules = d.rules!!
         val security = d.security!!
-        title(getString(R.string.hello, me.optString("display_name")))
-        para(getString(R.string.identity, identityText(me.optString("identity_level"))), MUTED, 13f)
+        title(getString(R.string.hello, me.str("display_name")))
+        para(getString(R.string.identity, identityText(me.str("identity_level"))), MUTED, 13f)
 
         val paused = rules.optBoolean("kill_switch")
         val status = card(if (paused) BAD else OK)
@@ -340,21 +340,21 @@ class MainActivity : Activity() {
         if (security.optBoolean("sim_swap_window_open")) {
             val c = card(WARN)
             heading(c, getString(R.string.sim_title))
-            para(c, getString(R.string.sim_until, Wire.time(security.optString("window_ends_at"))))
+            para(c, getString(R.string.sim_until, Wire.time(security.str("window_ends_at"))))
             para(c, getString(R.string.sim_explain), MUTED)
             button(c, getString(R.string.sim_confirm)) { b ->
                 act(b, { api().post("/v1/me/security/confirm-sim-change") }) { getString(R.string.sim_confirmed) }
             }
         }
 
-        val pending = d.changes!!.objects().filter { it.optString("status") == "pending" }
+        val pending = d.changes!!.objects().filter { it.str("status") == "pending" }
         if (pending.isNotEmpty()) {
             val c = card(WARN)
             heading(c, getString(R.string.changes_waiting))
             for (ch in pending) {
                 item(c)
-                para(c, changeLabel(ch.optString("kind")), bold = true)
-                para(c, getString(R.string.takes_effect, Wire.time(ch.optString("effective_at"))), MUTED, 13f)
+                para(c, changeLabel(ch.str("kind")), bold = true)
+                para(c, getString(R.string.takes_effect, Wire.time(ch.str("effective_at"))), MUTED, 13f)
             }
         }
 
@@ -379,8 +379,17 @@ class MainActivity : Activity() {
         val presets = d.presets!!
         val names = presets.keys().asSequence().toList()
         val spinner = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
-                names.map { presets.optJSONObject(it)?.optString("label") ?: it })
+            // long preset names wrap instead of being cut off, closed and open
+            adapter = object : ArrayAdapter<String>(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
+                names.map { presets.optJSONObject(it)?.str("label") ?: it }) {
+                private fun wrap(v: View): View = v.apply {
+                    (this as? TextView)?.apply { isSingleLine = false; maxLines = 3; ellipsize = null; textSize = 15f; setTextColor(INK) }
+                }
+                override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View =
+                    wrap(super.getView(position, convertView, parent))
+                override fun getDropDownView(position: Int, convertView: View?, parent: android.view.ViewGroup): View =
+                    wrap(super.getDropDownView(position, convertView, parent))
+            }
             contentDescription = getString(R.string.preset_label)
         }
         r.addView(spinner, LinearLayout.LayoutParams(-1, -2))
@@ -398,8 +407,8 @@ class MainActivity : Activity() {
         if (guardians.isEmpty()) para(g, getString(R.string.no_guardians), MUTED)
         for (x in guardians) {
             item(g)
-            val st = x.optString("status")
-            rowWithPill(g, x.optString("guardian_name"), identityText(x.optString("guardian_identity_level")), statusWord(st),
+            val st = x.str("status")
+            rowWithPill(g, x.str("guardian_name"), identityText(x.str("guardian_identity_level")), statusWord(st),
                 when (st) { "active" -> OK; "invited" -> WARN; else -> MUTED })
         }
         para(g, getString(R.string.invite_label), bold = true).apply { setPadding(0, dp(14), 0, dp(4)) }
@@ -431,7 +440,7 @@ class MainActivity : Activity() {
     private fun guardianView(d: Data) {
         val inbox = d.inbox
         val wards = d.wards!!.objects()
-        val names = wards.associate { it.optString("principal_id") to it.optString("principal_name") }
+        val names = wards.associate { it.str("principal_id") to it.str("principal_name") }
         title(getString(R.string.people_i_protect))
 
         val invites = inbox.optJSONArray("invitations").objects()
@@ -440,7 +449,7 @@ class MainActivity : Activity() {
             heading(c, getString(R.string.guardian_requests))
             for (inv in invites) {
                 item(c)
-                val who = inv.optString("principal_name")
+                val who = inv.str("principal_name")
                 para(c, getString(R.string.asked_guardian, who))
                 val id = inv.getString("id")
                 row(c,
@@ -454,12 +463,12 @@ class MainActivity : Activity() {
         heading(w, getString(R.string.payments_waiting))
         if (held.isEmpty()) para(w, getString(R.string.nothing_waiting), MUTED)
         for (p in held) {
-            paymentItem(w, p, names[p.optString("principal_id")]?.let { getString(R.string.from_name, it) })
-            p.optString("approval_expires_at").ifBlank { null }?.let { para(w, getString(R.string.answer_by, Wire.time(it)), MUTED, 13f) }
-            p.optString("release_at").ifBlank { null }?.let { para(w, getString(R.string.goes_through, Wire.time(it)), MUTED, 13f) }
+            paymentItem(w, p, names[p.str("principal_id")]?.let { getString(R.string.from_name, it) })
+            p.str("approval_expires_at").ifBlank { null }?.let { para(w, getString(R.string.answer_by, Wire.time(it)), MUTED, 13f) }
+            p.str("release_at").ifBlank { null }?.let { para(w, getString(R.string.goes_through, Wire.time(it)), MUTED, 13f) }
             para(w, getString(R.string.not_sure), MUTED, 13f)
             val id = p.getString("check_id")
-            if (p.optString("status") == "pending_approval") {
+            if (p.str("status") == "pending_approval") {
                 row(w,
                     action(getString(R.string.approve), Style.OK) { b ->
                         confirm(getString(R.string.approve_q)) { act(b, { api().post("/v1/guardian/payments/$id/approve") }) { getString(R.string.approved) } }
@@ -478,8 +487,8 @@ class MainActivity : Activity() {
             heading(c, getString(R.string.changes_waiting_g))
             for (ch in changes) {
                 item(c)
-                para(c, getString(R.string.wants_to, names[ch.optString("principal_id")] ?: getString(R.string.someone), changeLabel(ch.optString("kind"))))
-                para(c, getString(R.string.happens_unless, Wire.time(ch.optString("effective_at"))), MUTED, 13f)
+                para(c, getString(R.string.wants_to, names[ch.str("principal_id")] ?: getString(R.string.someone), changeLabel(ch.str("kind"))))
+                para(c, getString(R.string.happens_unless, Wire.time(ch.str("effective_at"))), MUTED, 13f)
                 val id = ch.getString("id")
                 row(c,
                     action(getString(R.string.stop_it), Style.DANGER) { b -> act(b, { api().post("/v1/guardian/changes/$id/veto") }) { getString(R.string.stopped) } },
@@ -493,10 +502,10 @@ class MainActivity : Activity() {
             heading(c, getString(R.string.recoveries))
             for (rc in recoveries) {
                 item(c)
-                para(c, getString(R.string.recovery_wants, rc.optString("person_name"), rc.optString("new_number")))
+                para(c, getString(R.string.recovery_wants, rc.str("person_name"), rc.str("new_number")))
                 para(c, getString(R.string.recovery_warn), MUTED, 13f)
-                val opens = rc.optString("vouching_opens_at")
-                val pendingNow = rc.optString("status") == "pending"
+                val opens = rc.str("vouching_opens_at")
+                val pendingNow = rc.str("status") == "pending"
                 if (pendingNow && Wire.isFuture(opens)) para(c, getString(R.string.recovery_from, Wire.time(opens)), MUTED, 13f)
                 val id = rc.getString("recovery_id")
                 val deny = action(getString(R.string.deny), Style.DANGER) { b -> act(b, { api().post("/v1/guardian/recoveries/$id/deny") }) { getString(R.string.stopped) } }
@@ -512,12 +521,12 @@ class MainActivity : Activity() {
 
         val pc = card()
         heading(pc, getString(R.string.people_i_protect))
-        val active = wards.filter { it.optString("status") == "active" }
+        val active = wards.filter { it.str("status") == "active" }
         if (active.isEmpty()) para(pc, getString(R.string.protect_none), MUTED)
         for (x in active) {
             item(pc)
-            val who = x.optString("principal_name")
-            val id = x.optString("principal_id")
+            val who = x.str("principal_name")
+            val id = x.str("principal_id")
             para(pc, who, bold = true)
             button(pc, getString(R.string.pause_theirs), style = Style.DANGER) { b ->
                 confirm(getString(R.string.pause_theirs_q, who)) {
@@ -540,9 +549,9 @@ class MainActivity : Activity() {
         if (items.isEmpty()) para(c, getString(R.string.no_alerts_yet), MUTED)
         for (n in items) {
             item(c)
-            rowWithPill(c, n.optString("title"), null, if (n.optBoolean("read")) null else getString(R.string.new_badge), WARN)
-            para(c, n.optString("body"))
-            para(c, Wire.time(n.optString("created_at")), MUTED, 13f)
+            rowWithPill(c, n.str("title"), null, if (n.optBoolean("read")) null else getString(R.string.new_badge), WARN)
+            para(c, n.str("body"))
+            para(c, Wire.time(n.str("created_at")), MUTED, 13f)
         }
     }
 
@@ -555,11 +564,11 @@ class MainActivity : Activity() {
         if (devices.isEmpty()) para(c, getString(R.string.no_devices), MUTED)
         for (x in devices) {
             item(c)
-            val kid = x.optString("key_id")
+            val kid = x.str("key_id")
             val mine = kid == d.myKeyId
-            val st = x.optString("status")
+            val st = x.str("status")
             rowWithPill(c, if (mine) getString(R.string.this_device) else getString(R.string.device_id, kid.take(8)),
-                getString(R.string.added_at, Wire.time(x.optString("created_at"))), statusWord(st),
+                getString(R.string.added_at, Wire.time(x.str("created_at"))), statusWord(st),
                 when (st) { "trusted" -> OK; "probation" -> WARN; else -> MUTED })
             if (st != "revoked" && !mine) {
                 button(c, getString(R.string.remove), style = Style.SECONDARY) { b ->
@@ -586,12 +595,12 @@ class MainActivity : Activity() {
     // ---------------------------------------------------------------- shared bits
     private fun paymentItem(parent: LinearLayout, p: JSONObject, extra: String?) {
         item(parent)
-        val st = p.optString("status")
+        val st = p.str("status")
         val (label, color) = statusPill(st)
         rowWithPill(parent, Wire.rupees(p.optLong("amount")), null, label, color, big = true)
-        para(parent, getString(R.string.to_payee, p.optString("payee")) + (extra?.let { " · $it" } ?: ""))
+        para(parent, getString(R.string.to_payee, p.str("payee")) + (extra?.let { " · $it" } ?: ""))
         val reasons = p.optJSONArray("reasons")?.let { r -> (0 until r.length()).joinToString("; ") { r.optString(it) } }.orEmpty()
-        para(parent, Wire.time(p.optString("created_at")) + if (reasons.isNotEmpty()) " · $reasons" else "", MUTED, 13f)
+        para(parent, Wire.time(p.str("created_at")) + if (reasons.isNotEmpty()) " · $reasons" else "", MUTED, 13f)
     }
 
     private fun statusPill(status: String): Pair<String, Int> = when (status) {
@@ -649,6 +658,9 @@ class MainActivity : Activity() {
 
     private fun busy(b: Button) { b.isEnabled = false; b.alpha = 0.5f }
     private fun idle(b: Button) { b.isEnabled = true; b.alpha = 1f }
+
+    /** A JSON string field, with JSON null and missing both read as "" (optString would give "null"). */
+    private fun JSONObject.str(k: String): String = if (isNull(k)) "" else optString(k)
 
     private fun JSONArray?.objects(): List<JSONObject> =
         if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }
