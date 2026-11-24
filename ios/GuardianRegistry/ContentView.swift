@@ -387,7 +387,8 @@ struct MyProtectionView: View {
             } else {
                 // the number and its button side by side, like the web app: the button stays above the keyboard
                 HStack(spacing: 12) {
-                    TextField("Invite a guardian by mobile number", text: $invite)
+                    TextField("Mobile number", text: $invite)
+                        .accessibilityLabel(Text("Invite a guardian by mobile number"))
                         .keyboardType(.phonePad).textContentType(.telephoneNumber)
                     Button("Invite") {
                         let m = invite.trimmingCharacters(in: .whitespaces)
