@@ -153,7 +153,9 @@ jobs:
           mkdir -p ios-screens
           set +e
           TEST_RUNNER_GR_SHOTS="$PWD/ios-screens" xcodebuild test -project ios/GuardianRegistry.xcodeproj -scheme GuardianRegistry \
-            -destination "id=$SIM" -resultBundlePath ios-tests.xcresult \n            -retry-tests-on-failure -test-iterations 2 > xcodebuild-test.log 2>&1   # a simulator hiccup gets one retry; a real bug fails both
+            -destination "id=$SIM" -resultBundlePath ios-tests.xcresult \
+            -retry-tests-on-failure -test-iterations 2 > xcodebuild-test.log 2>&1
+          # (a UI test that fails gets one retry: simulator launch hiccups on slow runners; a real bug fails both)
           status=$?
           # every test's result and every failure message (with file:line), not just the tail
           grep -E "error:|Test Case .*(passed|failed)|TEST (SUCCEEDED|FAILED)|Failing tests|^\s+[A-Za-z]+\.test" xcodebuild-test.log | tail -150
