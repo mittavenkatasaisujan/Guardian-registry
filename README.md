@@ -29,9 +29,13 @@ names and payees on the page as text only.
 hardware**: Android Keystore (StrongBox when the phone has one) and the iOS Secure Enclave. The key is created at the
 first sign-in, after the app has the server's challenge, so the platform's evidence is bound to that sign-in:
 Android's Keystore attestation certificate carries the challenge, and iOS asks App Attest to vouch for
-`SHA256(prefix + challenge + device key)`. In the apps you sign in by SMS code, approve or deny payments (approvals
-ask you to confirm), stop held payments, accept guardian requests, pause your own payments, read alerts and report a
-lost phone. Push alerts come through FCM / APNs. CI compiles both apps on every push (Android on Linux with its unit
+`SHA256(prefix + challenge + device key)`. Both apps have the web app's four screens. **My protection**: payment
+status, pause and switch back on (held 24 hours unless a guardian approves), SIM-change confirmation, changes waiting,
+rules and ready-made sets, guardians and invitations, recent payments, lost phone. **I protect**: guardian requests,
+payments waiting (approve, deny or stop), protection changes waiting (approve now or stop), account recoveries, and
+pausing someone's payments. **Alerts** (mark all read) and **Devices** (this device, remove others, sign out here or
+everywhere). On a **restricted sign-in** (a new phone, or after a SIM change) the banner shows when it ends, and the
+actions the registry would refuse become a note instead of a button that fails. Push alerts come through FCM / APNs. CI compiles both apps on every push (Android on Linux with its unit
 tests, iOS for the simulator on macOS). It checks byte for byte that the apps and the server agree on the signing
 input, the key encoding and the attestation format.
 
@@ -42,6 +46,11 @@ CI also **runs the apps' own sign-in code against a live registry**:
   the registry's parser: the chain verifies, it is bound to that key and challenge, and it names this app's package
   and signing certificate. Replaying it with another challenge fails.
 - **iOS simulator:** the same flow with the Keychain key, plus the token store. App Attest is correctly absent there.
+- **Every screen, both apps:** Espresso (Android 15 emulator) and XCUITest (iOS simulator) drive the real screens
+  against the live registry: a person pauses and asks to switch back on, invites a guardian; the guardian approves the
+  held change, approves and denies payments a test bank sends, pauses the person's payments; alerts, devices, a
+  restricted second phone, sign-in through the screens, sign-out and lost phone. After each action the test checks
+  the registry's own API. Both save screenshots of every screen, in English and Hindi, as CI artifacts.
 
 
 | Feature | Behaviour |
@@ -90,7 +99,7 @@ CI also **runs the apps' own sign-in code against a live registry**:
 | **Deployment** | `deploy/docker-compose.yml` runs Postgres, two API nodes, nginx (TLS, optional bank client certificates, request IDs) and nightly `pg_dump` backups with a restore script. Secrets are Docker secrets read through `GR_*_FILE`. `scripts/deploy_init.py` creates the secrets, trial certificates and settings. CI starts the whole stack and runs `scripts/smoke_deploy.py` through nginx: TLS, four-eyes onboarding, the API key refused without its certificate, a forged certificate header refused, the real client certificate accepted, a sign-in and a check. CI also backs up, restores into a new database and verifies the restored audit chain. |
 | **Load test** | `scripts/loadtest.py` sends concurrent checks to several nodes and reports throughput and p50/p95/p99 latency. It also checks that **no person ever goes over their daily limit** while checks for the same person race on different nodes. In CI, two nodes on Postgres handle 4,000 checks at concurrency 64 with no errors and no limit exceeded (about 100 checks a second on a shared CI runner). |
 | **Security checks** | CI fails on any known vulnerability in the runtime dependencies (`pip-audit`) or any medium or high static-analysis finding (`bandit`). The SQL lines it flags were reviewed and annotated: only fixed fragments and `?` placeholders are spliced in. Spreadsheet parts that declare a DTD are refused. [tests/test_authz.py](tests/test_authz.py) walks **every route**: each one is either public by design or refuses anonymous calls. It also proves banks can't read or change another bank's checks, and people can't act on someone else's payments. |
-| **Free testing** | [docs/free-testing.md](docs/free-testing.md): CI builds a **debug Android APK** (artifact `guardian-registry-debug-apk`) whose sign-in screen takes a server address, so a real phone can test against `python scripts/dev_server.py 8010 --lan` on the same Wi-Fi. `sudo bash deploy/bootstrap.sh --tunnel` turns a free Ubuntu VM (Oracle Always Free, Google Cloud e2-micro) into a staging registry with a free `trycloudflare.com` HTTPS address. **CodeQL** scans the Python and JavaScript on every push, and an **OWASP ZAP** baseline scan runs against the live deployment in CI (high-risk findings fail the job). |
+| **Free testing** | [docs/free-testing.md](docs/free-testing.md): CI builds a **debug Android APK** (artifact `guardian-registry-debug-apk`, signed with one fixed debug key so each new build installs over the last) whose sign-in screen takes a server address, so a real phone can test against `python scripts/dev_server.py 8010 --lan` on the same Wi-Fi. `sudo bash deploy/bootstrap.sh --tunnel` turns a free Ubuntu VM (Oracle Always Free, Google Cloud e2-micro) into a staging registry with a free `trycloudflare.com` HTTPS address. **CodeQL** scans the Python and JavaScript on every push, and an **OWASP ZAP** baseline scan runs against the live deployment in CI (high-risk findings fail the job). |
 | Safe production start | With `GR_ENV=production` the server refuses to start on dev secrets, with no SMS gateway, or with the OTP dev echo on. |
 
 ## Run it

@@ -915,10 +915,21 @@ def create_app(
         return reg.set_language(uid, messages.normalise(body.language) or body.language)
 
     # ------------------------------------------------------- SIM-swap safety
+    def screen_lang(request: Request) -> str:
+        return messages.language_from_header(request.headers.get("accept-language"))
+
+    def with_reasons_in(lang: str, payments: list[dict]) -> list[dict]:
+        """Payment reasons are stored in English; people read them in their language."""
+        if lang == "en":
+            return payments
+        return [{**p, "reasons": [messages.phrase(r, lang) for r in p.get("reasons") or []]} for p in payments]
+
     @app.get("/v1/me/security", tags=["people"])
-    def my_security(info: Session):
+    def my_security(info: Session, request: Request):
+        lang = screen_lang(request)
         return {**reg.security_status(info["user_id"], info["user_id"]),
-                "this_session": {"restricted": info["restricted"], "reasons": info["reasons"]}}
+                "this_session": {"restricted": info["restricted"],
+                                 "reasons": [messages.restriction(r, lang) for r in info["reasons"]]}}
 
     @app.post("/v1/me/security/lost-phone", tags=["people"])
     def my_lost_phone(uid: User):
@@ -1085,8 +1096,8 @@ def create_app(
         return reg.changes_for(uid)
 
     @app.get("/v1/me/payments", tags=["people"])
-    def my_payments(uid: User, limit: int = 50):
-        return reg.history(uid, uid, min(max(limit, 1), 200))
+    def my_payments(uid: User, request: Request, limit: int = 50):
+        return with_reasons_in(screen_lang(request), reg.history(uid, uid, min(max(limit, 1), 200)))
 
     @app.post("/v1/me/payments/{check_id}/cancel", tags=["people"])
     def my_cancel(check_id: str, uid: User):
@@ -1098,8 +1109,9 @@ def create_app(
 
     # -------------------------------------------------------------- guardian
     @app.get("/v1/guardian/inbox", tags=["guardians"])
-    def inbox(uid: User):
-        return reg.inbox(uid)
+    def inbox(uid: User, request: Request):
+        out = reg.inbox(uid)
+        return {**out, "held_payments": with_reasons_in(screen_lang(request), out.get("held_payments") or [])}
 
     @app.get("/v1/guardian/recoveries", tags=["guardians"])
     def recoveries(uid: User):

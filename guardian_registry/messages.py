@@ -404,6 +404,21 @@ def _translate(text: str, lang: str, table: int, fragments: int) -> str:
     return text
 
 
+def phrase(text: str, lang: str) -> str:
+    """A phrase the code inserts (a payment's reasons) in `lang`, for the screens that list
+    payments; English when there is no translation."""
+    if not text or lang == "en" or not _known(lang):
+        return text
+    return _value(text, 2, lang=lang)
+
+
+def restriction(text: str, lang: str) -> str:
+    """Why a sign-in is restricted ("new device: restricted until ...") in `lang`."""
+    if not text or lang == "en" or not _known(lang):
+        return text
+    return _value(text, 4, lang=lang)
+
+
 def alert(text: str, lang: str) -> str:
     return _translate(text, lang, 1, 2)
 

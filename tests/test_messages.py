@@ -163,3 +163,33 @@ def test_api_language_and_hindi_errors(reg):
         assert c.put("/v1/me/language", headers=h, json={"language": "hi"}).json()["language"] == "hi"
         assert c.get("/v1/me", headers=h).json()["language"] == "hi"
         assert c.put("/v1/me/language", headers=h, json={"language": "fr"}).status_code == 422
+
+
+def test_screens_list_payment_reasons_in_the_readers_language(reg):
+    """Reasons are stored in English (banks read them); the people's screens get them in the
+    language their app asks for, and English otherwise."""
+    from guardian_registry.api import create_app
+    amma, a_tok = reg.register_user("+919844455566", "Amma Lang")
+    ravi, r_tok = reg.register_user("+919855566677", "Ravi Lang")
+    g = reg.invite_guardian(amma, "+919855566677")
+    reg.respond_to_invite(ravi, g["id"], accept=True)
+    reg.update_rules(amma, {"approval_threshold": 10_000 * R})
+    bank, _ = reg.register_participant("Lang Bank")
+    held = reg.check(bank, "+919844455566", "lang-1", 20_000 * R, "new@upi")
+    assert held["status"] == "pending_approval" and held["reasons"]
+    with TestClient(create_app(reg, run_worker=False)) as c:
+        hi = {"Accept-Language": "hi"}
+        mine = c.get("/v1/me/payments", headers={"Authorization": f"Bearer {a_tok}", **hi}).json()
+        waiting = c.get("/v1/guardian/inbox", headers={"Authorization": f"Bearer {r_tok}", **hi}).json()["held_payments"]
+        english = c.get("/v1/me/payments", headers={"Authorization": f"Bearer {a_tok}"}).json()
+    for reasons in (mine[0]["reasons"], waiting[0]["reasons"]):
+        assert reasons and all(not _english_left(r) for r in reasons), reasons
+        assert any("मंज़ूरी सीमा" in r for r in reasons)
+    assert english[0]["reasons"] == held["reasons"]                       # English without the header
+    assert reg.history(amma, amma, 10)[0]["reasons"] == held["reasons"]  # stored English unchanged
+
+
+def test_restriction_reasons_in_hindi():
+    out = messages.restriction("new device: restricted until 2026-11-25T15:23:36+00:00", "hi")
+    assert out == "नया डिवाइस: 2026-11-25T15:23:36+00:00 तक सीमित"
+    assert messages.restriction("new device: restricted until x", "en") == "new device: restricted until x"
