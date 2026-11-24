@@ -756,6 +756,13 @@
    "server:error"
   ]
  },
+ "e9b450d14b": {
+  "en": "Done",
+  "where": [
+   "web",
+   "ios"
+  ]
+ },
  "e838916bd1": {
   "en": "Done. Every device is signed out.",
   "where": [

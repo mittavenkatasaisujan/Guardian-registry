@@ -38,6 +38,7 @@
 "Development mode code: %@" = "डेवलपमेंट मोड कोड: %@";
 "Device %@" = "डिवाइस %@";
 "Devices" = "डिवाइस";
+"Done" = "हो गया";
 "Done. Every device is signed out." = "हो गया। हर डिवाइस से साइन आउट कर दिया गया है।";
 "Each phone or browser you sign in on has its own key. A new one can't approve payments for 24 hours." = "जिस भी फ़ोन या ब्राउज़र पर आप साइन इन करते हैं, उसकी अपनी कुंजी होती है। नया डिवाइस 24 घंटे तक भुगतान मंज़ूर नहीं कर सकता।";
 "Enter amounts in whole rupees, or leave empty for no limit." = "राशि पूरे रुपयों में लिखें, या कोई सीमा न रखने के लिए खाली छोड़ें।";

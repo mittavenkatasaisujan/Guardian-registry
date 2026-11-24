@@ -134,15 +134,20 @@ class AppFlowTest {
     /** Tap, then wait for the registry to show the effect. A screen can redraw (its 15-second
      *  refresh, or the previous action's reload) just as a tap lands on the old button, so if
      *  nothing reached the registry, tap once more. */
-    private fun tapUntil(text: String, what: String, cond: () -> Boolean) {
+    private fun tapUntil(text: String, what: String, fill: (() -> Unit)? = null, cond: () -> Boolean) {
         repeat(3) { attempt ->
+            // a redraw also rebuilds a form's boxes, so type again before each tap
+            fill?.let { eventually(block = it) }
             tap(text)
             val end = SystemClock.uptimeMillis() + 8_000
             while (SystemClock.uptimeMillis() < end) {
                 if (cond()) return
                 Thread.sleep(300)
             }
-            if (attempt == 2) throw AssertionError("timed out waiting for: $what")
+            if (attempt == 2) {
+                shot("failed-" + what.replace(' ', '-'))
+                throw AssertionError("timed out waiting for: $what")
+            }
         }
     }
 
@@ -420,21 +425,23 @@ class AppFlowTest {
         val P = Api(base, p)
         val app = launchAs(p)
         see(s(R.string.change_limits))
-        eventually {
+        tapUntil(s(R.string.save_limits), "per-payee limit", fill = {
             onView(withContentDescription(s(R.string.lim_payee))).perform(scrollTo(), replaceText("20000"), closeSoftKeyboard())
-        }
-        tapUntil(s(R.string.save_limits), "per-payee limit") { P.obj("/v1/me/rules").optLong("per_payee_daily_limit") == 20_000L * 100 }
+            onView(withContentDescription(s(R.string.lim_payee))).check(matches(withText("20000")))
+        }) { P.obj("/v1/me/rules").optLong("per_payee_daily_limit") == 20_000L * 100 }
         see(s(R.string.rule_payee))
         shot("12-limits")
 
-        eventually { onView(inContent(withHint(s(R.string.your_name)))).perform(scrollTo(), replaceText("Lata Devi $run"), closeSoftKeyboard()) }
-        tapUntil(s(R.string.save_name), "name") { P.obj("/v1/me").getString("display_name") == "Lata Devi $run" }
+        tapUntil(s(R.string.save_name), "name", fill = {
+            onView(inContent(withHint(s(R.string.your_name)))).perform(scrollTo(), replaceText("Lata Devi $run"), closeSoftKeyboard())
+        }) { P.obj("/v1/me").getString("display_name") == "Lata Devi $run" }
         see(s(R.string.hello, "Lata Devi $run"))
 
-        eventually { onView(inContent(withHint(s(R.string.nominee_name)))).perform(scrollTo(), replaceText("Kumar"), closeSoftKeyboard()) }
-        onView(inContent(withHint(s(R.string.nominee_relation)))).perform(scrollTo(), replaceText("son"), closeSoftKeyboard())
-        onView(inContent(withHint(s(R.string.nominee_mobile)))).perform(scrollTo(), replaceText("9876543210"), closeSoftKeyboard())
-        tapUntil(s(R.string.save_nominee), "nominee") { !P.obj("/v1/me/nominee").isNull("nominee") }
+        tapUntil(s(R.string.save_nominee), "nominee", fill = {
+            onView(inContent(withHint(s(R.string.nominee_name)))).perform(scrollTo(), replaceText("Kumar"), closeSoftKeyboard())
+            onView(inContent(withHint(s(R.string.nominee_relation)))).perform(scrollTo(), replaceText("son"), closeSoftKeyboard())
+            onView(inContent(withHint(s(R.string.nominee_mobile)))).perform(scrollTo(), replaceText("9876543210"), closeSoftKeyboard())
+        }) { !P.obj("/v1/me/nominee").isNull("nominee") }
         see(s(R.string.remove_nominee))
         shot("13-your-details")
         tapUntil(s(R.string.remove_nominee), "nominee removed") { P.obj("/v1/me/nominee").isNull("nominee") }

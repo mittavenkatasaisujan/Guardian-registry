@@ -270,6 +270,17 @@ struct MyProtectionView: View {
         }
         .textCase(nil)
         .headerProminence(.increased)   // headings in normal case and a little larger, like the web app
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            // number and phone keypads have no return key: give them a way to close
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
+                .accessibilityIdentifier("keyboard-done")
+            }
+        }
         .navigationTitle(Text(verbatim: model.loaded ? L("Hello, %@", model.me["display_name"] as? String ?? "") : L("My protection")))
         .refreshable { await model.refresh() }
         .confirmationDialog("Sign out of every device and hold larger payments for 72 hours?",

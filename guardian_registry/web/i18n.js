@@ -115,6 +115,7 @@ const STRINGS = {
     "Remove nominee": "नामित व्यक्ति हटाएँ",
     "No nominee yet.": "अभी कोई नामित व्यक्ति नहीं।",
     "Fill in the nominee's name, relation and mobile number.": "नामित व्यक्ति का नाम, रिश्ता और मोबाइल नंबर भरें।",
+    "Done": "हो गया",
     "Not sure? Call them on a number you know before approving.": "पक्का नहीं? मंज़ूरी से पहले उन्हें किसी जाने-पहचाने नंबर पर कॉल करें।",
     "Nothing is waiting for you.": "आपके लिए कुछ भी प्रतीक्षा में नहीं है।", "Protection changes waiting": "प्रतीक्षा में सुरक्षा बदलाव",
     "Someone": "कोई", "{name} wants to: {what}": "{name} यह करना चाहते हैं: {what}",

@@ -154,7 +154,17 @@ final class AppFlowUITests: XCTestCase {
 
     /// Tap, then wait for the registry to show the effect; if the tap landed while the list
     /// was redrawing and nothing arrived, tap once more.
+    /// Close the keyboard (the keypads have no return key) so it can't cover the next button.
+    private func closeKeyboard(_ app: XCUIApplication) {
+        guard app.keyboards.firstMatch.exists else { return }
+        let done = app.buttons["keyboard-done"]
+        if done.waitForExistence(timeout: 2) { done.tap() }
+        let end = Date().addingTimeInterval(3)
+        while app.keyboards.firstMatch.exists && Date() < end { Thread.sleep(forTimeInterval: 0.2) }
+    }
+
     private func tapUntil(_ app: XCUIApplication, button label: String, _ what: String, _ cond: () throws -> Bool) throws {
+        closeKeyboard(app)
         for attempt in 0..<3 {
             tap(app, button: label)
             let end = Date().addingTimeInterval(8)
