@@ -215,6 +215,10 @@ jobs:
           disable-animations: true
           script: |
             adb logcat -c
+            adb shell settings put global hide_error_dialogs 1 || true
+            adb shell svc power stayon true || true
+            adb shell input keyevent 82 || true
+            adb shell wm dismiss-keyguard || true
             gradle -p android :app:connectedDebugAndroidTest --no-daemon -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true || { adb pull /sdcard/Android/data/in.guardianregistry.app/files/shots app-screens || true; exit 1; }
             adb logcat -d -s GRATTEST:I -v raw > attestation-logcat.txt
             adb pull /sdcard/Android/data/in.guardianregistry.app/files/shots app-screens || true
