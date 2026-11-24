@@ -24,28 +24,40 @@ What this proves on a real phone: the device key is created in the phone's secur
 device, and the Keystore attestation chain is real. `scripts/check_attestation.py` can check the
 chain the phone produced.
 
-## 2. Push notifications (free Firebase account)
+## 2. Real SMS codes and push notifications (free Twilio trial + free Firebase)
 
-1. Create a Firebase project at console.firebase.google.com and add an Android app with package
-   name `in.guardianregistry.app`.
-2. From *Project settings*, note the project id, app id, web API key and sender id; build with
-   `gradle -p android :app:assembleDebug -PgrFcmProjectId=... -PgrFcmAppId=... -PgrFcmApiKey=...
-   -PgrFcmSenderId=...` (or ask for these to be wired into the CI build as repository secrets).
-3. For the server: *Project settings -> Service accounts -> Generate new private key*, then set
-   `GR_PUSH_PROVIDER=direct` and `GR_FCM_SERVICE_ACCOUNT_FILE=/path/to/key.json`. Keep that file
-   out of the repository.
+Both work on free plans; set up once, then run the test server in real mode.
 
-## 3. Real SMS codes to your own phone (Twilio free trial)
+1. **Firebase:** create a project (Analytics not needed) and add an Android app with package name
+   `in.guardianregistry.app`. CI builds the APK with push when the repository has the secrets
+   `GR_FCM_PROJECT_ID`, `GR_FCM_APP_ID`, `GR_FCM_API_KEY` and `GR_FCM_SENDER_ID` (from *Project
+   settings*; the API key is the auto-created "Android key" in Google Cloud *Credentials*). For the
+   server: *Project settings -> Service accounts -> Generate new private key*, saved as
+   `local-secrets/firebase-service-account.json`.
+2. **Twilio:** sign up for the free *Limited trial* (no card) and verify your own mobile number.
+   A trial only sends Twilio's own wording, so sign-in codes go through **Twilio Verify** (Twilio
+   makes, sends and checks the code; the registry keeps its own limits). Create a Verify service
+   (console, or `POST https://verify.twilio.com/v2/Services`) and save its `VA...` id as
+   `local-secrets/twilio_verify_service`; save your Auth Token as `local-secrets/twilio_auth_token`.
+   Alert SMS can't be sent on a trial: alerts arrive in the app and by push.
+3. `local-secrets/real.env` (the folder is git-ignored):
 
-1. Sign up for a Twilio trial and verify your own mobile number in the console.
-2. Set `GR_SMS_PROVIDER=twilio`, `GR_TWILIO_ACCOUNT_SID`, `GR_TWILIO_AUTH_TOKEN_FILE` (a file with
-   the token) and `GR_TWILIO_FROM` (the trial number). Trial accounts only send to numbers you
-   verified, and add a "Sent from a Twilio trial account" prefix.
-3. Run without `GR_OTP_DEV_ECHO`: the code now arrives by SMS.
+   ```
+   GR_SMS_PROVIDER=twilio_verify
+   GR_TWILIO_ACCOUNT_SID=AC...
+   GR_TWILIO_AUTH_TOKEN_FILE=local-secrets/twilio_auth_token
+   GR_TWILIO_VERIFY_SERVICE_FILE=local-secrets/twilio_verify_service
+   GR_PUSH_PROVIDER=direct
+   GR_FCM_SERVICE_ACCOUNT_FILE=local-secrets/firebase-service-account.json
+   ```
 
-Real users need a paid account and, in India, DLT registration of the sender and templates.
+4. `python scripts/dev_server.py 8010 --lan --real`: codes now arrive by SMS (not on screen), and
+   urgent alerts as push notifications.
 
-## 4. A public staging server (free cloud VM)
+Real users need a paid account and, in India, DLT registration of the sender and templates;
+with that, `GR_SMS_PROVIDER=twilio` or `msg91` sends our own wording, alerts included.
+
+## 3. A public staging server (free cloud VM)
 
 1. Create an Ubuntu VM on a free tier: Oracle Cloud "Always Free" (an Ampere A1 VM with several
    GB of RAM is the comfortable choice) or Google Cloud's free-tier e2-micro.
@@ -60,7 +72,7 @@ Real users need a paid account and, in India, DLT registration of the sender and
    people's app and the operator console.
 3. Point the phone's **Server address (testing)** at that address to test away from your Wi-Fi.
 
-## 5. Free security scanning
+## 4. Free security scanning
 
 * **CodeQL** runs on every push once the repository is public (`.github/workflows/codeql.yml`);
   results appear under *Security -> Code scanning*.

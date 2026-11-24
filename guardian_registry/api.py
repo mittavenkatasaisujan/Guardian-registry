@@ -388,6 +388,8 @@ def create_app(
                            "GR_OPERATOR_OIDC_ALLOWED); participant onboarding needs a second approver")
     single_operator = n_operators == 1  # dev convenience: approves its own requests
     sms = sms or sms_sender_from_env()
+    if getattr(sms, "checks_codes", False):   # Twilio Verify: every node can check codes
+        reg.code_checker = sms
     dispatcher = Dispatcher(reg.db, reg.clock, sms=sms, http=http, whatsapp=whatsapp, push=push)
     if run_worker is None:
         run_worker = os.environ.get("GR_WORKER", "1") == "1"
@@ -771,7 +773,7 @@ def create_app(
         limited(otp_limiter, client_ip(request))
         code = reg.request_otp(body.mobile, sms, body.language)
         out = {"sent": True, "expires_in_seconds": OTP_TTL_MINUTES * 60}
-        if dev_echo:
+        if dev_echo and code:
             out["dev_code"] = code  # development only; refused in production
         return out
 
@@ -945,7 +947,7 @@ def create_app(
         limited(otp_limiter, client_ip(request))
         code = reg.request_mobile_change(uid, body.new_mobile, sms)
         out = {"sent": True, "expires_in_seconds": OTP_TTL_MINUTES * 60}
-        if dev_echo:
+        if dev_echo and code:
             out["dev_code"] = code
         return out
 

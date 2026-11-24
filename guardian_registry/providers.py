@@ -18,6 +18,7 @@ The generic HTTP senders in notify.py still work for any other provider behind a
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
@@ -26,6 +27,9 @@ import httpx
 import jwt
 
 from .notify import PushSender, SmsSender, WhatsAppSender
+from .security import mask_mobile
+
+log = logging.getLogger(__name__)
 
 
 class DeadToken(Exception):
@@ -68,6 +72,40 @@ class TwilioSms(SmsSender):
         r = self.client.post(f"https://api.twilio.com/2010-04-01/Accounts/{self.sid}/Messages.json",
                              data=data, auth=(self.sid, self.auth))
         _check(r, "Twilio")
+
+
+class TwilioVerifySms(SmsSender):
+    """Sign-in codes through Twilio Verify: Twilio makes, sends and checks the code. It works on
+    a free Twilio trial, which can only send Twilio's own wording, not ours. Free-form alert SMS
+    isn't possible there, so alerts are logged and skipped; people still get them in the app and
+    by push. The registry keeps its own limits (resend wait, sends per window, attempts, expiry)."""
+
+    checks_codes = True
+    LOCALES = {"en", "hi"}   # Verify locales we have checked; others get Twilio's English
+
+    def __init__(self, account_sid: str, auth_token: str, service_sid: str, client: httpx.Client | None = None):
+        self.sid, self.auth, self.service = account_sid, auth_token, service_sid
+        self.client = client or httpx.Client(timeout=10)
+        self.base = f"https://verify.twilio.com/v2/Services/{service_sid}"
+
+    def send(self, to: str, text: str) -> None:
+        log.info("SMS alert to %s skipped: Twilio Verify sends sign-in codes only (alerts go in-app and by push)",
+                 mask_mobile(to))
+
+    def send_otp(self, to: str, code: str, minutes: int, language: str = "en") -> None:
+        data = {"To": to, "Channel": "sms"}
+        if language in self.LOCALES:
+            data["Locale"] = language
+        r = self.client.post(f"{self.base}/Verifications", data=data, auth=(self.sid, self.auth))
+        _check(r, "Twilio Verify")
+
+    def check_code(self, to: str, code: str) -> bool:
+        r = self.client.post(f"{self.base}/VerificationCheck", data={"To": to, "Code": code},
+                             auth=(self.sid, self.auth))
+        if r.status_code == 404:   # nothing pending for this number: expired, used or never sent
+            return False
+        _check(r, "Twilio Verify")
+        return r.json().get("status") == "approved"
 
 
 class Msg91Sms(SmsSender):
@@ -245,11 +283,14 @@ def sms_from_env() -> SmsSender | None:
         return None
     if p == "twilio":
         return TwilioSms(_need("GR_TWILIO_ACCOUNT_SID"), _need("GR_TWILIO_AUTH_TOKEN"), _need("GR_TWILIO_FROM"))
+    if p == "twilio_verify":
+        return TwilioVerifySms(_need("GR_TWILIO_ACCOUNT_SID"), _need("GR_TWILIO_AUTH_TOKEN"),
+                               _need("GR_TWILIO_VERIFY_SERVICE"))
     if p == "msg91":
         hi = (os.environ.get("GR_MSG91_OTP_TEMPLATE_HI"), os.environ.get("GR_MSG91_ALERT_TEMPLATE_HI"))
         return Msg91Sms(_need("GR_MSG91_AUTHKEY"), _need("GR_MSG91_OTP_TEMPLATE"), _need("GR_MSG91_ALERT_TEMPLATE"),
                         templates_hi=hi if all(hi) else None)
-    raise RuntimeError("GR_SMS_PROVIDER must be twilio or msg91")
+    raise RuntimeError("GR_SMS_PROVIDER must be twilio, twilio_verify or msg91")
 
 
 def whatsapp_from_env() -> WhatsAppSender | None:

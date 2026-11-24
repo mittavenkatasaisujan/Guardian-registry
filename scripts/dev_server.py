@@ -51,15 +51,28 @@ if hasattr(signal, "SIGUSR1"):
     faulthandler.register(signal.SIGUSR1, all_threads=True)
 import uvicorn  # noqa: E402
 
-# keep idle connections longer than clients do, so a reused connection is never closed mid-request
 if host == "0.0.0.0":
+    # Every real address of this PC: a VPN or virtual adapter can make "the" route-based guess
+    # wrong, so list them all (link-local 169.254.x.x and loopback left out).
     import socket
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    found = []
     try:
-        s.connect(("10.255.255.255", 1))  # no packet is sent; this just picks the LAN interface
-        print(f"Phone on the same Wi-Fi: use http://{s.getsockname()[0]}:{port} as the server address", flush=True)
+        found += socket.gethostbyname_ex(socket.gethostname())[2]
     except OSError:
         pass
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))  # no packet is sent
+        route = s.getsockname()[0]
+    except OSError:
+        route = None
     finally:
         s.close()
+    addrs = [a for a in dict.fromkeys(found) if not a.startswith(("127.", "169.254."))]
+    if not addrs and route:   # only when the PC lists none: the route guess can name a VPN's address
+        addrs = [route]
+    print("Phone on the same Wi-Fi: use one of these as the server address:", flush=True)
+    for a in addrs:
+        print(f"    http://{a}:{port}", flush=True)
+# keep idle connections longer than clients do, so a reused connection is never closed mid-request
 uvicorn.run("guardian_registry.api:create_app", factory=True, host=host, port=port, timeout_keep_alive=75)

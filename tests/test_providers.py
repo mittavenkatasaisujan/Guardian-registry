@@ -227,3 +227,57 @@ def test_dead_token_is_deleted_and_other_devices_still_get_it(reg, family, clock
     assert "live-ios-token" in sent
     assert [x["platform"] for x in reg.alert_settings(family["ravi"])["push_devices"]] == ["ios"]
     assert not reg.db.one("SELECT 1 FROM notifications WHERE channel='push' AND status='pending'")
+
+
+# ------------------------------------------------------------------ Twilio Verify (free trial)
+def test_twilio_verify_sends_and_checks_codes_and_skips_alerts():
+    rec = Recorder(httpx.Response(201, json={"status": "pending"}),
+                   httpx.Response(200, json={"status": "pending"}),       # wrong code
+                   httpx.Response(200, json={"status": "approved"}),
+                   httpx.Response(404, json={"message": "not found"}))    # nothing pending
+    v = P.TwilioVerifySms("AC1", "tok", "VA9", client=rec.client())
+    v.send_otp("+919800000001", "", 5, "hi")
+    v.send_alert("+919800000001", "title", "body")                        # logged, not sent
+    assert v.check_code("+919800000001", "111111") is False
+    assert v.check_code("+919800000001", "222222") is True
+    assert v.check_code("+919800000001", "333333") is False
+    assert [str(r.url) for r in rec.requests] == [
+        "https://verify.twilio.com/v2/Services/VA9/Verifications",
+        "https://verify.twilio.com/v2/Services/VA9/VerificationCheck",
+        "https://verify.twilio.com/v2/Services/VA9/VerificationCheck",
+        "https://verify.twilio.com/v2/Services/VA9/VerificationCheck"]
+    assert parse_qs(rec.requests[0].content.decode()) == {"To": ["+919800000001"], "Channel": ["sms"], "Locale": ["hi"]}
+    assert parse_qs(rec.requests[2].content.decode())["Code"] == ["222222"]
+
+
+def test_sign_in_with_twilio_verify_keeps_the_registrys_limits(reg):
+    """The provider checks the code; the registry still counts attempts and refuses after too many."""
+    from guardian_registry.service import OTP_MAX_ATTEMPTS
+    answers = iter([False] * OTP_MAX_ATTEMPTS + [True])
+
+    class FakeVerify:
+        checks_codes = True
+        sent = []
+
+        def send_otp(self, to, code, minutes, language="en"):
+            self.sent.append(to)
+
+        def check_code(self, to, code):
+            return next(answers)
+
+    fake = FakeVerify()
+    assert reg.request_otp("+919811122233", fake) is None          # no code of ours to echo
+    assert fake.sent == ["+919811122233"]
+    for _ in range(OTP_MAX_ATTEMPTS):
+        with pytest.raises(Exception, match="wrong code"):
+            reg.verify_otp("+919811122233", "000000", "Verify Person")
+    with pytest.raises(Exception, match="too many wrong codes"):
+        reg.verify_otp("+919811122233", "123456", "Verify Person")
+
+
+def test_twilio_verify_from_env(monkeypatch):
+    monkeypatch.setenv("GR_SMS_PROVIDER", "twilio_verify")
+    monkeypatch.setenv("GR_TWILIO_ACCOUNT_SID", "AC1")
+    monkeypatch.setenv("GR_TWILIO_AUTH_TOKEN", "tok")
+    monkeypatch.setenv("GR_TWILIO_VERIFY_SERVICE", "VA9")
+    assert isinstance(sms_sender_from_env(), P.TwilioVerifySms)

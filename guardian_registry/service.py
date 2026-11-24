@@ -51,6 +51,7 @@ MAX_GUARDIANS = 3
 SESSION_DAYS = 30
 KEY_ROTATION_GRACE_HOURS = 24
 OTP_TTL_MINUTES = 5
+REMOTE_CODE = "remote"   # otps.code_hash when the SMS provider makes and checks the code
 OTP_MAX_ATTEMPTS = 5
 OTP_RESEND_SECONDS = 30
 OTP_MAX_SENDS_PER_WINDOW = 3
@@ -222,7 +223,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             self._audit(c, uid, "session.revoked", uid, everywhere=everywhere)
 
     # ---------------------------------------------------------------------- OTP
-    def request_otp(self, mobile: str, sms: "notify.SmsSender", language: str | None = None) -> str:
+    def request_otp(self, mobile: str, sms: "notify.SmsSender", language: str | None = None) -> str | None:
         """Send a one-time code to prove the person holds this number. Behaves the same whether
         or not the number is enrolled, so it can't be used to probe who is registered.
         Returns the code (the API echoes it only when GR_OTP_DEV_ECHO=1 outside production)."""
@@ -241,18 +242,26 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
                 window_start, sends = row["window_start"], row["sends"]
                 if sends >= OTP_MAX_SENDS_PER_WINDOW:
                     raise TooMany(f"too many codes requested; try again in {OTP_WINDOW_MINUTES} minutes")
+        # A provider that makes and checks its own codes (Twilio Verify): we keep the limits and
+        # the expiry here, and ask the provider whether a code is right.
+        remote = bool(getattr(sms, "checks_codes", False))
+        if remote:
+            self.code_checker = sms
         code = new_otp()
         with self.db.tx(f"otp:{mh}") as c:
             c.execute("INSERT INTO otps (mobile_hash, code_hash, expires_at, attempts, window_start, sends, "
                       "last_sent_at) VALUES (?,?,?,0,?,?,?) ON CONFLICT(mobile_hash) DO UPDATE SET "
                       "code_hash=excluded.code_hash, expires_at=excluded.expires_at, attempts=0, "
                       "window_start=excluded.window_start, sends=excluded.sends, last_sent_at=excluded.last_sent_at",
-                      (mh, otp_hash(mh, code), iso(now + timedelta(minutes=OTP_TTL_MINUTES)),
+                      (mh, REMOTE_CODE if remote else otp_hash(mh, code), iso(now + timedelta(minutes=OTP_TTL_MINUTES)),
                        window_start, sends + 1, iso(now)))
         lang = messages.normalise(language)
         if not lang:
             u = self.db.one("SELECT language FROM users WHERE mobile_hash=?", (mh,))
             lang = u["language"] if u and u["language"] in messages.enabled_languages() else "en"
+        if remote:
+            sms.send_otp(normalize_mobile(mobile), "", OTP_TTL_MINUTES, lang)
+            return None
         if hasattr(sms, "send_otp"):
             try:
                 sms.send_otp(normalize_mobile(mobile), code, OTP_TTL_MINUTES, lang)
@@ -274,7 +283,14 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             raise Unauthorized("code expired or not requested")
         if row["attempts"] >= OTP_MAX_ATTEMPTS:
             raise Unauthorized("too many wrong codes; request a new one")
-        if not hmac.compare_digest(row["code_hash"], otp_hash(mh, (code or "").strip())):
+        if row["code_hash"] == REMOTE_CODE:
+            checker = getattr(self, "code_checker", None)
+            if checker is None:
+                raise Unauthorized("code expired or not requested")
+            right = bool((code or "").strip()) and checker.check_code(normalize_mobile(mobile), (code or "").strip())
+        else:
+            right = hmac.compare_digest(row["code_hash"], otp_hash(mh, (code or "").strip()))
+        if not right:
             with self.db.tx(f"otp:{mh}") as c:
                 c.execute("UPDATE otps SET attempts=attempts+1 WHERE mobile_hash=?", (mh,))
             raise Unauthorized("wrong code")
