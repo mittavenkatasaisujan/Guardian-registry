@@ -78,6 +78,12 @@
    "server:phrase"
   ]
  },
+ "97d23595b7": {
+  "en": "a new guardian can approve payments only after the waiting period set in this person's rules",
+  "where": [
+   "server:error"
+  ]
+ },
  "7ba17f2432": {
   "en": "A recovery to the number {0} was started. If this isn't you, cancel it here.",
   "where": [
@@ -269,6 +275,12 @@
    "web",
    "android:apply",
    "ios"
+  ]
+ },
+ "f0cbab4aa1": {
+  "en": "approval_scope must be all or rbi",
+  "where": [
+   "server:error"
   ]
  },
  "4e83bb0161": {
@@ -494,6 +506,12 @@
    "server:phrase"
   ]
  },
+ "db2c5a9c75": {
+  "en": "channel_daily_limits must map channels to positive whole numbers of paise",
+  "where": [
+   "server:error"
+  ]
+ },
  "ee6ba7f0dd": {
   "en": "check not found",
   "where": [
@@ -546,6 +564,12 @@
   "en": "Create account",
   "where": [
    "web"
+  ]
+ },
+ "1614ff8316": {
+  "en": "daily limit {0} for {1} would be exceeded ({2} left today)",
+  "where": [
+   "server:phrase"
   ]
  },
  "96a3901e3d": {
@@ -1218,6 +1242,12 @@
    "server:error-phrase"
   ]
  },
+ "ec9f8ae33a": {
+  "en": "new_guardian_wait_hours must be between 0 and 168",
+  "where": [
+   "server:error"
+  ]
+ },
  "816c52fd2b": {
   "en": "No",
   "where": [
@@ -1515,6 +1545,12 @@
    "server:alert"
   ]
  },
+ "2e650fedf2": {
+  "en": "payments to this payee today would go over the limit {0} ({1} left today)",
+  "where": [
+   "server:phrase"
+  ]
+ },
  "72197b41f9": {
   "en": "Payments waiting",
   "where": [
@@ -1541,6 +1577,12 @@
    "web",
    "android:people_i_protect",
    "ios"
+  ]
+ },
+ "5db9009feb": {
+  "en": "per_payee_daily_limit must be a positive whole number of paise or null",
+  "where": [
+   "server:error"
   ]
  },
  "aa4276e190": {

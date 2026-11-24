@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 from . import __version__, messages
 from .db import Database
 from .errors import RegistryError
-from .models import CHANNELS
+from .models import CHANNELS, KINDS
 from .notify import Dispatcher, PushSender, SmsSender, WhatsAppSender, sms_sender_from_env
 from .participants import CAPABILITIES, PARTICIPANT_KINDS
 from .certs import ProxyTrust
@@ -247,6 +247,10 @@ class RulesPatch(BaseModel):
     blocked_channels: list[str] | None = None
     require_verified_guardian: bool | None = None
     scam_signals: bool | None = None
+    per_payee_daily_limit: int | None = None
+    channel_daily_limits: dict[str, int] | None = None
+    approval_scope: Literal["all", "rbi"] | None = None
+    new_guardian_wait_hours: int | None = None
 
 
 class AttestIn(BaseModel):
@@ -281,6 +285,11 @@ class CheckIn(BaseModel):
     amount: int = Field(description="paise")
     payee: str = Field(min_length=1, max_length=200)
     channel: Literal[CHANNELS] = "upi"  # type: ignore[valid-type]
+    kind: Literal[KINDS] = Field(  # type: ignore[valid-type]
+        default="transfer",
+        description="transfer, merchant (a payment to a shop), recurring (a debit under an existing mandate or "
+                    "standing instruction) or new_mandate. Existing recurring mandates still run while payments are "
+                    "paused, and with approval_scope 'rbi' only transfers outside UPI go to the trusted person.")
 
 
 class OutcomeIn(BaseModel):
@@ -834,7 +843,7 @@ def create_app(
     @app.post("/v1/checks", tags=["banks"])
     def create_check(body: CheckIn, pid: Participant):
         limited(check_limiter, pid)
-        out = reg.check(pid, body.mobile, body.participant_txn_id, body.amount, body.payee, body.channel)
+        out = reg.check(pid, body.mobile, body.participant_txn_id, body.amount, body.payee, body.channel, body.kind)
         metrics.inc("gr_checks_total", {"status": str(out.get("status"))})
         return out
 

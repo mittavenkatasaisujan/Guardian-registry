@@ -60,6 +60,11 @@ class ChangeStatus(str, Enum):
 
 
 CHANNELS = ("upi", "imps", "neft", "rtgs", "card", "netbanking")
+# What a payment is, as the bank knows it. RBI's Nov 2026 draft treats these differently: the trusted
+# person mechanism leaves out merchant and recurring payments, and the Stop Switch lets existing
+# recurring mandates continue while blocking new ones.
+KINDS = ("transfer", "merchant", "recurring", "new_mandate")
+APPROVAL_SCOPES = ("all", "rbi")
 
 
 @dataclass
@@ -76,6 +81,11 @@ class Rules:
     require_verified_guardian: bool = False     # only bank-KYC'd guardians may approve
     sim_swap_hold: bool = True                  # extra holds while a SIM change is recent
     scam_signals: bool = False                  # hold payments that look coached (scamsignals.py)
+    # RBI draft directions of Nov 2026 (customer-induced controls and the trusted person mechanism):
+    per_payee_daily_limit: int | None = None    # block if today's total to one payee would go over
+    channel_daily_limits: dict[str, int] = field(default_factory=dict)  # block if a channel's day total would go over
+    approval_scope: str = "all"                 # "all", or "rbi": not UPI, merchant or recurring payments
+    new_guardian_wait_hours: int = 0            # a newly accepted guardian approves only after this wait
     kill_switch: bool = False
 
     def to_dict(self) -> dict:
@@ -117,6 +127,15 @@ class Rules:
             return True
         if self.scam_signals and not new.scam_signals:
             return True
+        if looser_limit(self.per_payee_daily_limit, new.per_payee_daily_limit):
+            return True
+        for ch, limit in self.channel_daily_limits.items():
+            if looser_limit(limit, new.channel_daily_limits.get(ch)):
+                return True
+        if self.approval_scope == "all" and new.approval_scope != "all":
+            return True   # fewer payments go to the trusted person
+        if new.new_guardian_wait_hours < self.new_guardian_wait_hours:
+            return True
         if self.kill_switch and not new.kill_switch:
             return True
         return False
@@ -127,6 +146,7 @@ class Transaction:
     amount: int        # paise
     payee: str         # VPA / account ref, as the bank sees it
     channel: str = "upi"
+    kind: str = "transfer"   # see KINDS
 
 
 @dataclass

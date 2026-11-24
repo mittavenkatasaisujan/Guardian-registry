@@ -1,8 +1,12 @@
 """The rules engine. Pure: no database, no clock. Same inputs, same decision.
 
 Precedence, strongest first:
-  1. BLOCK          kill switch, blocked channel, per-transaction limit, daily limit
-  2. NEEDS_APPROVAL amount at/above the approval threshold (needs an active guardian)
+  1. BLOCK          kill switch (existing recurring mandates still run, as with RBI's draft Stop
+                    Switch), blocked channel, per-transaction limit, daily limit, per-payee and
+                    per-channel daily limits
+  2. NEEDS_APPROVAL amount at/above the approval threshold (needs an active guardian). With the
+                    rule approval_scope "rbi" this covers only fund transfers that aren't UPI,
+                    merchant or recurring payments, as in RBI's Nov 2026 draft trusted person mechanism.
   3. DELAY          first payment to a payee at/above the new-payee threshold,
                     or approval was needed but nobody is available to approve
   4. ALLOW
@@ -46,12 +50,14 @@ def evaluate(
     sim_swap_recent: bool = False,
     payee_watch: str | None = None,
     risk_signals: list[str] | None = None,
+    spent_to_payee_today: int = 0,
+    spent_on_channel_today: int = 0,
 ) -> Decision:
     if txn.amount <= 0:
         return Decision(Outcome.BLOCK, ["amount must be positive"])
 
     blocks: list[str] = []
-    if rules.kill_switch:
+    if rules.kill_switch and txn.kind != "recurring":
         blocks.append("kill switch is on: all outgoing payments are paused")
     if txn.channel in rules.blocked_channels:
         blocks.append(f"channel '{txn.channel}' is switched off")
@@ -60,12 +66,21 @@ def evaluate(
     if rules.daily_limit is not None and spent_today + txn.amount > rules.daily_limit:
         left = max(rules.daily_limit - spent_today, 0)
         blocks.append(f"daily limit {_rupees(rules.daily_limit)} would be exceeded ({_rupees(left)} left today)")
+    if rules.per_payee_daily_limit is not None and spent_to_payee_today + txn.amount > rules.per_payee_daily_limit:
+        left = max(rules.per_payee_daily_limit - spent_to_payee_today, 0)
+        blocks.append(f"payments to this payee today would go over the limit {_rupees(rules.per_payee_daily_limit)} "
+                      f"({_rupees(left)} left today)")
+    ch_limit = rules.channel_daily_limits.get(txn.channel)
+    if ch_limit is not None and spent_on_channel_today + txn.amount > ch_limit:
+        left = max(ch_limit - spent_on_channel_today, 0)
+        blocks.append(f"daily limit {_rupees(ch_limit)} for {txn.channel} would be exceeded ({_rupees(left)} left today)")
     if payee_watch == "confirmed":
         blocks.append("banks have confirmed fraud involving this payee")
     if blocks:
         return Decision(Outcome.BLOCK, blocks)
 
-    needs_approval = rules.approval_threshold is not None and txn.amount >= rules.approval_threshold
+    in_scope = rules.approval_scope != "rbi" or (txn.kind == "transfer" and txn.channel != "upi")
+    needs_approval = rules.approval_threshold is not None and txn.amount >= rules.approval_threshold and in_scope
     reported = payee_watch == "reported"
     signals = list(risk_signals or []) if rules.scam_signals else []
     new_payee_hold = (

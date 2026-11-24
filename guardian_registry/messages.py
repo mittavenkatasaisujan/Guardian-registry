@@ -176,6 +176,9 @@ FRAGMENTS_HI = {
     "a request to loosen protection is waiting": "सुरक्षा ढीली करने का एक अनुरोध प्रतीक्षा में है",
     "a large payment at night ({0}:00 to {1}:00)": "रात में बड़ा भुगतान ({0}:00 से {1}:00 के बीच)",
     "kill switch is on: all outgoing payments are paused": "सभी भुगतान रोकने वाला बटन चालू है: सभी भुगतान रुके हुए हैं",
+    "payments to this payee today would go over the limit {0} ({1} left today)":
+        "आज इस प्राप्तकर्ता को भुगतान सीमा {0} से ज़्यादा हो जाएँगे (आज {1} बाकी)",
+    "daily limit {0} for {1} would be exceeded ({2} left today)": "{1} की दैनिक सीमा {0} पार हो जाएगी (आज {2} बाकी)",
     "channel '{0}' is switched off": "माध्यम '{0}' बंद है",
     "amount {0} is over the per-payment limit {1}": "राशि {0} एक भुगतान की सीमा {1} से ज़्यादा है",
     "daily limit {0} would be exceeded ({1} left today)": "दैनिक सीमा {0} पार हो जाएगी (आज {1} बाकी)",
@@ -245,6 +248,14 @@ ERRORS_HI = {
     "recovery is already {0}": "खाता वापसी पहले से {0} है",
     "recovery not found": "खाता वापसी नहीं मिली",
     "require_verified_guardian must be true or false": "'केवल बैंक-सत्यापित गार्डियन' हाँ या नहीं होना चाहिए",
+    "a new guardian can approve payments only after the waiting period set in this person's rules":
+        "नया गार्डियन इस व्यक्ति के नियमों में तय प्रतीक्षा अवधि के बाद ही भुगतान मंज़ूर कर सकता है",
+    "approval_scope must be all or rbi": "मंज़ूरी का दायरा 'सभी' या 'RBI' होना चाहिए",
+    "channel_daily_limits must map channels to positive whole numbers of paise":
+        "हर माध्यम की दैनिक सीमा पैसे में शून्य से बड़ी पूर्ण संख्या होनी चाहिए",
+    "new_guardian_wait_hours must be between 0 and 168": "नए गार्डियन की प्रतीक्षा 0 से 168 घंटे के बीच होनी चाहिए",
+    "per_payee_daily_limit must be a positive whole number of paise or null":
+        "हर प्राप्तकर्ता की दैनिक सीमा पैसे में शून्य से बड़ी पूर्ण संख्या या खाली होनी चाहिए",
     "send device_key, challenge and device_proof together": "डिवाइस कुंजी, चुनौती और प्रमाण एक साथ भेजें",
     "that new number is already enrolled; recover with a number that isn't": "वह नया नंबर पहले से पंजीकृत है; किसी ऐसे नंबर से खाता वापस पाएँ जो पंजीकृत न हो",
     "that number is already enrolled": "वह नंबर पहले से पंजीकृत है",
@@ -307,7 +318,7 @@ NOT_FOR_PEOPLE = {
     "occurred_at cannot be in the future", "occurred_at is required", "occurred_at must be an ISO 8601 timestamp",
     "occurred_at must include a timezone", "outcome already reported as completed", "participant_txn_id is required",
     "participant_txn_id was already used for a different payment", "payee is required",
-    "payment was not cleared to execute (status: {0})", "token is required", "unknown rule fields: {0}",
+    "payment was not cleared to execute (status: {0})", "kind must be one of {0}", "token is required", "unknown rule fields: {0}",
     "verified_on cannot be in the future",
     "webhook url must be https:// (http://localhost allowed outside production)", "{0} must be a date like 1951-04-23",
     "{0} must be base64",

@@ -141,13 +141,18 @@ class Client:
         return min(0.5 * (2 ** attempt), 8.0)
 
     # ------------------------------------------------------------------ payments
-    def check(self, mobile: str, txn_id: str, amount_paise: int, payee: str, channel: str = "upi") -> CheckResult:
-        """Ask before moving money. Safe to call again with the same txn_id."""
+    def check(self, mobile: str, txn_id: str, amount_paise: int, payee: str, channel: str = "upi",
+              kind: str = "transfer") -> CheckResult:
+        """Ask before moving money. Safe to call again with the same txn_id.
+
+        kind: "transfer", "merchant" (a payment to a shop), "recurring" (a debit under an existing
+        mandate or standing instruction) or "new_mandate". Recurring debits still run while the
+        customer's payments are paused, as with RBI's draft Stop Switch."""
         if not isinstance(amount_paise, int) or isinstance(amount_paise, bool) or amount_paise <= 0:
             raise ValueError("amount_paise must be a positive int (paise, not rupees)")
         return CheckResult(self._call("POST", "/v1/checks", {
             "mobile": mobile, "participant_txn_id": txn_id, "amount": amount_paise, "payee": payee,
-            "channel": channel}))
+            "channel": channel, "kind": kind}))
 
     def get_check(self, check_id: str) -> CheckResult:
         return CheckResult(self._call("GET", f"/v1/checks/{check_id}"))

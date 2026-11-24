@@ -37,7 +37,8 @@ from .recovery import RecoveryMixin
 from .simfeed import SimFeedMixin, SimLookup
 from .simswap import SimSwapMixin
 from .models import (
-    CHANNELS, ChangeKind, ChangeStatus, CheckStatus, GuardianStatus, Outcome, Rules, Transaction,
+    APPROVAL_SCOPES, CHANNELS, KINDS, ChangeKind, ChangeStatus, CheckStatus, GuardianStatus, Outcome, Rules,
+    Transaction,
 )
 from .policy import _rupees as rupees, evaluate
 from .presets import PRESETS
@@ -118,8 +119,14 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
     def _approver_ids(self, principal_id: str) -> list[str]:
         """Guardians allowed to APPROVE a payment. With require_verified_guardian on, only
         bank-verified ones. (Any active guardian may still deny or cancel: that only protects.)"""
-        ids = self._active_guardian_ids(principal_id)
-        if self._rules_raw(principal_id).require_verified_guardian:
+        rules = self._rules_raw(principal_id)
+        rows = self.db.all("SELECT guardian_id, accepted_at FROM guardianships WHERE principal_id=? AND status=?",
+                           (principal_id, GuardianStatus.ACTIVE.value))
+        if rules.new_guardian_wait_hours:
+            cutoff = iso(self.clock.now() - timedelta(hours=rules.new_guardian_wait_hours))
+            rows = [r for r in rows if r["accepted_at"] and r["accepted_at"] <= cutoff]
+        ids = [r["guardian_id"] for r in rows]
+        if rules.require_verified_guardian:
             ids = [g for g in ids if self.identity_level(g) == "bank_verified"]
         return ids
 
@@ -499,6 +506,21 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         bad = set(rules.blocked_channels) - set(CHANNELS)
         if bad:
             raise Invalid(f"unknown channels: {sorted(bad)}")
+        v = rules.per_payee_daily_limit
+        if v is not None and (not isinstance(v, int) or isinstance(v, bool) or v <= 0):
+            raise Invalid("per_payee_daily_limit must be a positive whole number of paise or null")
+        if not isinstance(rules.channel_daily_limits, dict):
+            raise Invalid("channel_daily_limits must map channels to positive whole numbers of paise")
+        bad = set(rules.channel_daily_limits) - set(CHANNELS)
+        if bad:
+            raise Invalid(f"unknown channels: {sorted(bad)}")
+        if any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in rules.channel_daily_limits.values()):
+            raise Invalid("channel_daily_limits must map channels to positive whole numbers of paise")
+        if rules.approval_scope not in APPROVAL_SCOPES:
+            raise Invalid("approval_scope must be all or rbi")
+        if (not isinstance(rules.new_guardian_wait_hours, int) or isinstance(rules.new_guardian_wait_hours, bool)
+                or not 0 <= rules.new_guardian_wait_hours <= 168):
+            raise Invalid("new_guardian_wait_hours must be between 0 and 168")
 
     def update_rules(self, principal_id: str, changes: dict) -> dict:
         """Principal changes their own rules. `changes` holds only the fields to change.
@@ -744,7 +766,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         view = {
             "check_id": r["id"], "enrolled": True,
             "participant_txn_id": r["participant_txn_id"],
-            "amount": r["amount"], "payee": r["payee"], "channel": r["channel"],
+            "amount": r["amount"], "payee": r["payee"], "channel": r["channel"], "kind": r["kind"] or "transfer",
             "outcome": r["outcome"], "status": status.value,
             "may_execute": status.is_final_go and r["completed_at"] is None,
             "reasons": json.loads(r["reasons"]),
@@ -758,13 +780,16 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         return view
 
     def check(self, participant_id: str, mobile: str, participant_txn_id: str,
-              amount: int, payee: str, channel: str = "upi") -> dict:
-        """Called by a bank/app before moving money. Idempotent on (participant, participant_txn_id)."""
+              amount: int, payee: str, channel: str = "upi", kind: str = "transfer") -> dict:
+        """Called by a bank/app before moving money. Idempotent on (participant, participant_txn_id).
+        `kind`: transfer, merchant, recurring (a debit under an existing mandate) or new_mandate."""
         self._require_participant(participant_id, "checks")
         if not participant_txn_id.strip():
             raise Invalid("participant_txn_id is required")
         if channel not in CHANNELS:
             raise Invalid(f"channel must be one of {list(CHANNELS)}")
+        if kind not in KINDS:
+            raise Invalid(f"kind must be one of {list(KINDS)}")
         if not isinstance(amount, int) or isinstance(amount, bool):
             raise Invalid("amount must be a whole number of paise")
         payee = payee.strip().lower()
@@ -783,8 +808,8 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         existing = self.db.one("SELECT * FROM checks WHERE participant_id=? AND participant_txn_id=?",
                                (participant_id, participant_txn_id))
         if existing:
-            if (existing["principal_id"], existing["amount"], existing["payee"], existing["channel"]) != \
-                    (principal_id, amount, payee, channel):
+            if (existing["principal_id"], existing["amount"], existing["payee"], existing["channel"],
+                    existing["kind"] or "transfer") != (principal_id, amount, payee, channel, kind):
                 raise Conflict("participant_txn_id was already used for a different payment")
             return self.get_check(participant_id, existing["id"])
 
@@ -799,13 +824,13 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
                 cid = None
             else:
                 cid = self._decide_new_check(c, principal_id, participant_id, participant_txn_id,
-                                             amount, payee, channel, now, day)
+                                             amount, payee, channel, now, day, kind)
         if cid is None:
-            return self.check(participant_id, mobile, participant_txn_id, amount, payee, channel)
+            return self.check(participant_id, mobile, participant_txn_id, amount, payee, channel, kind)
         return self._with_customer_facts(self._check_view(cid, for_participant=True), principal_id)
 
     def _decide_new_check(self, c, principal_id: str, participant_id: str, participant_txn_id: str,
-                          amount: int, payee: str, channel: str, now, day: str) -> str:
+                          amount: int, payee: str, channel: str, now, day: str, kind: str = "transfer") -> str:
         self._refresh_principal(c, principal_id)
         spend_statuses = [s.value for s in CheckStatus if s.counts_as_spend]
         spent = c.execute(
@@ -813,13 +838,22 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             % ",".join("?" * len(spend_statuses)),
             (principal_id, day, *spend_statuses),
         ).fetchone()["s"]
+        status_in = ",".join("?" * len(spend_statuses))
+        to_payee = c.execute(
+            "SELECT COALESCE(SUM(amount),0) s FROM checks WHERE principal_id=? AND day=? AND payee=? "  # nosec B608: fixed fragments and '?' placeholders only
+            "AND status IN (%s)" % status_in, (principal_id, day, payee, *spend_statuses)).fetchone()["s"]
+        on_channel = c.execute(
+            "SELECT COALESCE(SUM(amount),0) s FROM checks WHERE principal_id=? AND day=? AND channel=? "  # nosec B608: fixed fragments and '?' placeholders only
+            "AND status IN (%s)" % status_in, (principal_id, day, channel, *spend_statuses)).fetchone()["s"]
         rules = self._rules_raw(principal_id)
         known = self._payee_known(principal_id, payee)
         features = self._risk_features(c, principal_id, amount, payee, known)  # measured always (shadow mode)
         fired = signals_from(features, self.active_signal_settings())
         decision = evaluate(
-            rules, Transaction(amount=amount, payee=payee, channel=channel),
+            rules, Transaction(amount=amount, payee=payee, channel=channel, kind=kind),
             spent_today=spent,
+            spent_to_payee_today=to_payee,
+            spent_on_channel_today=on_channel,
             payee_known=known,
             sim_swap_recent=self.sim_swap_active(principal_id),
             has_active_guardian=bool(self._approver_ids(principal_id)),
@@ -833,11 +867,11 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         cid = new_id("chk")
         c.execute(
             "INSERT INTO checks (id, principal_id, participant_id, participant_txn_id, amount, payee, channel, "
-            "outcome, status, reasons, day, created_at, release_at, expires_at, features, signals) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "outcome, status, reasons, day, created_at, release_at, expires_at, features, signals, kind) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (cid, principal_id, participant_id, participant_txn_id, amount, payee, channel,
              decision.outcome.value, status.value, json.dumps(decision.reasons, ensure_ascii=False),
-             day, iso(now), release_at, expires_at, json.dumps(features), json.dumps([c_ for c_, _ in fired])),
+             day, iso(now), release_at, expires_at, json.dumps(features), json.dumps([c_ for c_, _ in fired]), kind),
         )
         self._audit(c, participant_id, "check.decided", principal_id, check_id=cid,
                     amount=amount, payee=payee, channel=channel, outcome=decision.outcome.value)
@@ -917,7 +951,10 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             if not (allow_principal and actor_id == pid):
                 self._require_guardian(pid, actor_id)
             if new_status is CheckStatus.APPROVED and actor_id not in self._approver_ids(pid):
-                raise Forbidden("this person's rules require a bank-verified guardian to approve payments")
+                if self._rules_raw(pid).require_verified_guardian and self.identity_level(actor_id) != "bank_verified":
+                    raise Forbidden("this person's rules require a bank-verified guardian to approve payments")
+                raise Forbidden("a new guardian can approve payments only after the waiting period set in this "
+                                "person's rules")
             if CheckStatus(r["status"]) not in allowed_from:
                 raise Conflict(f"payment is {r['status']}; it can no longer be changed")
             c.execute("UPDATE checks SET status=?, decided_by=?, decided_at=? WHERE id=?",

@@ -25,6 +25,12 @@ POST /v1/checks
 ```
 
 * `amount` is **integer paise** (₹20,000 = 2000000). Never send rupees or floats.
+* `kind` (optional, default `transfer`): `merchant` for a payment to a shop, `recurring` for a debit
+  under an existing mandate or standing instruction, `new_mandate` when the customer sets one up.
+  This follows RBI's November 2026 draft directions: existing recurring mandates keep running
+  while the customer's payments are paused (the draft's Stop Switch), and customers who choose the
+  RBI scope for their trusted person only have transfers outside UPI sent for approval (the
+  draft leaves out UPI, merchant and recurring payments).
 * `participant_txn_id` is your own id for the payment. The call is **idempotent** on it: after a
   timeout, send the same request again; you get the same check back, never a second one.
 * Decide only on **`may_execute`**:

@@ -191,6 +191,18 @@
             "title": "Channel",
             "type": "string"
           },
+          "kind": {
+            "default": "transfer",
+            "description": "transfer, merchant (a payment to a shop), recurring (a debit under an existing mandate or standing instruction) or new_mandate. Existing recurring mandates still run while payments are paused, and with approval_scope 'rbi' only transfers outside UPI go to the trusted person.",
+            "enum": [
+              "transfer",
+              "merchant",
+              "recurring",
+              "new_mandate"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "mobile": {
             "title": "Mobile",
             "type": "string"
@@ -927,6 +939,21 @@
         "additionalProperties": false,
         "description": "Only the fields you send are changed. Amounts are in paise; null means no limit.",
         "properties": {
+          "approval_scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "all",
+                  "rbi"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Scope"
+          },
           "approval_threshold": {
             "anyOf": [
               {
@@ -963,6 +990,20 @@
             ],
             "title": "Blocked Channels"
           },
+          "channel_daily_limits": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Daily Limits"
+          },
           "cooling_off_minutes": {
             "anyOf": [
               {
@@ -985,6 +1026,17 @@
             ],
             "title": "Daily Limit"
           },
+          "new_guardian_wait_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Guardian Wait Hours"
+          },
           "new_payee_delay_threshold": {
             "anyOf": [
               {
@@ -995,6 +1047,17 @@
               }
             ],
             "title": "New Payee Delay Threshold"
+          },
+          "per_payee_daily_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per Payee Daily Limit"
           },
           "per_txn_limit": {
             "anyOf": [

@@ -76,9 +76,19 @@ public final class GuardianRegistryClient {
 
     // ------------------------------------------------------------------ payments
     public CheckResult check(String mobile, String txnId, long amountPaise, String payee, String channel) {
+        return check(mobile, txnId, amountPaise, payee, channel, "transfer");
+    }
+
+    /**
+     * kind: "transfer", "merchant" (a payment to a shop), "recurring" (a debit under an existing
+     * mandate or standing instruction) or "new_mandate". Recurring debits still run while the
+     * customer's payments are paused, as with RBI's draft Stop Switch.
+     */
+    public CheckResult check(String mobile, String txnId, long amountPaise, String payee, String channel, String kind) {
         if (amountPaise <= 0) throw new IllegalArgumentException("amountPaise must be positive (paise, not rupees)");
         JSONObject body = new JSONObject().put("mobile", mobile).put("participant_txn_id", txnId)
-            .put("amount", amountPaise).put("payee", payee).put("channel", channel == null ? "upi" : channel);
+            .put("amount", amountPaise).put("payee", payee).put("channel", channel == null ? "upi" : channel)
+            .put("kind", kind == null ? "transfer" : kind);
         return new CheckResult(call("POST", "/v1/checks", body, true));
     }
 
