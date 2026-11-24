@@ -22,8 +22,21 @@ android {
         buildConfigField("String", "FCM_SENDER_ID", "\"${prop("grFcmSenderId")}\"")
     }
 
+    // One fixed debug key (in the repo, public on purpose: it signs only test builds) so every
+    // CI debug APK installs over the last one and the phone keeps its device key. Release builds
+    // are signed with your own key, never this one.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         debug {
+            signingConfig = signingConfigs.getByName("debug")
             buildConfigField("String", "API_BASE", "\"${prop("grApiBaseDebug")}\"")
             manifestPlaceholders["cleartext"] = "true"   // the emulator talks to a dev server on the host
         }
