@@ -115,3 +115,58 @@ def test_operator_event_errors_are_fixed_messages(reg):
     details = [r["detail"] for r in out["results"]]
     assert details[0] == "mobile must be a valid Indian mobile number"
     assert "ISO 8601" in details[1] and "yesterday-ish" not in details[1]
+
+
+# Webhook delivery goes to the address that was checked (no DNS rebinding between check and connect)
+def _resolves_to(monkeypatch, *addresses):
+    import socket
+    calls = []
+
+    def fake(host, port, *a, **k):
+        calls.append(host)
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (a, port)) for a in addresses]
+    monkeypatch.setattr(socket, "getaddrinfo", fake)
+    return calls
+
+
+def test_pin_sends_to_the_checked_address_with_the_original_name(production, monkeypatch):
+    calls = _resolves_to(monkeypatch, "93.184.216.34")
+    problem, target, headers, ext = security.pin_webhook("https://hooks.bank.example:8443/gr?x=1")
+    assert problem is None and target == "https://93.184.216.34:8443/gr?x=1"
+    assert headers == {"Host": "hooks.bank.example:8443"} and ext == {"sni_hostname": "hooks.bank.example"}
+    assert calls == ["hooks.bank.example"]          # resolved once
+
+
+def test_pin_refuses_a_name_with_any_internal_address(production, monkeypatch):
+    _resolves_to(monkeypatch, "93.184.216.34", "10.0.0.7")
+    assert "public address" in security.pin_webhook("https://hooks.bank.example/gr")[0]
+
+
+def test_pin_leaves_addresses_and_development_alone(production, monkeypatch):
+    assert security.pin_webhook("https://8.8.8.8/h") == (None, "https://8.8.8.8/h", {}, {})
+    monkeypatch.delenv("GR_ENV")
+    assert security.pin_webhook("http://localhost:9000/h") == (None, "http://localhost:9000/h", {}, {})
+
+
+def test_delivery_connects_to_the_pinned_address(reg, production, monkeypatch):
+    import httpx
+
+    from guardian_registry.notify import Dispatcher, LogSmsSender
+    _resolves_to(monkeypatch, "93.184.216.34")
+    bank, _ = reg.register_participant("Audit Bank 3")
+    with reg.db.tx() as c:
+        c.execute("UPDATE participants SET webhook_url=?, webhook_secret='s' WHERE id=?",
+                  ("https://hooks.bank.example/gr", bank))
+        c.execute("INSERT INTO notifications (id, recipient_type, recipient_id, kind, channel, title, body, payload, "
+                  "status, attempts, next_attempt_at, created_at) VALUES ('n2','participant',?, 'check.updated', "
+                  "'webhook','t','b','{}','pending',0,'2000-01-01T00:00:00+00:00','2000-01-01T00:00:00+00:00')", (bank,))
+    seen = []
+
+    def hook(request):
+        seen.append(request)
+        return httpx.Response(200)
+    Dispatcher(reg.db, reg.clock, LogSmsSender(), http=httpx.Client(transport=httpx.MockTransport(hook))).run_once()
+    assert len(seen) == 1
+    r = seen[0]
+    assert r.url.host == "93.184.216.34" and r.headers["host"] == "hooks.bank.example"
+    assert r.extensions["sni_hostname"] == "hooks.bank.example" and r.headers["x-gr-signature"]

@@ -15,6 +15,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -289,6 +290,7 @@ class MainActivity : Activity() {
         val changes: JSONArray? = null, val payments: JSONArray? = null, val presets: JSONObject? = null,
         val wards: JSONArray? = null, val alerts: JSONArray? = null, val devices: JSONArray? = null,
         val myKeyId: String? = null, val nominee: JSONObject? = null,
+        val notice: JSONObject? = null, val consents: JSONObject? = null,
     )
 
     private fun load(which: String): Data {
@@ -303,7 +305,8 @@ class MainActivity : Activity() {
             else -> Data(inbox, unread, security = a.obj("/v1/me/security"), me = a.obj("/v1/me"),
                           rules = a.obj("/v1/me/rules"), guardians = a.arr("/v1/me/guardians"),
                           changes = a.arr("/v1/me/changes"), payments = a.arr("/v1/me/payments?limit=10"),
-                          presets = a.obj("/v1/presets"), nominee = a.obj("/v1/me/nominee").optJSONObject("nominee"))
+                          presets = a.obj("/v1/presets"), nominee = a.obj("/v1/me/nominee").optJSONObject("nominee"),
+                          notice = a.obj("/v1/privacy/notice"), consents = a.obj("/v1/me/consents"))
         }
     }
 
@@ -331,6 +334,21 @@ class MainActivity : Activity() {
         val security = d.security!!
         title(getString(R.string.hello, me.str("display_name")))
         para(getString(R.string.identity, identityText(me.str("identity_level"))), MUTED, 13f)
+
+        // DPDP: the notice, and a clear "I agree", before the protection is relied on
+        val notice = d.notice!!
+        val agreed = d.consents?.optBoolean("accepted_current") == true
+        if (!agreed) {
+            val pc = card(WARN)
+            heading(pc, getString(R.string.privacy_notice))
+            para(pc, getString(R.string.privacy_please))
+            noticeToggle(pc, notice)
+            button(pc, getString(R.string.privacy_agree)) { b ->
+                act(b, { api().post("/v1/me/consents", JSONObject().put("notice_version", notice.str("version"))) }) {
+                    getString(R.string.privacy_thanks)
+                }
+            }
+        }
 
         val paused = rules.optBoolean("kill_switch")
         val status = card(if (paused) BAD else OK)
@@ -395,6 +413,7 @@ class MainActivity : Activity() {
             R.string.rule_wait to rules.optInt("new_guardian_wait_hours").let {
                 if (it > 0) getString(R.string.hours, it.toString()) else getString(R.string.right_away)
             },
+            R.string.quiet_hours to (rules.optJSONObject("quiet_hours")?.let { quietText(it) } ?: getString(R.string.none)),
         )
         for ((label, value) in rows) keyValue(r, getString(label), value)
         para(r, getString(R.string.preset_label), bold = true).apply { setPadding(0, dp(14), 0, dp(4)) }
@@ -450,6 +469,57 @@ class MainActivity : Activity() {
             }
             act(b, { api().put("/v1/me/rules", body) as JSONObject }) {   // PUT: same as PATCH on the server
                 if (it.isNull("held")) getString(R.string.saved) else getString(R.string.preset_held)
+            }
+        }
+
+        // quiet hours: chosen channels off every day between two hours (RBI's draft time-window control)
+        val qc = card()
+        heading(qc, getString(R.string.quiet_hours))
+        para(qc, getString(R.string.quiet_note), MUTED, 13f)
+        val quiet = rules.optJSONObject("quiet_hours")
+        val quietOn = quiet?.optJSONArray("channels")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
+        para(qc, getString(R.string.quiet_channels), bold = true).apply { setPadding(0, dp(10), 0, 0) }
+        val boxes = CHANNEL_KEYS.map { c ->
+            c to CheckBox(this).apply {
+                text = channelName(c); textSize = 16f; setTextColor(INK); minHeight = dp(44)
+                isChecked = c in quietOn
+                setOnCheckedChangeListener { _, _ -> formDirty = true }
+                qc.addView(this, LinearLayout.LayoutParams(-1, -2))
+            }
+        }
+        fun hourSpinner(label: Int, value: Int): Spinner {
+            para(qc, getString(label), bold = true).apply { setPadding(0, dp(10), 0, 0) }
+            return Spinner(this).apply {
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, (0..23).map { hourText(it) })
+                setSelection(value)
+                contentDescription = getString(label)
+                onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                    override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                        if (pos != value) formDirty = true   // the first call is the initial selection
+                    }
+                    override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+                }
+                qc.addView(this, LinearLayout.LayoutParams(-1, dp(52)))
+            }
+        }
+        val from = hourSpinner(R.string.quiet_from, quiet?.optInt("start", 22) ?: 22)
+        val to = hourSpinner(R.string.quiet_to, quiet?.optInt("end", 6) ?: 6)
+        button(qc, getString(R.string.save_quiet), style = Style.SECONDARY) { b ->
+            val chosen = boxes.filter { it.second.isChecked }.map { it.first }
+            if (chosen.isEmpty() || from.selectedItemPosition == to.selectedItemPosition) {
+                toast(getString(R.string.quiet_invalid)); return@button
+            }
+            val body = JSONObject().put("quiet_hours", JSONObject()
+                .put("channels", org.json.JSONArray(chosen)).put("start", from.selectedItemPosition).put("end", to.selectedItemPosition))
+            act(b, { api().put("/v1/me/rules", body) as JSONObject }) {
+                if (it.isNull("held")) getString(R.string.saved) else getString(R.string.preset_held)
+            }
+        }
+        if (quiet != null) {
+            button(qc, getString(R.string.quiet_off), style = Style.SECONDARY) { b ->
+                act(b, { api().put("/v1/me/rules", JSONObject().put("quiet_hours", JSONObject.NULL)) as JSONObject }) {
+                    if (it.isNull("held")) getString(R.string.saved) else getString(R.string.held_24h)
+                }
             }
         }
 
@@ -517,6 +587,12 @@ class MainActivity : Activity() {
                     act(b, { api().put("/v1/me/nominee", body) }) { getString(R.string.nominee_saved) }
                 }
             }
+        }
+
+        if (agreed) {
+            val pc = card()
+            heading(pc, getString(R.string.privacy_notice))
+            noticeToggle(pc, notice)
         }
 
         val l = card()
@@ -838,6 +914,43 @@ class MainActivity : Activity() {
     private fun pillView(text: String, bg: Int, fg: Int) = TextView(this).apply {
         this.text = text; textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setTextColor(fg)
         background = rounded(bg, radius = 999); setPadding(dp(10), dp(3), dp(10), dp(3))
+    }
+
+    private val CHANNEL_KEYS = listOf("upi", "imps", "neft", "rtgs", "card", "netbanking")
+
+    /** A button that shows or hides the full notice, in the language the server sent. */
+    private fun noticeToggle(parent: LinearLayout, n: JSONObject) {
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+        button(parent, getString(R.string.privacy_read), style = Style.SECONDARY) {
+            body.visibility = if (body.visibility == View.GONE) View.VISIBLE else View.GONE
+        }
+        parent.addView(body, LinearLayout.LayoutParams(-1, -2))
+        val parts = listOf("what_we_collect" to R.string.notice_collect, "why" to R.string.notice_why,
+            "who_sees_it" to R.string.notice_who_sees, "who_can_use_it" to R.string.notice_who_can,
+            "how_long" to R.string.notice_how_long, "your_rights" to R.string.notice_rights)
+        for ((key, title) in parts) {
+            val items = n.optJSONArray(key) ?: continue
+            para(body, getString(title), bold = true).apply { setPadding(0, dp(12), 0, dp(2)) }
+            for (i in 0 until items.length()) para(body, "•  " + items.getString(i), INK, 14f)
+        }
+        para(body, getString(R.string.notice_grievance), bold = true).apply { setPadding(0, dp(12), 0, dp(2)) }
+        para(body, n.str("grievance_officer"), INK, 14f)
+        para(body, getString(R.string.notice_version, n.str("version")), MUTED, 13f).apply { setPadding(0, dp(8), 0, 0) }
+    }
+
+    private fun hourText(h: Int) = String.format(java.util.Locale.ROOT, "%02d:00", h)
+
+    private fun channelName(c: String) = when (c) {
+        "card" -> getString(R.string.channel_card)
+        "netbanking" -> getString(R.string.channel_netbanking)
+        else -> c.uppercase(java.util.Locale.ROOT)
+    }
+
+    /** "UPI, Card · 22:00–06:00" */
+    private fun quietText(q: JSONObject): String {
+        val a = q.optJSONArray("channels") ?: org.json.JSONArray()
+        val names = (0 until a.length()).joinToString(", ") { channelName(a.getString(it)) }
+        return "$names · ${hourText(q.optInt("start"))}–${hourText(q.optInt("end"))}"
     }
 
     private fun tint(c: Int) = Color.argb(40, Color.red(c), Color.green(c), Color.blue(c))

@@ -182,4 +182,27 @@
     <string name="no_nominee">No nominee yet.</string>
     <string name="your_name">Your name</string>
     <string name="nominee_fill">Fill in the nominee\'s name, relation and mobile number.</string>
+    <string name="quiet_hours">Quiet hours</string>
+    <string name="quiet_note">Switch chosen payment types off every day between two times (India time). Recurring payments you have already set up still run.</string>
+    <string name="quiet_channels">Payment types to switch off</string>
+    <string name="quiet_from">From</string>
+    <string name="quiet_to">To</string>
+    <string name="save_quiet">Save quiet hours</string>
+    <string name="quiet_off">Turn off quiet hours</string>
+    <string name="quiet_invalid">Choose at least one payment type, and different start and end times.</string>
+    <string name="channel_card">Card</string>
+    <string name="channel_netbanking">Net banking</string>
+    <string name="privacy_notice">Privacy notice</string>
+    <string name="privacy_please">Please read how we use your data. Your protection works once you agree.</string>
+    <string name="privacy_read">Read the privacy notice</string>
+    <string name="privacy_agree">I agree</string>
+    <string name="privacy_thanks">Thank you. Your agreement is recorded.</string>
+    <string name="notice_collect">What we collect</string>
+    <string name="notice_why">Why we use it</string>
+    <string name="notice_who_sees">Who sees it</string>
+    <string name="notice_who_can">Who can use this service</string>
+    <string name="notice_how_long">How long we keep it</string>
+    <string name="notice_rights">Your rights</string>
+    <string name="notice_grievance">Grievance officer</string>
+    <string name="notice_version" formatted="true">Version %1$s</string>
 </resources>

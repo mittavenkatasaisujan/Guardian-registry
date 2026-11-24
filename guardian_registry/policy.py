@@ -2,8 +2,9 @@
 
 Precedence, strongest first:
   1. BLOCK          kill switch (existing recurring mandates still run, as with RBI's draft Stop
-                    Switch), blocked channel, per-transaction limit, daily limit, per-payee and
-                    per-channel daily limits
+                    Switch), blocked channel, a channel's quiet hours (RBI's draft: chosen
+                    channels off during a time window; recurring mandates still run),
+                    per-transaction limit, daily limit, per-payee and per-channel daily limits
   2. NEEDS_APPROVAL amount at/above the approval threshold (needs an active guardian). With the
                     rule approval_scope "rbi" this covers only fund transfers that aren't UPI,
                     merchant or recurring payments, as in RBI's Nov 2026 draft trusted person mechanism.
@@ -29,7 +30,7 @@ Every rule that fired is listed in `reasons`, so a bank can show the customer wh
 
 from __future__ import annotations
 
-from .models import Decision, Outcome, Rules, Transaction
+from .models import Decision, Outcome, Rules, Transaction, quiet_hours_set
 
 SIM_SWAP_KNOWN_PAYEE_LIMIT = 2_000 * 100   # paise
 SIM_SWAP_DELAY_MINUTES = 24 * 60
@@ -52,7 +53,9 @@ def evaluate(
     risk_signals: list[str] | None = None,
     spent_to_payee_today: int = 0,
     spent_on_channel_today: int = 0,
+    local_hour: int | None = None,
 ) -> Decision:
+    """`local_hour` is the hour (0-23) in India now; quiet hours apply only when it is given."""
     if txn.amount <= 0:
         return Decision(Outcome.BLOCK, ["amount must be positive"])
 
@@ -61,6 +64,10 @@ def evaluate(
         blocks.append("kill switch is on: all outgoing payments are paused")
     if txn.channel in rules.blocked_channels:
         blocks.append(f"channel '{txn.channel}' is switched off")
+    q = rules.quiet_hours
+    if (q and local_hour is not None and txn.kind != "recurring" and txn.channel in q["channels"]
+            and local_hour in quiet_hours_set(q)):
+        blocks.append(f"channel '{txn.channel}' is switched off from {q['start']:02d}:00 to {q['end']:02d}:00")
     if rules.per_txn_limit is not None and txn.amount > rules.per_txn_limit:
         blocks.append(f"amount {_rupees(txn.amount)} is over the per-payment limit {_rupees(rules.per_txn_limit)}")
     if rules.daily_limit is not None and spent_today + txn.amount > rules.daily_limit:

@@ -110,3 +110,52 @@ def test_rule_validation(reg, family):
                 {"channel_daily_limits": {"fax": 100}}, {"channel_daily_limits": {"upi": -1}}):
         with pytest.raises(Invalid):
             reg.update_rules(family["amma"], bad)
+
+
+# ------------------------------------------------------------------ quiet hours (chosen channels off during set hours)
+NIGHT_UPI = Rules(quiet_hours={"channels": ["upi"], "start": 22, "end": 6})
+
+
+def test_quiet_hours_switch_chosen_channels_off_across_midnight():
+    for hour in (22, 23, 0, 5):
+        d = ev(NIGHT_UPI, 100, "upi", local_hour=hour)
+        assert d.outcome is Outcome.BLOCK and "from 22:00 to 06:00" in d.reasons[0]
+    for hour in (6, 12, 21):
+        assert ev(NIGHT_UPI, 100, "upi", local_hour=hour).outcome is Outcome.ALLOW
+    assert ev(NIGHT_UPI, 100, "imps", local_hour=23).outcome is Outcome.ALLOW              # other channels run
+    assert ev(NIGHT_UPI, 100, "upi", kind="recurring", local_hour=23).outcome is Outcome.ALLOW  # mandates run
+    assert ev(NIGHT_UPI, 100, "upi").outcome is Outcome.ALLOW                               # no hour, no rule
+    day = Rules(quiet_hours={"channels": ["card"], "start": 9, "end": 17})
+    assert ev(day, 100, "card", local_hour=9).outcome is Outcome.BLOCK
+    assert ev(day, 100, "card", local_hour=17).outcome is Outcome.ALLOW
+
+
+def test_loosening_quiet_hours_is_held():
+    q = NIGHT_UPI.quiet_hours
+    def with_q(x):
+        return Rules(quiet_hours=x)
+    assert NIGHT_UPI.is_loosening(with_q(None))
+    assert NIGHT_UPI.is_loosening(with_q({**q, "channels": ["imps"]}))           # UPI no longer off
+    assert NIGHT_UPI.is_loosening(with_q({**q, "start": 23}))                     # an hour less
+    assert not NIGHT_UPI.is_loosening(with_q({**q, "channels": ["upi", "imps"]}))
+    assert not NIGHT_UPI.is_loosening(with_q({**q, "start": 21, "end": 7}))       # longer is stricter
+    assert not Rules().is_loosening(NIGHT_UPI)
+
+
+def test_quiet_hours_in_the_registry(reg, family, clock):
+    # the test clock starts at 10:00 in India
+    out = reg.update_rules(family["amma"], {"quiet_hours": {"channels": ["upi", "upi"], "start": 9, "end": 11}})
+    assert out["held"] is None and reg.get_rules(family["amma"]).quiet_hours == {"channels": ["upi"], "start": 9, "end": 11}
+    bank = family["bank"]
+    blocked = reg.check(bank, AMMA, "q1", 100 * R, "known@upi", "upi")
+    assert blocked["status"] == "blocked" and "from 09:00 to 11:00" in blocked["reasons"][0]
+    assert reg.check(bank, AMMA, "q2", 100 * R, "known@upi", "imps")["status"] == "allowed"
+    clock.advance(hours=1)
+    assert reg.check(bank, AMMA, "q3", 100 * R, "known@upi", "upi")["status"] == "allowed"
+    # switching it off is a loosening: held for 24 hours
+    assert reg.update_rules(family["amma"], {"quiet_hours": None})["held"] is not None
+    for bad in ({"channels": [], "start": 1, "end": 2}, {"channels": ["fax"], "start": 1, "end": 2},
+                {"channels": ["upi"], "start": 5, "end": 5}, {"channels": ["upi"], "start": 24, "end": 2},
+                {"channels": ["upi"], "start": 1}, "night"):
+        with pytest.raises(Invalid, match="quiet_hours"):
+            reg.update_rules(family["amma"], {"quiet_hours": bad})

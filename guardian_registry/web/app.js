@@ -202,7 +202,15 @@ const RULE_LABELS = [
     (s) => (s === "rbi" ? t("Transfers only (not UPI, shops or recurring)") : t("All payments"))],
   ["new_guardian_wait_hours", t("New guardian can approve after"),
     (h) => (h ? t("{h} hours", { h }) : t("Right away"))],
+  ["quiet_hours", t("Quiet hours"), (q) => (q ? quietText(q) : t("None"))],
 ];
+
+const CHANNEL_NAMES = { upi: "UPI", imps: "IMPS", neft: "NEFT", rtgs: "RTGS", card: t("Card"), netbanking: t("Net banking") };
+const hourText = (hr) => `${String(hr).padStart(2, "0")}:00`;
+/** For example: UPI, Card · 22:00–06:00 */
+function quietText(q) {
+  return `${q.channels.map((c) => CHANNEL_NAMES[c] || c).join(", ")} · ${hourText(q.start)}–${hourText(q.end)}`;
+}
 
 /** Rupees typed in a form -> paise for the API; empty means no limit (null). */
 function paiseFrom(text) {
@@ -285,7 +293,7 @@ function signInView() {
           location.hash = "#me";
           route();
         } catch (err) {
-          if (/send display_name/.test(err.message)) {
+          if (err.body && err.body.code === "not_enrolled") {   // the message is in the person's language
             state.needName = true;
             step2(devCode);
             toast(t("This number is new here. Add your name to create your account."), 7000);
@@ -320,10 +328,10 @@ function signInView() {
 
 // ------------------------------------------------------------------ my protection
 async function meView() {
-  const [me, rules, security, guardians, changes, payments, presets, nom] = await Promise.all([
+  const [me, rules, security, guardians, changes, payments, presets, nom, notice, consents] = await Promise.all([
     api("GET", "/v1/me"), api("GET", "/v1/me/rules"), api("GET", "/v1/me/security"),
     api("GET", "/v1/me/guardians"), api("GET", "/v1/me/changes"), api("GET", "/v1/me/payments?limit=10"),
-    api("GET", "/v1/presets"), api("GET", "/v1/me/nominee"),
+    api("GET", "/v1/presets"), api("GET", "/v1/me/nominee"), api("GET", "/v1/privacy/notice"), api("GET", "/v1/me/consents"),
   ]);
   const nominee = nom && nom.nominee;
   setBanner(security.this_session);
@@ -378,6 +386,35 @@ async function meView() {
     limitField("lim_approve", t("Guardian approves from (₹)"), rules.approval_threshold),
     h("div", { class: "row mt" }, h("button", { type: "submit", class: "secondary" }, t("Save limits"))));
 
+  const quiet = rules.quiet_hours;
+  const hourSelect = (id, value) => h("select", { id, name: id },
+    Array.from({ length: 24 }, (_, hr) => h("option", { value: String(hr), selected: hr === value ? true : null }, hourText(hr))));
+  const quietForm = h("form", { onsubmit: (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const channels = Object.keys(CHANNEL_NAMES).filter((c) => f[`qh_${c}`].checked);
+    const start = Number(f.qh_start.value), end = Number(f.qh_end.value);
+    if (!channels.length || start === end) {
+      toast(t("Choose at least one payment type, and different start and end times."), 7000);
+      return;
+    }
+    act(f.querySelector("button[type=submit]"), () => api("PATCH", "/v1/me/rules", { quiet_hours: { channels, start, end } }),
+      (out) => (out.held ? t("Stricter parts apply now; looser parts wait 24 hours.") : t("Saved.")));
+  } },
+    h("fieldset", { class: "plain" },
+      h("legend", {}, t("Payment types to switch off")),
+      h("div", { class: "checks" }, Object.entries(CHANNEL_NAMES).map(([c, name]) => h("label", { class: "check" },
+        h("input", { type: "checkbox", name: `qh_${c}`, checked: quiet && quiet.channels.includes(c) ? true : null }), name)))),
+    h("div", { class: "row" },
+      h("div", { class: "grow" }, h("label", { for: "qh_start" }, t("From")), hourSelect("qh_start", quiet ? quiet.start : 22)),
+      h("div", { class: "grow" }, h("label", { for: "qh_end" }, t("To")), hourSelect("qh_end", quiet ? quiet.end : 6))),
+    h("div", { class: "row mt" },
+      h("button", { type: "submit", class: "secondary" }, t("Save quiet hours")),
+      quiet ? h("button", { type: "button", class: "secondary", onclick: (e) => act(e.target,
+        () => api("PATCH", "/v1/me/rules", { quiet_hours: null }),
+        (out) => (out.held ? t("Your request is held for 24 hours. Your guardians can approve it sooner.") : t("Saved."))) },
+      t("Turn off quiet hours")) : null));
+
   const nameForm = h("form", { onsubmit: (e) => {
     e.preventDefault();
     act(e.target.querySelector("button"), () => api("PUT", "/v1/me/name", { display_name: e.target.myname.value.trim() }),
@@ -406,6 +443,14 @@ async function meView() {
   return [
     h("h1", {}, t("Hello, {name}", { name: me.display_name })),
     h("p", { class: "muted small" }, t("Identity: {level}", { level: identityText(me.identity_level) })),
+
+    consents.accepted_current ? null : h("section", { class: "card alert-warn", id: "consent" },
+      h("h2", {}, t("Privacy notice")),
+      h("p", {}, t("Please read how we use your data. Your protection works once you agree.")),
+      h("details", { class: "notice" }, h("summary", {}, t("Read the privacy notice")), noticeBody(notice)),
+      h("div", { class: "row mt" }, h("button", { onclick: (e) => act(e.target,
+        () => api("POST", "/v1/me/consents", { notice_version: notice.version }), t("Thank you. Your agreement is recorded.")) },
+      t("I agree")))),
 
     h("section", { class: `card ${paused ? "alert-bad" : "alert-ok"}` },
       h("div", { class: "big-status" }, h("span", { class: `dot ${paused ? "bad" : "ok"}` }),
@@ -445,6 +490,11 @@ async function meView() {
       limitsForm),
 
     h("section", { class: "card" },
+      h("h2", {}, t("Quiet hours")),
+      h("p", { class: "muted small" }, t("Switch chosen payment types off every day between two times (India time). Recurring payments you have already set up still run.")),
+      quietForm),
+
+    h("section", { class: "card" },
       h("h2", {}, t("My guardians")),
       guardians.length ? h("ul", { class: "list" }, guardians.map((g) => h("li", { class: "row space" },
         h("span", {}, h("strong", {}, g.guardian_name), " ", h("span", { class: "muted small" }, identityText(g.guardian_identity_level))),
@@ -468,6 +518,10 @@ async function meView() {
               t("Nominee removed.")) }, t("Remove nominee"))))
         : [h("p", { class: "empty" }, t("No nominee yet.")), RESTRICTED ? h("p", { class: "muted small" }, t("Not on this sign-in yet: it is restricted (see the note at the top).")) : nomineeForm]),
 
+    consents.accepted_current ? h("section", { class: "card" },
+      h("h2", {}, t("Privacy notice")),
+      h("details", { class: "notice" }, h("summary", {}, t("Read the privacy notice")), noticeBody(notice))) : null,
+
     h("section", { class: "card" },
       h("h2", {}, t("Lost your phone?")),
       h("p", { class: "muted" }, t("This signs you out everywhere and holds larger payments for 72 hours.")),
@@ -476,6 +530,19 @@ async function meView() {
         act(e.target, () => api("POST", "/v1/me/security/lost-phone"), t("Done. Every device is signed out."));
       } }, t("Report lost phone"))),
   ];
+}
+
+const NOTICE_PARTS = [
+  ["what_we_collect", t("What we collect")], ["why", t("Why we use it")], ["who_sees_it", t("Who sees it")],
+  ["who_can_use_it", t("Who can use this service")], ["how_long", t("How long we keep it")], ["your_rights", t("Your rights")],
+];
+
+/** The privacy notice, in the language the server sent (English or Hindi). */
+function noticeBody(n) {
+  return h("div", { class: "notice-body" },
+    NOTICE_PARTS.map(([key, title]) => (n[key] ? [h("h3", {}, title), h("ul", {}, n[key].map((x) => h("li", {}, x)))] : null)),
+    h("h3", {}, t("Grievance officer")), h("p", {}, n.grievance_officer),
+    h("p", { class: "muted small" }, t("Version {v}", { v: n.version })));
 }
 
 function identityText(level) {

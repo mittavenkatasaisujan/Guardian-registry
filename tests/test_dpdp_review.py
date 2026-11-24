@@ -32,7 +32,27 @@ def test_nominee_is_set_exported_and_erased(reg, family, clock):
 def test_notice_names_outside_services_adults_and_new_rights():
     text = str(NOTICE)
     assert NOTICE_VERSION == "2026-11-25"
-    assert "outside India" in text and "18 or older" in text and "nominate" in text and "PUT /v1/me/name" in text
+    assert "outside India" in text and "18 or older" in text and "nominate" in text and "Your details" in text
+
+
+def test_notice_in_hindi_has_the_same_shape_and_version():
+    from guardian_registry.privacy import NOTICE_HI
+    assert NOTICE_HI["version"] == NOTICE_VERSION and NOTICE_HI.keys() == NOTICE.keys()
+    for k, v in NOTICE.items():
+        if isinstance(v, list):
+            assert len(NOTICE_HI[k]) == len(v), k
+            assert all(any("\u0900" <= ch <= "\u097f" for ch in item) for item in NOTICE_HI[k]), k
+
+
+def test_notice_language_follows_the_reader(reg):
+    from fastapi.testclient import TestClient
+
+    from guardian_registry.api import create_app
+    with TestClient(create_app(reg, run_worker=False)) as c:
+        en = c.get("/v1/privacy/notice").json()
+        hi = c.get("/v1/privacy/notice", headers={"Accept-Language": "hi-IN,hi;q=0.9"}).json()
+    assert en["language"] == "en" and hi["language"] == "hi" and en["version"] == hi["version"]
+    assert "भारत के बाहर" in str(hi["who_sees_it"]) and hi["grievance_officer"] == en["grievance_officer"]
 
 
 def test_alert_detail_defaults(monkeypatch):
@@ -68,3 +88,21 @@ def test_api_routes(reg):
         assert r.status_code == 200 and r.json()["nominee"]["relation"] == "daughter"
         assert c.get("/v1/me/nominee", headers=h).json()["nominee"]["name"] == "N"
         assert c.delete("/v1/me/nominee", headers=h).json() == {"nominee": None}
+
+
+def test_sign_in_for_a_new_number_says_not_enrolled_in_any_language(reg):
+    """The web app asks for a name when it sees code not_enrolled; the message itself is translated."""
+    import os
+
+    from fastapi.testclient import TestClient
+
+    from guardian_registry.api import create_app
+    os.environ["GR_OTP_DEV_ECHO"] = "1"
+    try:
+        with TestClient(create_app(reg, run_worker=False)) as c:
+            code = c.post("/v1/auth/otp", json={"mobile": "+919811112222"}).json()["dev_code"]
+            r = c.post("/v1/auth/verify", json={"mobile": "+919811112222", "code": code},
+                       headers={"Accept-Language": "hi"})
+    finally:
+        del os.environ["GR_OTP_DEV_ECHO"]
+    assert r.status_code == 422 and r.json()["code"] == "not_enrolled" and "पंजीकृत" in r.json()["detail"]

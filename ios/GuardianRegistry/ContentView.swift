@@ -249,6 +249,10 @@ struct MyProtectionView: View {
     @State private var limits: [String: String] = [:]
     @State private var limitsLoaded = false
     @State private var newName = ""
+    @State private var quietChannels: Set<String> = []
+    @State private var quietStart = 22
+    @State private var quietEnd = 6
+    @State private var quietLoaded = false
     @State private var nomName = ""
     @State private var nomRelation = ""
     @State private var nomMobile = ""
@@ -257,14 +261,17 @@ struct MyProtectionView: View {
         List {
             RestrictedSection()
             if model.loaded {
+                if !model.agreedToNotice { privacy }
                 status
                 simWindow
                 changesWaiting
                 rules
                 limitsForm
+                quietHours
                 guardians
                 recent
                 details
+                if model.agreedToNotice { privacy }
                 lost
             }
         }
@@ -379,6 +386,7 @@ struct MyProtectionView: View {
             }())
             RuleRow(label: "Trusted person checks", value: (r["approval_scope"] as? String) == "rbi"
                     ? L("Transfers only (not UPI, shops or recurring)") : L("All payments"))
+            RuleRow(label: "Quiet hours", value: (r["quiet_hours"] as? [String: Any]).map(Self.quietText) ?? L("None"))
             RuleRow(label: "New guardian can approve after", value: {
                 let h = r["new_guardian_wait_hours"] as? Int ?? 0
                 return h > 0 ? L("%@ hours", String(h)) : L("Right away")
@@ -430,6 +438,95 @@ struct MyProtectionView: View {
             for field in Self.limitKeys {
                 if let v = model.rules[field.id] as? Int { limits[field.id] = String(v / 100) }
             }
+        }
+    }
+
+    private static let channels = ["upi", "imps", "neft", "rtgs", "card", "netbanking"]
+
+    private static func channelName(_ c: String) -> String {
+        switch c {
+        case "card": return L("Card")
+        case "netbanking": return L("Net banking")
+        default: return c.uppercased()
+        }
+    }
+
+    private static func hourText(_ h: Int) -> String { String(format: "%02d:00", h) }
+
+    /// "UPI, Card · 22:00–06:00"
+    private static func quietText(_ q: [String: Any]) -> String {
+        let names = (q["channels"] as? [String] ?? []).map(channelName).joined(separator: ", ")
+        return "\(names) · \(hourText(q["start"] as? Int ?? 0))–\(hourText(q["end"] as? Int ?? 0))"
+    }
+
+    private var quietHours: some View {
+        Section {
+            Text("Payment types to switch off").font(.subheadline.bold())
+            ForEach(Self.channels, id: \.self) { c in
+                Toggle(isOn: Binding(get: { quietChannels.contains(c) },
+                                     set: { on in if on { quietChannels.insert(c) } else { quietChannels.remove(c) } })) {
+                    Text(verbatim: Self.channelName(c))
+                }
+                .accessibilityIdentifier("quiet-\(c)")
+            }
+            Picker("From", selection: $quietStart) {
+                ForEach(0..<24, id: \.self) { Text(verbatim: Self.hourText($0)).tag($0) }
+            }
+            Picker("To", selection: $quietEnd) {
+                ForEach(0..<24, id: \.self) { Text(verbatim: Self.hourText($0)).tag($0) }
+            }
+            Button("Save quiet hours") {
+                model.saveQuietHours(channels: Self.channels.filter { quietChannels.contains($0) }, start: quietStart, end: quietEnd)
+            }
+            if model.rules["quiet_hours"] is [String: Any] {
+                Button("Turn off quiet hours", role: .destructive) { model.removeQuietHours() }
+            }
+        } header: {
+            Heading("Quiet hours")
+        } footer: {
+            Text("Switch chosen payment types off every day between two times (India time). Recurring payments you have already set up still run.")
+        }
+        .onAppear {
+            guard !quietLoaded else { return }
+            quietLoaded = true
+            if let q = model.rules["quiet_hours"] as? [String: Any] {
+                quietChannels = Set(q["channels"] as? [String] ?? [])
+                quietStart = q["start"] as? Int ?? 22
+                quietEnd = q["end"] as? Int ?? 6
+            }
+        }
+    }
+
+    private static let noticeParts: [(String, LocalizedStringKey)] = [
+        ("what_we_collect", "What we collect"), ("why", "Why we use it"), ("who_sees_it", "Who sees it"),
+        ("who_can_use_it", "Who can use this service"), ("how_long", "How long we keep it"), ("your_rights", "Your rights"),
+    ]
+
+    /// The privacy notice (in the language the server sent) and, until they agree, the "I agree" button.
+    private var privacy: some View {
+        Section {
+            if !model.agreedToNotice {
+                Text("Please read how we use your data. Your protection works once you agree.")
+            }
+            DisclosureGroup("Read the privacy notice") {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Self.noticeParts, id: \.0) { key, title in
+                        if let items = model.notice[key] as? [String], !items.isEmpty {
+                            Text(title).font(.subheadline.bold()).padding(.top, 6)
+                            ForEach(items, id: \.self) { Text(verbatim: "•  " + $0).font(.footnote) }
+                        }
+                    }
+                    Text("Grievance officer").font(.subheadline.bold()).padding(.top, 6)
+                    Text(verbatim: model.notice["grievance_officer"] as? String ?? "").font(.footnote)
+                    Text(verbatim: L("Version %@", model.notice["version"] as? String ?? ""))
+                        .font(.caption).foregroundStyle(.secondary).padding(.top, 4)
+                }
+            }
+            if !model.agreedToNotice {
+                Button("I agree") { model.agreeToNotice() }.bold()
+            }
+        } header: {
+            Heading("Privacy notice")
         }
     }
 

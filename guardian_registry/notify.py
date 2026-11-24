@@ -365,18 +365,20 @@ class Dispatcher:
             p = self.db.one("SELECT webhook_url, webhook_secret FROM participants WHERE id=?", (n["recipient_id"],))
             if not p or not p["webhook_url"]:
                 return False
-            from .security import webhook_url_problem
-            problem = webhook_url_problem(p["webhook_url"])   # again at delivery: DNS can change after setup
+            from .security import pin_webhook
+            # checked again at delivery (DNS can change after setup), and sent to the address checked
+            problem, target, extra_headers, extensions = pin_webhook(p["webhook_url"])
             if problem:
                 raise RuntimeError(problem)
             body = json.dumps({"id": n["id"], "event": n["kind"], "created_at": n["created_at"],
                                "data": json.loads(n["payload"])}, ensure_ascii=False).encode()
-            r = self.http.post(p["webhook_url"], content=body, headers={
+            r = self.http.post(target, content=body, headers={
                 "Content-Type": "application/json",
                 "X-GR-Event": n["kind"],
                 "X-GR-Delivery": n["id"],
                 "X-GR-Signature": sign_webhook(p["webhook_secret"], body),
-            })
+                **extra_headers,
+            }, extensions=extensions, follow_redirects=False)   # a redirect would skip the address check
             if r.status_code >= 300:
                 raise RuntimeError(f"webhook returned HTTP {r.status_code}")
             return True

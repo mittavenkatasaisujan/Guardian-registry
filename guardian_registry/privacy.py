@@ -70,10 +70,53 @@ NOTICE = {
     ],
     "your_rights": [
         "see everything we hold about you (data export)",
-        "correct your name (PUT /v1/me/name) and your rules in the app",
-        "nominate someone to exercise these rights if you die or can't act yourself (PUT /v1/me/nominee)",
+        "correct your name (Your details in the app) and your rules",
+        "nominate someone to exercise these rights if you die or can't act yourself (Your details in the app)",
         "erase your account (held 7 days so nobody can pressure you into removing your protection at once)",
         "complain to our grievance officer, and then to the Data Protection Board of India",
+    ],
+}
+
+# The same notice in Hindi (DPDP Act s.5(3): English or a language in the Eighth Schedule).
+# Same version: the content is the same. Counsel should check the wording of both.
+NOTICE_HI = {
+    "version": NOTICE_VERSION,
+    "controller": "Guardian Registry",
+    "what_we_collect": [
+        "आपका मोबाइल नंबर (खोजने के लिए एक कुंजी वाले हैश के रूप में, और केवल आपको कोड और सूचनाएँ भेजने के लिए "
+        "एन्क्रिप्ट करके रखा जाता है)",
+        "आपका दिया हुआ नाम, आपके सुरक्षा नियम, आपके गार्डियन और वे लोग जिनकी आप सुरक्षा करते हैं",
+        "आपके खाते के लिए बैंकों के कहने पर की गई भुगतान जाँचें (राशि, प्राप्तकर्ता, समय, फ़ैसला)",
+        "आपका फ़ोन पहचानने के लिए ज़रूरी डिवाइस और ऐप की जानकारी (एक सार्वजनिक कुंजी, ऐप इंस्टॉल की पहचान)",
+        "आपकी मंज़ूरी से आपके बैंक की पहचान-पुष्टि (KYC स्तर; जन्मतिथि केवल तब जब आपका बैंक उसे साझा करे, और "
+        "उसका उपयोग सिर्फ़ बैंकों को यह बताने के लिए कि आप 70 या उससे ज़्यादा उम्र के हैं)",
+    ],
+    "why": [
+        "सभी बैंकों में आपके नियम लागू करने और भुगतानों को गार्डियन की मंज़ूरी के लिए रोकने के लिए",
+        "आपको और आपके गार्डियन को सूचना देने के लिए",
+        "सिम-बदलाव और खाते पर कब्ज़े वाली धोखाधड़ी से आपकी रक्षा के लिए",
+    ],
+    "who_sees_it": [
+        "आपके गार्डियन आपके नियम और भुगतान देखते हैं; बैंक केवल उस भुगतान का फ़ैसला देखते हैं जिसके बारे में "
+        "उन्होंने पूछा, यह कभी नहीं कि आपके गार्डियन कौन हैं",
+        "आपके फ़ोन तक कोड और सूचनाएँ पहुँचाने वाली मैसेजिंग सेवाएँ (एक SMS सेवा, ऐप सूचनाओं के लिए Google या "
+        "Apple, और आप चुनें तो WhatsApp) आपका नंबर या ऐप पहचान और संदेश पाती हैं; इनमें से कुछ भारत के बाहर "
+        "हैं। ऐप के बाहर सूचनाएँ भुगतान के विवरण के बिना भेजी जा सकती हैं",
+    ],
+    "who_can_use_it": ["वयस्क (18 वर्ष या उससे ज़्यादा); बच्चे के डेटा के लिए माता-पिता की सत्यापन योग्य सहमति "
+                       "चाहिए, जो यह सेवा नहीं लेती, इसलिए बच्चे पंजीकरण न करें"],
+    "how_long": [
+        "जब तक आपका खाता है; सूचनाएँ 180 दिन बाद और पुराने साइन-इन 90 दिन बाद हटा दिए जाते हैं",
+        "खाता मिटाने के बाद भी भुगतान जाँच के रिकॉर्ड और छेड़छाड़-रोधी ऑडिट रिकॉर्ड, बैंकों के रिकॉर्ड की ज़रूरत "
+        "के अनुसार, आपके नंबर या नाम के बिना रखे जाते हैं",
+    ],
+    "your_rights": [
+        "हमारे पास आपकी जो भी जानकारी है, उसे देखना (डेटा निर्यात)",
+        "अपना नाम (ऐप में 'आपकी जानकारी') और अपने नियम सुधारना",
+        "किसी को नामित करना जो आपकी मृत्यु होने पर या आपके खुद कुछ न कर पाने पर ये अधिकार इस्तेमाल करे "
+        "(ऐप में 'आपकी जानकारी')",
+        "अपना खाता मिटाना (7 दिन रोका जाता है ताकि कोई आप पर दबाव डालकर तुरंत आपकी सुरक्षा न हटवा सके)",
+        "हमारे शिकायत अधिकारी से शिकायत करना, और फिर भारतीय डेटा संरक्षण बोर्ड से",
     ],
 }
 
@@ -91,8 +134,11 @@ class PrivacyMixin:
     """Mixed into Registry."""
 
     # ------------------------------------------------------------- notice and consent
-    def privacy_notice(self) -> dict:
-        return {**NOTICE, "grievance_officer": grievance_contact(), "erasure_hold_days": ERASURE_HOLD_DAYS}
+    def privacy_notice(self, lang: str = "en") -> dict:
+        """The notice in English, or in Hindi for lang "hi" (same version, same content)."""
+        body = NOTICE_HI if lang == "hi" else NOTICE
+        return {**body, "language": "hi" if lang == "hi" else "en",
+                "grievance_officer": grievance_contact(), "erasure_hold_days": ERASURE_HOLD_DAYS}
 
     def record_consent(self, uid: str, version: str) -> dict:
         if version != NOTICE_VERSION:
@@ -291,4 +337,4 @@ class PrivacyMixin:
         return out
 
 
-__all__ = ["PrivacyMixin", "NOTICE_VERSION", "ERASURE_HOLD_DAYS", "RETAINED", "notify"]
+__all__ = ["PrivacyMixin", "NOTICE_VERSION", "NOTICE_HI", "ERASURE_HOLD_DAYS", "RETAINED", "notify"]

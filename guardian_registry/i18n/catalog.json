@@ -494,6 +494,14 @@
    "ios"
   ]
  },
+ "4d4ce73b15": {
+  "en": "Card",
+  "where": [
+   "web",
+   "android:channel_card",
+   "ios"
+  ]
+ },
  "f9c96f8ee5": {
   "en": "change is already {0}",
   "where": [
@@ -540,6 +548,12 @@
    "server:phrase"
   ]
  },
+ "3a03bba04b": {
+  "en": "channel '{0}' is switched off from {1} to {2}",
+  "where": [
+   "server:phrase"
+  ]
+ },
  "db2c5a9c75": {
   "en": "channel_daily_limits must map channels to positive whole numbers of paise",
   "where": [
@@ -556,6 +570,14 @@
   "en": "check your recent payments in the app",
   "where": [
    "server:phrase"
+  ]
+ },
+ "150f761a1d": {
+  "en": "Choose at least one payment type, and different start and end times.",
+  "where": [
+   "web",
+   "android:quiet_invalid",
+   "ios"
   ]
  },
  "adac69379a": {
@@ -856,6 +878,14 @@
    "server:alert"
   ]
  },
+ "3f66052a10": {
+  "en": "From",
+  "where": [
+   "web",
+   "android:quiet_from",
+   "ios"
+  ]
+ },
  "5de4edc275": {
   "en": "from %1$s",
   "where": [
@@ -890,6 +920,13 @@
   "en": "Goes through at {time} unless stopped",
   "where": [
    "web"
+  ]
+ },
+ "117afdd6c5": {
+  "en": "Grievance officer",
+  "where": [
+   "web",
+   "android:notice_grievance"
   ]
  },
  "d2a33b17cb": {
@@ -1038,6 +1075,20 @@
    "web",
    "android:rule_scam",
    "ios"
+  ]
+ },
+ "5a01609c8a": {
+  "en": "How long we keep it",
+  "where": [
+   "web",
+   "android:notice_how_long"
+  ]
+ },
+ "6a151a67b7": {
+  "en": "I agree",
+  "where": [
+   "web",
+   "android:privacy_agree"
   ]
  },
  "f4934b2661": {
@@ -1328,6 +1379,14 @@
   "where": [
    "web",
    "android:name_saved",
+   "ios"
+  ]
+ },
+ "a98d434074": {
+  "en": "Net banking",
+  "where": [
+   "web",
+   "android:channel_netbanking",
    "ios"
   ]
  },
@@ -1661,6 +1720,14 @@
    "server:alert"
   ]
  },
+ "b95fe42f24": {
+  "en": "Payment types to switch off",
+  "where": [
+   "web",
+   "android:quiet_channels",
+   "ios"
+  ]
+ },
  "c4e6cf6262": {
   "en": "Payment {0}",
   "where": [
@@ -1782,10 +1849,24 @@
    "server:error"
   ]
  },
+ "858db2ed08": {
+  "en": "Please read how we use your data. Your protection works once you agree.",
+  "where": [
+   "web",
+   "android:privacy_please"
+  ]
+ },
  "bca788763d": {
   "en": "Preset",
   "where": [
    "web"
+  ]
+ },
+ "ec7c829b39": {
+  "en": "Privacy notice",
+  "where": [
+   "web",
+   "android:privacy_notice"
   ]
  },
  "24c5512fcc": {
@@ -1834,10 +1915,31 @@
    "server:error"
   ]
  },
+ "706b24d0d1": {
+  "en": "Quiet hours",
+  "where": [
+   "web",
+   "android:quiet_hours",
+   "ios"
+  ]
+ },
+ "a31e91b227": {
+  "en": "quiet_hours needs one or more channels and a start and end hour (0 to 23) that differ",
+  "where": [
+   "server:error"
+  ]
+ },
  "0f5ff0c65b": {
   "en": "rate limit exceeded",
   "where": [
    "server:error"
+  ]
+ },
+ "aff2ea3aa5": {
+  "en": "Read the privacy notice",
+  "where": [
+   "web",
+   "android:privacy_read"
   ]
  },
  "acca8b854a": {
@@ -2002,6 +2104,14 @@
   "where": [
    "web",
    "android:save_nominee",
+   "ios"
+  ]
+ },
+ "de2fd31f2b": {
+  "en": "Save quiet hours",
+  "where": [
+   "web",
+   "android:save_quiet",
    "ios"
   ]
  },
@@ -2224,6 +2334,14 @@
    "ios"
   ]
  },
+ "d709f01e37": {
+  "en": "Switch chosen payment types off every day between two times (India time). Recurring payments you have already set up still run.",
+  "where": [
+   "web",
+   "android:quiet_note",
+   "ios"
+  ]
+ },
  "d298e87c3c": {
   "en": "switch payments back on",
   "where": [
@@ -2254,6 +2372,13 @@
   "en": "Takes effect {time} unless a guardian stops it.",
   "where": [
    "web"
+  ]
+ },
+ "ec445d36c8": {
+  "en": "Thank you. Your agreement is recorded.",
+  "where": [
+   "web",
+   "android:privacy_thanks"
   ]
  },
  "a054eb28f9": {
@@ -2428,6 +2553,14 @@
    "ios"
   ]
  },
+ "ae79ea1e9c": {
+  "en": "To",
+  "where": [
+   "web",
+   "android:quiet_to",
+   "ios"
+  ]
+ },
  "bb8c5457b1": {
   "en": "To %1$s",
   "where": [
@@ -2491,6 +2624,14 @@
   "where": [
    "web",
    "android:rule_scope",
+   "ios"
+  ]
+ },
+ "6decfbea1a": {
+  "en": "Turn off quiet hours",
+  "where": [
+   "web",
+   "android:quiet_off",
    "ios"
   ]
  },
@@ -2570,6 +2711,18 @@
    "ios"
   ]
  },
+ "d2f210e660": {
+  "en": "Version %1$s",
+  "where": [
+   "android:notice_version"
+  ]
+ },
+ "40f8bd1431": {
+  "en": "Version {v}",
+  "where": [
+   "web"
+  ]
+ },
  "2aa0db7f3c": {
   "en": "vetoed",
   "where": [
@@ -2642,6 +2795,34 @@
    "web",
    "android:welcome",
    "ios"
+  ]
+ },
+ "c48bbcfed6": {
+  "en": "What we collect",
+  "where": [
+   "web",
+   "android:notice_collect"
+  ]
+ },
+ "b12994c186": {
+  "en": "Who can use this service",
+  "where": [
+   "web",
+   "android:notice_who_can"
+  ]
+ },
+ "a9faec6170": {
+  "en": "Who sees it",
+  "where": [
+   "web",
+   "android:notice_who_sees"
+  ]
+ },
+ "b9bc152557": {
+  "en": "Why we use it",
+  "where": [
+   "web",
+   "android:notice_why"
   ]
  },
  "02499f03f9": {
@@ -2859,6 +3040,13 @@
    "web",
    "android:held_24h",
    "ios"
+  ]
+ },
+ "e71102d544": {
+  "en": "Your rights",
+  "where": [
+   "web",
+   "android:notice_rights"
   ]
  },
  "6f3745dbc6": {

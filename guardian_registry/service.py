@@ -21,9 +21,9 @@ import sqlite3
 from datetime import datetime, timedelta
 
 from . import audit, messages, notify
-from .clock import Clock, iso, ist_day
+from .clock import IST, Clock, iso, ist_day
 from .db import Database
-from .errors import Conflict, Forbidden, Invalid, NotFound, TooMany, Unauthorized
+from .errors import Conflict, Forbidden, Invalid, NotEnrolled, NotFound, TooMany, Unauthorized
 from .kyc import KycMixin
 from .certs import CertMixin
 from .registerfeed import RegisterFeedMixin
@@ -317,7 +317,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         mh = self._check_otp(mobile, code)
         uid = self.user_by_mobile(mobile)
         if not uid and not (display_name or "").strip():
-            raise Invalid("this number is not enrolled yet: send display_name to enrol")
+            raise NotEnrolled("this number is not enrolled yet: send display_name to enrol")
         key_id = None
         if device_key or device_proof or challenge:
             if not (device_key and device_proof and challenge):
@@ -521,6 +521,15 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         if (not isinstance(rules.new_guardian_wait_hours, int) or isinstance(rules.new_guardian_wait_hours, bool)
                 or not 0 <= rules.new_guardian_wait_hours <= 168):
             raise Invalid("new_guardian_wait_hours must be between 0 and 168")
+        q = rules.quiet_hours
+        if q is not None:
+            hours_ok = all(isinstance(q.get(k), int) and not isinstance(q.get(k), bool) and 0 <= q[k] <= 23
+                           for k in ("start", "end")) if isinstance(q, dict) else False
+            chans = q.get("channels") if isinstance(q, dict) else None
+            if (not hours_ok or q["start"] == q["end"] or set(q) != {"channels", "start", "end"}
+                    or not isinstance(chans, list) or not chans or not set(chans) <= set(CHANNELS)):
+                raise Invalid("quiet_hours needs one or more channels and a start and end hour (0 to 23) that differ")
+            rules.quiet_hours = {"channels": sorted(set(chans)), "start": q["start"], "end": q["end"]}
 
     def update_rules(self, principal_id: str, changes: dict) -> dict:
         """Principal changes their own rules. `changes` holds only the fields to change.
@@ -533,6 +542,8 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             raise Invalid(f"unknown rule fields: {sorted(unknown)}")
         proposed = Rules.from_dict({**current.to_dict(), **changes})
         self._validate_rules(proposed)
+        if changes.get("quiet_hours"):
+            changes = {**changes, "quiet_hours": proposed.quiet_hours}   # as validated: channels sorted, once each
 
         tighten, loosen = {}, {}
         for k, v in changes.items():
@@ -854,6 +865,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             spent_today=spent,
             spent_to_payee_today=to_payee,
             spent_on_channel_today=on_channel,
+            local_hour=now.astimezone(IST).hour,
             payee_known=known,
             sim_swap_recent=self.sim_swap_active(principal_id),
             has_active_guardian=bool(self._approver_ids(principal_id)),

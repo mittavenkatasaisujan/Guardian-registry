@@ -1,5 +1,6 @@
 class RegistryError(Exception):
     status = 400
+    code: str | None = None   # a stable name apps can check; the message itself is translated
 
 
 class NotFound(RegistryError):
@@ -16,6 +17,11 @@ class Conflict(RegistryError):
 
 class Invalid(RegistryError):
     status = 422
+
+
+class NotEnrolled(Invalid):
+    """Sign-in for a number with no account: the app should ask for a name to create one."""
+    code = "not_enrolled"
 
 
 class Unauthorized(RegistryError):

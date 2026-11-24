@@ -67,6 +67,14 @@ KINDS = ("transfer", "merchant", "recurring", "new_mandate")
 APPROVAL_SCOPES = ("all", "rbi")
 
 
+def quiet_hours_set(q: dict | None) -> set[int]:
+    """The IST hours (0-23) a quiet-hours rule covers. start == end covers nothing (refused)."""
+    if not q:
+        return set()
+    s, e = q["start"], q["end"]
+    return {h for h in range(24) if (s <= h < e if s < e else h >= s or h < e)}
+
+
 @dataclass
 class Rules:
     """A person's protection rules. `None` means "no limit" for that field."""
@@ -86,6 +94,8 @@ class Rules:
     channel_daily_limits: dict[str, int] = field(default_factory=dict)  # block if a channel's day total would go over
     approval_scope: str = "all"                 # "all", or "rbi": not UPI, merchant or recurring payments
     new_guardian_wait_hours: int = 0            # a newly accepted guardian approves only after this wait
+    # chosen channels switched off during set hours (IST), e.g. {"channels": ["upi"], "start": 22, "end": 6}
+    quiet_hours: dict | None = None
     kill_switch: bool = False
 
     def to_dict(self) -> dict:
@@ -136,6 +146,13 @@ class Rules:
             return True   # fewer payments go to the trusted person
         if new.new_guardian_wait_hours < self.new_guardian_wait_hours:
             return True
+        if self.quiet_hours:
+            if not new.quiet_hours:
+                return True
+            if set(self.quiet_hours["channels"]) - set(new.quiet_hours["channels"]):
+                return True   # a channel is no longer switched off at night
+            if quiet_hours_set(self.quiet_hours) - quiet_hours_set(new.quiet_hours):
+                return True   # fewer hours covered
         if self.kill_switch and not new.kill_switch:
             return True
         return False

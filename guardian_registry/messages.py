@@ -181,6 +181,7 @@ FRAGMENTS_HI = {
         "आज इस प्राप्तकर्ता को भुगतान सीमा {0} से ज़्यादा हो जाएँगे (आज {1} बाकी)",
     "daily limit {0} for {1} would be exceeded ({2} left today)": "{1} की दैनिक सीमा {0} पार हो जाएगी (आज {2} बाकी)",
     "channel '{0}' is switched off": "माध्यम '{0}' बंद है",
+    "channel '{0}' is switched off from {1} to {2}": "माध्यम '{0}' {1} से {2} तक बंद रहता है",
     "amount {0} is over the per-payment limit {1}": "राशि {0} एक भुगतान की सीमा {1} से ज़्यादा है",
     "daily limit {0} would be exceeded ({1} left today)": "दैनिक सीमा {0} पार हो जाएगी (आज {1} बाकी)",
     # ready-made rule sets (presets.py), shown in the apps
@@ -261,6 +262,8 @@ ERRORS_HI = {
     "a new guardian can approve payments only after the waiting period set in this person's rules":
         "नया गार्डियन इस व्यक्ति के नियमों में तय प्रतीक्षा अवधि के बाद ही भुगतान मंज़ूर कर सकता है",
     "approval_scope must be all or rbi": "मंज़ूरी का दायरा 'सभी' या 'RBI' होना चाहिए",
+    "quiet_hours needs one or more channels and a start and end hour (0 to 23) that differ":
+        "बंद रहने के समय के लिए कम से कम एक माध्यम और शुरू व खत्म होने का अलग-अलग घंटा (0 से 23) चाहिए",
     "channel_daily_limits must map channels to positive whole numbers of paise":
         "हर माध्यम की दैनिक सीमा पैसे में शून्य से बड़ी पूर्ण संख्या होनी चाहिए",
     "new_guardian_wait_hours must be between 0 and 168": "नए गार्डियन की प्रतीक्षा 0 से 168 घंटे के बीच होनी चाहिए",

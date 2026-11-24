@@ -27,7 +27,7 @@ The RBI draft PDF itself and its comment deadline were not read; **check the RBI
 | **Stop Switch**: blocks customer debits, new mandates, new UPI registrations; **existing recurring mandates, liens and bank-initiated debits continue**; credits continue | Kill switch blocks every `kind` except `recurring`. Liens and bank-initiated debits never reach the registry. New UPI app registrations are the bank's own control | `policy.evaluate` |
 | Customer limits: per transaction, per beneficiary per day, per channel per day, overall daily | `per_txn_limit`, `per_payee_daily_limit`, `channel_daily_limits`, `daily_limit` | `models.Rules`, `policy.evaluate` |
 | Switch channels off | `blocked_channels` | |
-| Time window when chosen channels stay off | **Not built.** The `scam_signals` night rule holds large night payments instead | possible follow-up |
+| Time window when chosen channels stay off | Rule `quiet_hours` (`{"channels": ["upi"], "start": 22, "end": 6}`, India time, may cross midnight): those channels are blocked in that window; existing recurring mandates still run. Shorter windows or fewer channels are loosening, so held 24 hours. Set from "Quiet hours" in the web, Android and iOS apps | `models.Rules`, `policy.evaluate` |
 | Channels off by default at onboarding; first-24-hour cap for new customers | Bank-side controls (the bank's own channels), not the registry's | bank |
 | "Negligence by a bank" includes not providing the trusted person mechanism or customer controls | The registry gives banks both through one API, with an audit trail to show they were applied | `docs/bank-integration.md` |
 

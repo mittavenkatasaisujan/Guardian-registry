@@ -59,10 +59,16 @@ class AppFlowTest {
 
     private fun mobile() = "+9196" + (10_000_000..99_999_999).random()
 
-    private fun person(mobile: String, name: String): String {
+    /** A signed-up person; `agree`: they have also agreed to the privacy notice (as most tests assume). */
+    private fun person(mobile: String, name: String, agree: Boolean = true): String {
         val code = (anon.post("/v1/auth/otp", JSONObject().put("mobile", mobile)) as JSONObject).getString("dev_code")
-        return (anon.post("/v1/auth/verify", JSONObject().put("mobile", mobile).put("code", code).put("display_name", name)) as JSONObject)
+        val token = (anon.post("/v1/auth/verify", JSONObject().put("mobile", mobile).put("code", code).put("display_name", name)) as JSONObject)
             .getString("token")
+        if (agree) {
+            val p = Api(base, token)
+            p.post("/v1/me/consents", JSONObject().put("notice_version", p.obj("/v1/privacy/notice").getString("version")))
+        }
+        return token
     }
 
     private fun bank(): Api {
@@ -421,9 +427,14 @@ class AppFlowTest {
     /** The person's own limits, name correction and nominee, through the screens. */
     @Test
     fun limitsNameAndNominee() {
-        val p = person(mobile(), "Lata $run")
+        val p = person(mobile(), "Lata $run", agree = false)
         val P = Api(base, p)
         val app = launchAs(p)
+        // the privacy notice comes first: read it, then agree
+        tap(s(R.string.privacy_read))
+        see(s(R.string.notice_grievance))
+        shot("11b-privacy-notice")
+        tapUntil(s(R.string.privacy_agree), "privacy agreement") { P.obj("/v1/me/consents").optBoolean("accepted_current") }
         see(s(R.string.change_limits))
         tapUntil(s(R.string.save_limits), "per-payee limit", fill = {
             onView(withContentDescription(s(R.string.lim_payee))).perform(scrollTo(), replaceText("20000"), closeSoftKeyboard())
@@ -431,6 +442,19 @@ class AppFlowTest {
         }) { P.obj("/v1/me/rules").optLong("per_payee_daily_limit") == 20_000L * 100 }
         see(s(R.string.rule_payee))
         shot("12-limits")
+
+        // quiet hours: UPI off from 22:00 to 06:00 (the form's default times)
+        tapUntil(s(R.string.save_quiet), "quiet hours", fill = {
+            onView(allOf(isAssignableFrom(android.widget.CheckBox::class.java), withText("UPI"))).perform(scrollTo())
+            onView(allOf(isAssignableFrom(android.widget.CheckBox::class.java), withText("UPI")))
+                .check { v, _ -> if (!(v as android.widget.CheckBox).isChecked) v.performClick() }
+        }) {
+            P.obj("/v1/me/rules").optJSONObject("quiet_hours")?.let {
+                it.getJSONArray("channels").toString() == "[\"upi\"]" && it.getInt("start") == 22 && it.getInt("end") == 6
+            } == true
+        }
+        see(s(R.string.quiet_off))
+        shot("12b-quiet-hours")
 
         tapUntil(s(R.string.save_name), "name", fill = {
             onView(inContent(withHint(s(R.string.your_name)))).perform(scrollTo(), replaceText("Lata Devi $run"), closeSoftKeyboard())

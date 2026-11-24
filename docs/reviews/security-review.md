@@ -48,10 +48,15 @@ deployment's secret files; they are owner-only and git-ignored). CodeQL: 0 open 
   key; iOS token in the Keychain (this device only), local HTTP only for the simulator.
 - **CI:** no `pull_request_target`; secrets are not given to pull requests from forks.
 
+## Fixed after the review
+
+- **DNS rebinding of webhook delivery** (v0.27.0): in production the webhook host is resolved once,
+  every address is checked, and the request is sent to the checked address, with the original name
+  kept for the Host header, TLS SNI and the certificate check (`security.pin_webhook`). Redirects are
+  not followed. Tests: `tests/test_security_audit.py`.
+
 ## Left for an independent tester
 
 1. A penetration test of the deployed stack (nginx mTLS, both API nodes, Postgres, backups).
 2. Mobile app reverse-engineering and tamper tests on real devices.
-3. DNS-rebinding resistance of webhook delivery (the check runs before each delivery; pinning the
-   connection to the checked address would close the remaining gap).
-4. Load and abuse testing of OTP and recovery flows across many IPs.
+3. Load and abuse testing of OTP and recovery flows across many IPs.

@@ -62,19 +62,36 @@ def webhook_url_problem(url: str) -> str | None:
     for testing. In production the host must resolve only to public addresses, so a participant
     can't make the registry send requests into its own network (cloud metadata at 169.254.169.254,
     internal services, the registry itself)."""
-    from urllib.parse import urlsplit
+    return pin_webhook(url)[0]
+
+
+def pin_webhook(url: str) -> tuple[str | None, str, dict, dict]:
+    """(problem, url to connect to, extra headers, httpx request extensions).
+
+    In production the host is resolved once, every address is checked, and the request then goes
+    to the checked address, with the original name kept for the Host header and for TLS (SNI and
+    certificate check). So a name can't resolve to a public address for the check and to an
+    internal one for the connection a moment later (DNS rebinding). Outside production, or for an
+    IP address in the URL, the URL is used as it is."""
+    from urllib.parse import urlsplit, urlunsplit
     local = url.startswith(("http://localhost", "http://127.0.0.1"))
     if not (url.startswith("https://") or (local and not is_production())):
-        return "webhook url must be https:// (http://localhost allowed outside production)"
+        return "webhook url must be https:// (http://localhost allowed outside production)", url, {}, {}
     if not is_production():
-        return None
-    host = urlsplit(url).hostname
+        return None, url, {}, {}
+    parts = urlsplit(url)
+    host = parts.hostname
     if not host:
-        return "webhook url must be https:// (http://localhost allowed outside production)"
-    for ip in resolve_host(host):
-        if not ip.is_global:
-            return "webhook url must point to a public address, not a private or internal one"
-    return None
+        return "webhook url must be https:// (http://localhost allowed outside production)", url, {}, {}
+    ips = resolve_host(host)
+    if any(not ip.is_global for ip in ips):
+        return "webhook url must point to a public address, not a private or internal one", url, {}, {}
+    ip = ips[0]
+    if str(ip) == host.strip("[]"):
+        return None, url, {}, {}          # already an address: nothing to re-resolve
+    port = f":{parts.port}" if parts.port else ""
+    netloc = (f"[{ip}]" if ip.version == 6 else str(ip)) + port
+    return None, urlunsplit(parts._replace(netloc=netloc)), {"Host": host + port}, {"sni_hostname": host}
 
 
 def resolve_host(host: str) -> list:

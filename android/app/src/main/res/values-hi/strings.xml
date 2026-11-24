@@ -181,4 +181,27 @@
     <string name="no_nominee">अभी कोई नामित व्यक्ति नहीं।</string>
     <string name="your_name">आपका नाम</string>
     <string name="nominee_fill">नामित व्यक्ति का नाम, रिश्ता और मोबाइल नंबर भरें।</string>
+    <string name="quiet_hours">बंद रहने का समय</string>
+    <string name="quiet_note">चुने हुए भुगतान माध्यम हर दिन दो समय के बीच बंद रहें (भारतीय समय)। पहले से तय नियमित भुगतान चलते रहेंगे।</string>
+    <string name="quiet_channels">बंद करने वाले भुगतान माध्यम</string>
+    <string name="quiet_from">से</string>
+    <string name="quiet_to">तक</string>
+    <string name="save_quiet">बंद रहने का समय सहेजें</string>
+    <string name="quiet_off">बंद रहने का समय हटाएँ</string>
+    <string name="quiet_invalid">कम से कम एक भुगतान माध्यम चुनें, और शुरू व खत्म होने का अलग-अलग समय।</string>
+    <string name="channel_card">कार्ड</string>
+    <string name="channel_netbanking">नेट बैंकिंग</string>
+    <string name="privacy_notice">निजता सूचना</string>
+    <string name="privacy_please">कृपया पढ़ें कि हम आपके डेटा का उपयोग कैसे करते हैं। आपकी सहमति के बाद आपकी सुरक्षा काम करती है।</string>
+    <string name="privacy_read">निजता सूचना पढ़ें</string>
+    <string name="privacy_agree">मैं सहमत हूँ</string>
+    <string name="privacy_thanks">धन्यवाद। आपकी सहमति दर्ज हो गई।</string>
+    <string name="notice_collect">हम क्या जानकारी लेते हैं</string>
+    <string name="notice_why">हम इसका उपयोग क्यों करते हैं</string>
+    <string name="notice_who_sees">इसे कौन देखता है</string>
+    <string name="notice_who_can">यह सेवा कौन इस्तेमाल कर सकता है</string>
+    <string name="notice_how_long">हम इसे कितने समय तक रखते हैं</string>
+    <string name="notice_rights">आपके अधिकार</string>
+    <string name="notice_grievance">शिकायत अधिकारी</string>
+    <string name="notice_version" formatted="true">संस्करण %1$s</string>
 </resources>

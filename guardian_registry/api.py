@@ -235,6 +235,14 @@ class InviteIn(BaseModel):
     mobile: str
 
 
+class QuietHoursIn(BaseModel):
+    """Chosen channels switched off every day between two hours, India time (end may be next day)."""
+    model_config = {"extra": "forbid"}
+    channels: list[str] = Field(min_length=1, description="e.g. [\"upi\"]")
+    start: int = Field(ge=0, le=23, description="hour it starts, e.g. 22")
+    end: int = Field(ge=0, le=23, description="hour it ends, e.g. 6")
+
+
 class RulesPatch(BaseModel):
     """Only the fields you send are changed. Amounts are in paise; null means no limit."""
     model_config = {"extra": "forbid"}
@@ -251,6 +259,7 @@ class RulesPatch(BaseModel):
     channel_daily_limits: dict[str, int] | None = None
     approval_scope: Literal["all", "rbi"] | None = None
     new_guardian_wait_hours: int | None = None
+    quiet_hours: QuietHoursIn | None = None
 
 
 class NameIn(BaseModel):
@@ -448,8 +457,10 @@ def create_app(
     @app.exception_handler(RegistryError)
     async def _registry_error(request: Request, exc: RegistryError):
         lang = messages.language_from_header(request.headers.get("accept-language"))
-        return JSONResponse(status_code=exc.status, content={"error": type(exc).__name__,
-                                                             "detail": messages.error(str(exc), lang)})
+        body = {"error": type(exc).__name__, "detail": messages.error(str(exc), lang)}
+        if exc.code:
+            body["code"] = exc.code   # stable whatever the language of `detail`
+        return JSONResponse(status_code=exc.status, content=body)
 
     @app.exception_handler(HTTPException)
     async def _http_error(request: Request, exc: HTTPException):
@@ -1067,9 +1078,10 @@ def create_app(
         return {"nominee": None}
 
     @app.get("/v1/privacy/notice", tags=["people"])
-    def privacy_notice():
-        """What we collect, why, for how long, your rights and the grievance officer."""
-        return reg.privacy_notice()
+    def privacy_notice(request: Request):
+        """What we collect, why, for how long, your rights and the grievance officer. In Hindi when
+        Accept-Language asks for it (same version)."""
+        return reg.privacy_notice(screen_lang(request))
 
     @app.get("/v1/me/consents", tags=["people"])
     def my_consents(uid: User):

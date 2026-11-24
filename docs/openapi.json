@@ -867,6 +867,42 @@
         "title": "PushTokenIn",
         "type": "object"
       },
+      "QuietHoursIn": {
+        "additionalProperties": false,
+        "description": "Chosen channels switched off every day between two hours, India time (end may be next day).",
+        "properties": {
+          "channels": {
+            "description": "e.g. [\"upi\"]",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Channels",
+            "type": "array"
+          },
+          "end": {
+            "description": "hour it ends, e.g. 6",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "start": {
+            "description": "hour it starts, e.g. 22",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "channels",
+          "start",
+          "end"
+        ],
+        "title": "QuietHoursIn",
+        "type": "object"
+      },
       "ReadIn": {
         "properties": {
           "ids": {
@@ -1112,6 +1148,16 @@
               }
             ],
             "title": "Per Txn Limit"
+          },
+          "quiet_hours": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuietHoursIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "require_verified_guardian": {
             "anyOf": [
@@ -1452,7 +1498,7 @@
   "info": {
     "description": "Cross-bank trusted-person and payment-protection registry.",
     "title": "Guardian Registry",
-    "version": "0.26.0"
+    "version": "0.27.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8969,7 +9015,7 @@
     },
     "/v1/privacy/notice": {
       "get": {
-        "description": "What we collect, why, for how long, your rights and the grievance officer.",
+        "description": "What we collect, why, for how long, your rights and the grievance officer. In Hindi when\nAccept-Language asks for it (same version).",
         "operationId": "privacy_notice_v1_privacy_notice_get",
         "responses": {
           "200": {

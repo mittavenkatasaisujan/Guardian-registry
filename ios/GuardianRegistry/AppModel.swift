@@ -39,6 +39,8 @@ final class AppModel: ObservableObject {
     @Published var devices: [[String: Any]] = []
     @Published var myKeyId: String?
     @Published var nominee: [String: Any]?
+    @Published var notice: [String: Any] = [:]
+    @Published var agreedToNotice = true
 
     init() {
         #if DEBUG
@@ -194,9 +196,14 @@ final class AppModel: ObservableObject {
             async let p = a.list("/v1/me/payments?limit=10")
             async let pr = a.object("/v1/presets")
             async let nm = a.object("/v1/me/nominee")
+            async let no = a.object("/v1/privacy/notice")
+            async let co = a.object("/v1/me/consents")
             let (mm, rr, gg, cc, pp, ps, nn) = try await (m, r, g, c, p, pr, nm)
+            let (nt, cs) = try await (no, co)
             me = mm; rules = rr; guardians = gg; changes = cc; payments = pp
             nominee = nn["nominee"] as? [String: Any]
+            notice = nt
+            agreedToNotice = cs["accepted_current"] as? Bool ?? false
             presets = ps.keys.sorted().map { k in Preset(id: k, label: (ps[k] as? [String: Any])?["label"] as? String ?? k) }
         case .guardian:
             wards = try await a.list("/v1/guardian/wards")
@@ -257,6 +264,39 @@ final class AppModel: ObservableObject {
             let out = try await self.api.call("PATCH", "/v1/me/rules", body) as? [String: Any]
             try await self.load()
             self.message = (out?["held"] as? [String: Any]) != nil ? L("Stricter parts apply now; looser parts wait 24 hours.") : L("Saved.")
+        }
+    }
+
+    /// Chosen channels off every day from `start` to `end` (hours, India time).
+    func saveQuietHours(channels: [String], start: Int, end: Int) {
+        if channels.isEmpty || start == end {
+            message = L("Choose at least one payment type, and different start and end times.")
+            return
+        }
+        run {
+            let out = try await self.api.call("PATCH", "/v1/me/rules",
+                                              ["quiet_hours": ["channels": channels, "start": start, "end": end]]) as? [String: Any]
+            try await self.load()
+            self.message = (out?["held"] as? [String: Any]) != nil ? L("Stricter parts apply now; looser parts wait 24 hours.") : L("Saved.")
+        }
+    }
+
+    func removeQuietHours() {
+        run {
+            let out = try await self.api.call("PATCH", "/v1/me/rules", ["quiet_hours": NSNull()]) as? [String: Any]
+            try await self.load()
+            self.message = (out?["held"] as? [String: Any]) != nil
+                ? L("Your request is held for 24 hours. Your guardians can approve it sooner.") : L("Saved.")
+        }
+    }
+
+    /// DPDP: a clear "I agree" to the current privacy notice.
+    func agreeToNotice() {
+        let version = notice["version"] as? String ?? ""
+        run {
+            try await self.api.call("POST", "/v1/me/consents", ["notice_version": version])
+            try await self.load()
+            self.message = L("Thank you. Your agreement is recorded.")
         }
     }
 

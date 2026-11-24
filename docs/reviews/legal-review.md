@@ -16,7 +16,7 @@ the retention periods and the provider contracts before real users.
 
 | Duty | Registry | Gap / action |
 |---|---|---|
-| Notice in clear terms (s.5) | `GET /v1/privacy/notice`, versioned; consent recorded per version | **Fixed:** notice v2026-11-25 now names the outside messaging services (some outside India), says the service is for adults, and lists the new rights. **Counsel:** final wording; notice in English *or any scheduled language* (s.5(3)): the notice text is English only today. |
+| Notice in clear terms (s.5) | `GET /v1/privacy/notice`, versioned; consent recorded per version | **Fixed:** notice v2026-11-25 now names the outside messaging services (some outside India), says the service is for adults, and lists the new rights. **Fixed (v0.27.0):** the notice is also in Hindi (`Accept-Language: hi`, same version), and the web, Android and iOS apps now show it with an "I agree" button that records consent (before, only the API had it). **Counsel:** final wording of both languages. |
 | Consent: free, specific, withdrawable as easily as given (s.6) | Consent recorded; erasure available | **Counsel:** erasure is held 7 days so a scammer can't strip protection in one tap; confirm this is a reasonable safeguard under s.6(4) and say so in the notice (it does). |
 | Legitimate uses without consent (s.7) | Banks' checks rely on the person's enrolment | **Counsel:** lawful basis for processing payment checks of enrolled customers. |
 | Security safeguards (s.8(5)) | See [security-review.md](security-review.md) | Independent penetration test before launch. |

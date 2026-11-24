@@ -58,9 +58,15 @@ final class AppFlowUITests: XCTestCase {
     }
 
     /// A person signed in without a device key (as a web browser on plain http would).
-    private func person(_ mobile: String, _ name: String) throws -> String {
+    /// A signed-up person; `agree`: they have also agreed to the privacy notice (as most tests assume).
+    private func person(_ mobile: String, _ name: String, agree: Bool = true) throws -> String {
         let out = try call("POST", "/v1/auth/verify", ["mobile": mobile, "code": try devCode(mobile), "display_name": name]) as? [String: Any]
-        return try XCTUnwrap(out?["token"] as? String)
+        let token = try XCTUnwrap(out?["token"] as? String)
+        if agree {
+            let version = try XCTUnwrap(try obj("/v1/privacy/notice")["version"] as? String)
+            try call("POST", "/v1/me/consents", ["notice_version": version], token: token)
+        }
+        return token
     }
 
     /// A sign-in with a software P-256 key (a stand-in for another phone's Secure Enclave key).
@@ -381,9 +387,17 @@ final class AppFlowUITests: XCTestCase {
 
     /// The person's own limits, name correction and nominee, through the screens.
     func testLimitsNameAndNominee() throws {
-        let p = try person(mobile(), "Lata \(run)")
+        let p = try person(mobile(), "Lata \(run)", agree: false)
         let app = launch(token: p)
         see(app, text(app, "Hello, Lata \(run)"), "greeting")
+
+        // the privacy notice comes first: read it, then agree
+        tap(app, button: "Read the privacy notice")
+        see(app, text(app, "Grievance officer"), "notice shown")
+        shot("ios-11b-privacy-notice")
+        try tapUntil(app, button: "I agree", "privacy agreement") {
+            try obj("/v1/me/consents", token: p)["accepted_current"] as? Bool == true
+        }
 
         let payee = see(app, app.textFields["limit-per_payee_daily_limit"], "per-payee limit field")
         payee.tap()
@@ -393,6 +407,20 @@ final class AppFlowUITests: XCTestCase {
         }
         see(app, text(app, "Most per payee per day"), "rule row")
         shot("ios-12-limits")
+
+        // quiet hours: UPI off from 22:00 to 06:00 (the form's default times)
+        let upi = see(app, app.switches["quiet-upi"], "UPI switch")
+        for _ in 0..<3 where (upi.value as? String) != "1" {
+            // the switch itself is at the right end of the row; tapping the label does nothing
+            upi.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+            Thread.sleep(forTimeInterval: 0.8)
+        }
+        try tapUntil(app, button: "Save quiet hours", "quiet hours") {
+            let q = try obj("/v1/me/rules", token: p)["quiet_hours"] as? [String: Any]
+            return (q?["channels"] as? [String]) == ["upi"] && (q?["start"] as? Int) == 22 && (q?["end"] as? Int) == 6
+        }
+        see(app, app.buttons["Turn off quiet hours"], "quiet hours saved")
+        shot("ios-12b-quiet-hours")
 
         let name = see(app, app.textFields["Your name"], "name field")
         name.tap()
