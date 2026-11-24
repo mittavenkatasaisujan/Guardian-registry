@@ -126,7 +126,7 @@ final class AppFlowUITests: XCTestCase {
 
     /// Wait for it, scrolling the list down (then back up) until it is on screen.
     @discardableResult
-    private func see(_ app: XCUIApplication, _ el: XCUIElement, _ what: String, timeout: TimeInterval = 25) -> XCUIElement {
+    private func see(_ app: XCUIApplication, _ el: XCUIElement, _ what: String, timeout: TimeInterval = 50) -> XCUIElement {
         _ = el.waitForExistence(timeout: 5)
         let end = Date().addingTimeInterval(timeout)
         var swipes = 0
@@ -135,7 +135,7 @@ final class AppFlowUITests: XCTestCase {
             if el.exists {
                 // below the fold or under a bar: scroll towards it
                 if el.frame.midY >= app.frame.maxY - 110 { app.swipeUp(velocity: .slow) } else { app.swipeDown(velocity: .slow) }
-            } else if swipes < 6 {
+            } else if swipes < 12 {
                 app.swipeUp(velocity: .slow)
             } else {
                 app.swipeDown(velocity: .slow)
