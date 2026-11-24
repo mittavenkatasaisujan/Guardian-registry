@@ -47,11 +47,23 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: in.guardianregistry.app.tests
+  GuardianRegistryUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [GuardianRegistryUITests]
+    dependencies:
+      - target: GuardianRegistry
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: in.guardianregistry.app.uitests
+        TEST_TARGET_NAME: GuardianRegistry
 schemes:
   GuardianRegistry:
     build:
       targets:
         GuardianRegistry: all
         GuardianRegistryTests: [test]
+        GuardianRegistryUITests: [test]
     test:
-      targets: [GuardianRegistryTests]
+      targets: [GuardianRegistryTests, GuardianRegistryUITests]

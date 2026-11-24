@@ -143,15 +143,32 @@ jobs:
             CODE_SIGNING_ALLOWED=NO build | tail -40
       - name: Start a registry for the app to talk to
         run: |
-          PYTHONUNBUFFERED=1 GR_DB=ios-e2e.db python scripts/dev_server.py 8010 > server.log 2>&1 &
+          PYTHONUNBUFFERED=1 GR_DB=ios-e2e.db GR_RATE_OTP=1000/60 python scripts/dev_server.py 8010 > server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8010/healthz && break; sleep 1; done
-      - name: Sign in from the app's code in the simulator (Keychain key, signing, server checks)
+      - name: Sign-in and every screen in the simulator (Keychain key, signing, UI flows, server checks)
         run: |
           set -o pipefail
           SIM=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in sorted(d.items(), reverse=True) if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
           echo "simulator $SIM"
-          xcodebuild test -project ios/GuardianRegistry.xcodeproj -scheme GuardianRegistry \
-            -destination "id=$SIM" | tail -60
+          mkdir -p ios-screens
+          TEST_RUNNER_GR_SHOTS="$PWD/ios-screens" xcodebuild test -project ios/GuardianRegistry.xcodeproj -scheme GuardianRegistry \
+            -destination "id=$SIM" -resultBundlePath ios-tests.xcresult | tail -80
+      - name: Keep the screenshots of every screen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-screens
+          path: ios-screens/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Keep the test results (screenshots are attachments in it too)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: ios-tests.xcresult
+          if-no-files-found: ignore
+          retention-days: 14
       - if: failure()
         run: |
           pkill -USR1 -f dev_server.py || true   # dump every server thread's stack

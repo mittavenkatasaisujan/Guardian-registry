@@ -23,6 +23,12 @@ struct Api {
     }
 
     static var configuredBase: URL {
+        #if DEBUG
+        // Debug builds only: a test server (the registry on your Mac or PC), from the sign-in
+        // screen's "Server address (testing)" field or the UI tests' launch environment.
+        let test = ProcessInfo.processInfo.environment["GR_API_BASE_OVERRIDE"] ?? UserDefaults.standard.string(forKey: "api_base") ?? ""
+        if !test.isEmpty, let url = URL(string: test) { return url }
+        #endif
         let s = Bundle.main.object(forInfoDictionaryKey: "GRApiBase") as? String ?? ""
         return URL(string: s.isEmpty ? "https://registry.example.in" : s)!
     }

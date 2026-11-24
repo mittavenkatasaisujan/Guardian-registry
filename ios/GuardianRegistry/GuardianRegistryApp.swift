@@ -24,6 +24,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // UI tests drive the screens: no system permission prompt over them
+        if ProcessInfo.processInfo.environment["GR_UI_TEST"] == "1" { return true }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             if granted { DispatchQueue.main.async { application.registerForRemoteNotifications() } }
         }
