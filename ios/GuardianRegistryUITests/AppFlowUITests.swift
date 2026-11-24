@@ -116,23 +116,40 @@ final class AppFlowUITests: XCTestCase {
         app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", s)).firstMatch
     }
 
+    /// On screen, clear of the navigation bar at the top and the tab bar at the bottom. A frame
+    /// check, not isHittable: asking for hittability while a list is still scrolling can fail.
+    private func onScreen(_ app: XCUIApplication, _ el: XCUIElement) -> Bool {
+        guard el.exists else { return false }
+        let f = el.frame, w = app.frame
+        return !f.isEmpty && f.midY > w.minY + 100 && f.midY < w.maxY - 110 && f.midX > w.minX && f.midX < w.maxX
+    }
+
     /// Wait for it, scrolling the list down (then back up) until it is on screen.
     @discardableResult
-    private func see(_ app: XCUIApplication, _ el: XCUIElement, _ what: String, timeout: TimeInterval = 20) -> XCUIElement {
+    private func see(_ app: XCUIApplication, _ el: XCUIElement, _ what: String, timeout: TimeInterval = 25) -> XCUIElement {
+        _ = el.waitForExistence(timeout: 5)
         let end = Date().addingTimeInterval(timeout)
         var swipes = 0
         while Date() < end {
-            if el.exists && el.isHittable { return el }
-            if el.waitForExistence(timeout: 1) && el.isHittable { return el }
-            if swipes < 6 { app.swipeUp(velocity: .slow) } else if swipes < 12 { app.swipeDown(velocity: .slow) }
+            if onScreen(app, el) { return el }
+            if el.exists {
+                // below the fold or under a bar: scroll towards it
+                if el.frame.midY >= app.frame.maxY - 110 { app.swipeUp(velocity: .slow) } else { app.swipeDown(velocity: .slow) }
+            } else if swipes < 6 {
+                app.swipeUp(velocity: .slow)
+            } else {
+                app.swipeDown(velocity: .slow)
+            }
             swipes += 1
+            Thread.sleep(forTimeInterval: 1.0)   // let the list come to rest
         }
         XCTFail("not on screen: \(what)")
         return el
     }
 
     private func tap(_ app: XCUIApplication, button label: String) {
-        see(app, app.buttons[label].firstMatch, "button \(label)").tap()
+        let el = see(app, app.buttons[label].firstMatch, "button \(label)")
+        el.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     /// Tap, then wait for the registry to show the effect; if the tap landed while the list
@@ -205,6 +222,7 @@ final class AppFlowUITests: XCTestCase {
         try call("POST", "/v1/me/rules/preset/senior_with_guardian", token: p)   // guardian approves from ₹10,000
 
         app.swipeDown(velocity: .fast); app.swipeDown(velocity: .fast)
+        Thread.sleep(forTimeInterval: 1.0)
         try tapUntil(app, button: "Pause all payments", "paused") { try obj("/v1/me/rules", token: p)["kill_switch"] as? Bool == true }
         see(app, text(app, "Payments are paused"), "paused")
         try tapUntil(app, button: "Switch payments back on", "change held") {
