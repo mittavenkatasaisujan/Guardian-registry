@@ -196,6 +196,16 @@ jobs:
             gradle -p android :app:connectedDebugAndroidTest --no-daemon -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true || { adb pull /sdcard/Android/data/in.guardianregistry.app/files/shots app-screens || true; exit 1; }
             adb logcat -d -s GRATTEST:I -v raw > attestation-logcat.txt
             adb pull /sdcard/Android/data/in.guardianregistry.app/files/shots app-screens || true
+      - name: Keep the instrumented test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-report
+          path: |
+            android/app/build/reports/androidTests/
+            android/app/build/outputs/androidTest-results/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Keep the screenshots of every screen
         if: always()
         uses: actions/upload-artifact@v4

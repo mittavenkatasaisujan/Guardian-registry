@@ -45,6 +45,15 @@ class MainActivity : Activity() {
     private var dialogOpen = false
     private var resumed = false
     private val tabButtons = HashMap<String, Button>()
+    private var insetTop = 0
+    private var outer: View? = null
+
+    /** Tabs on (signed in) or off (sign-in screens); the status-bar space goes to whichever is on top. */
+    private fun showTabs(on: Boolean) {
+        tabs.visibility = if (on) View.VISIBLE else View.GONE
+        tabs.setPadding(dp(4), (if (on) insetTop else 0) + dp(4), dp(4), dp(6))
+        outer?.let { it.setPadding(it.paddingLeft, if (on) 0 else insetTop, it.paddingRight, it.paddingBottom) }
+    }
 
     private val refresher = object : Runnable {
         override fun run() {
@@ -61,18 +70,22 @@ class MainActivity : Activity() {
         tab = savedInstanceState?.getString("tab") ?: "me"
         tabs = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            isBaselineAligned = false
             setBackgroundColor(BRAND)
-            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setPadding(dp(4), dp(4), dp(4), dp(6))
         }
         for ((id, label) in listOf("me" to R.string.tab_me, "guardian" to R.string.tab_guardian,
                                    "alerts" to R.string.alerts, "devices" to R.string.tab_devices)) {
             val b = Button(this).apply {
                 text = getString(label); isAllCaps = false; textSize = 13f; setTextColor(Color.WHITE)
-                background = null; minHeight = dp(44); setPadding(dp(2), 0, dp(2), 0)
+                // every tab two lines tall, so one- and two-line labels sit level
+                minLines = 2; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; gravity = Gravity.CENTER
+                background = null; minHeight = dp(48); minimumHeight = dp(48); setPadding(dp(4), dp(4), dp(4), dp(4))
+                stateListAnimator = null
                 setOnClickListener { switchTo(id) }
             }
             tabButtons[id] = b
-            tabs.addView(b, LinearLayout.LayoutParams(0, -2, 1f))
+            tabs.addView(b, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(2); marginEnd = dp(2) })
         }
         banner = TextView(this).apply {
             textSize = 14f; setTextColor(Color.parseColor("#7C2D12")); setBackgroundColor(Color.parseColor("#FFEDD5"))
@@ -85,17 +98,22 @@ class MainActivity : Activity() {
         scroll = ScrollView(this).apply { addView(root); setBackgroundColor(PAGE) }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(BRAND)
-            // Android 15 draws apps edge to edge: keep the tabs below the status bar and the
-            // content above the navigation bar.
+            setBackgroundColor(PAGE)
+            // Android 15 draws apps edge to edge: the blue tab bar extends under the status bar,
+            // and the page keeps clear of the navigation bar and the keyboard.
             setOnApplyWindowInsetsListener { v, insets ->
                 if (Build.VERSION.SDK_INT >= 30) {
                     val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.ime())
-                    v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+                    insetTop = bars.top
+                    v.setPadding(bars.left, 0, bars.right, bars.bottom)
                 } else {
                     @Suppress("DEPRECATION")
-                    v.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
+                    insetTop = insets.systemWindowInsetTop
+                    @Suppress("DEPRECATION")
+                    v.setPadding(insets.systemWindowInsetLeft, 0, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
                 }
+                outer = v
+                showTabs(tabs.visibility == View.VISIBLE)
                 insets
             }
             addView(tabs, LinearLayout.LayoutParams(-1, -2))
@@ -149,7 +167,7 @@ class MainActivity : Activity() {
 
     // ---------------------------------------------------------------- sign-in
     private fun showSignIn(message: String? = null) {
-        tabs.visibility = View.GONE
+        showTabs(false)
         banner.visibility = View.GONE
         root.removeAllViews()
         title(getString(R.string.app_name))
@@ -230,10 +248,12 @@ class MainActivity : Activity() {
 
     /** Load the current tab's data, then draw it (keeping the scroll position on a refresh). */
     private fun render(quiet: Boolean = false) {
-        tabs.visibility = View.VISIBLE
+        showTabs(true)
         for ((id, b) in tabButtons) {
-            b.typeface = if (id == tab) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-            b.alpha = if (id == tab) 1f else 0.8f
+            val on = id == tab
+            b.typeface = if (on) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            b.alpha = if (on) 1f else 0.85f
+            b.background = if (on) rounded(Color.argb(56, 255, 255, 255), radius = 10) else null
         }
         val which = tab
         bg({ load(which) }, quiet = quiet) { data ->
@@ -686,7 +706,8 @@ class MainActivity : Activity() {
     private fun keyValue(parent: LinearLayout, k: String, v: String) {
         val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(4), 0, dp(4)) }
         r.addView(TextView(this).apply { text = k; textSize = 14f; setTextColor(MUTED) }, LinearLayout.LayoutParams(0, -2, 1f))
-        r.addView(TextView(this).apply { text = v; textSize = 14f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK); gravity = Gravity.END })
+        r.addView(TextView(this).apply { text = v; textSize = 14f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK); gravity = Gravity.END },
+            LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(16) })
         parent.addView(r)
     }
 

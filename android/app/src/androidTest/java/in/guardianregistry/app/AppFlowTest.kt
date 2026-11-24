@@ -54,7 +54,8 @@ class AppFlowTest {
     private val anon = Api(base, null)
     private val admin = Api(base, null, mapOf("X-Admin-Token" to "dev-admin"))
     private val run = (1000..9999).random()
-    private fun s(id: Int, vararg args: Any) = ctx.getString(id, *args)
+    private var lc: android.content.Context = ctx   // the language the screens are expected in
+    private fun s(id: Int, vararg args: Any) = lc.getString(id, *args)
 
     private fun mobile() = "+9196" + (10_000_000..99_999_999).random()
 
@@ -126,12 +127,35 @@ class AppFlowTest {
 
     private fun yes() = eventually { onView(withText(s(R.string.yes))).inRoot(isDialog()).perform(click()) }
 
-    /** Save what the screen shows now; CI pulls these and keeps them as the app-screens artifact. */
+    /** Save what the screen shows now, and the whole page top to bottom (the scrolling part drawn
+     *  at full height), so layout problems below the fold are visible too. CI keeps them as the
+     *  app-screens artifact. */
     private fun shot(name: String) {
-        Thread.sleep(400)
-        val bmp = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot() ?: return
+        Thread.sleep(600)
         val dir = java.io.File(ctx.getExternalFilesDir(null), "shots").apply { mkdirs() }
-        java.io.File(dir, "$name.png").outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        fun save(bmp: android.graphics.Bitmap?, file: String) {
+            bmp ?: return
+            java.io.File(dir, "$file.png").outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        save(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot(), name)
+        var full: android.graphics.Bitmap? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val activity = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).firstOrNull() ?: return@runOnMainSync
+            fun find(v: View): android.widget.ScrollView? = when (v) {
+                is android.widget.ScrollView -> v
+                is android.view.ViewGroup -> (0 until v.childCount).firstNotNullOfOrNull { find(v.getChildAt(it)) }
+                else -> null
+            }
+            val content = find(activity.window.decorView)?.getChildAt(0) ?: return@runOnMainSync
+            if (content.width == 0 || content.height == 0) return@runOnMainSync
+            full = android.graphics.Bitmap.createBitmap(content.width, content.height, android.graphics.Bitmap.Config.ARGB_8888).also {
+                val c = android.graphics.Canvas(it)
+                c.drawColor(MainActivity.PAGE)
+                content.draw(c)
+            }
+        }
+        save(full, "$name-full")
     }
 
     private fun until(timeoutMs: Long = 20_000, what: String, cond: () -> Boolean) {
@@ -272,5 +296,50 @@ class AppFlowTest {
         assertTrue(Store(ctx).token == null)
         app.close()
         DeviceKey(ctx).delete()
+    }
+
+    /** The same screens in Hindi, for the screenshots: longer words must still fit. */
+    @Test
+    fun hindiScreensFit() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return
+        val pm = mobile(); val gm = mobile()
+        val p = person(pm, "आशा $run"); val g = person(gm, "रवि $run")
+        val P = Api(base, p); val G = Api(base, g)
+        val inv = P.post("/v1/me/guardians", JSONObject().put("mobile", gm)) as JSONObject
+        G.post("/v1/guardian/invitations/${inv.getString("id")}/accept")
+        P.post("/v1/me/rules/preset/senior_with_guardian")
+        P.post("/v1/me/kill-switch/on")
+        P.post("/v1/me/kill-switch/off")
+        val bank = bank()
+        check(bank, pm, "hi", 20_000)
+
+        val locales = ctx.getSystemService(android.app.LocaleManager::class.java)
+        locales.applicationLocales = android.os.LocaleList.forLanguageTags("hi")
+        lc = ctx.createConfigurationContext(android.content.res.Configuration(ctx.resources.configuration).apply {
+            setLocale(java.util.Locale("hi"))
+        })
+        try {
+            var app = launchAs(p)
+            see(s(R.string.payments_paused))
+            see(s(R.string.changes_waiting))
+            shot("hi-01-my-protection")
+            app.close()
+
+            app = launchAs(g)
+            tab(R.string.tab_guardian)
+            see(s(R.string.changes_waiting_g))
+            see(s(R.string.st_pending_approval))
+            shot("hi-02-i-protect")
+            tab(R.string.alerts)
+            see(s(R.string.mark_all_read))
+            shot("hi-03-alerts")
+            tab(R.string.tab_devices)
+            see(s(R.string.sign_out_everywhere))
+            shot("hi-04-devices")
+            app.close()
+        } finally {
+            locales.applicationLocales = android.os.LocaleList.getEmptyLocaleList()
+            lc = ctx
+        }
     }
 }
