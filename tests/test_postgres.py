@@ -121,11 +121,15 @@ class TestMultiNode:
         c.execute("DROP TABLE device_keys")
         c.execute("DROP TABLE auth_challenges")
         c.execute("ALTER TABLE sessions DROP COLUMN device_key_id")
+        c.execute("ALTER TABLE checks DROP COLUMN kind")  # v19
+        c.execute("DROP TABLE nominees")  # v20
         c.execute("UPDATE gr_schema SET version = 8")
         upgraded = Database(PG_URL, schema=schema)
         assert upgraded.one("SELECT version FROM gr_schema")["version"] == len(MIGRATIONS)
         assert upgraded.one("SELECT COUNT(*) n FROM device_keys")["n"] == 0
         upgraded.one("SELECT device_key_id FROM sessions LIMIT 1")
+        upgraded.one("SELECT kind FROM checks LIMIT 1")              # v19 back
+        assert upgraded.one("SELECT COUNT(*) n FROM nominees")["n"] == 0   # v20 back
         with upgraded.tx() as tx:  # v11 + its Postgres extra: streams and an auto seq
             audit_mod.append(tx, "t", "x", "a", None, {})
         assert upgraded.one("SELECT stream, stream_seq, seq FROM audit_log")["stream"] == "system"
