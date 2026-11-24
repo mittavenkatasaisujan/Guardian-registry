@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "guardianregistry"
-version = "0.23.0"
+version = "0.24.0"
 
 java {
     toolchain { languageVersion.set(JavaLanguageVersion.of(17)) }

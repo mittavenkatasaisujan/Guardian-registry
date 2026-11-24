@@ -28,6 +28,11 @@ class Store(context: Context) {
         get() = prefs.getString("token", null)?.let { decrypt(it) }
         set(v) = prefs.edit().putString("token", v?.let { encrypt(it) }).apply()
 
+    /** The registry's address: the build's own, unless a debug build was pointed elsewhere. */
+    var apiBase: String
+        get() = (if (BuildConfig.DEBUG) prefs.getString("api_base", null) else null) ?: BuildConfig.API_BASE
+        set(v) = prefs.edit().putString("api_base", v.ifBlank { BuildConfig.API_BASE }).apply()
+
     var pushToken: String?
         get() = prefs.getString("push_token", null)
         set(v) = prefs.edit().putString("push_token", v).apply()

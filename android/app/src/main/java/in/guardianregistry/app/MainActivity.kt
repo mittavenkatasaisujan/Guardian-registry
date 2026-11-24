@@ -53,7 +53,7 @@ class MainActivity : Activity() {
         if (store.token == null) showSignIn() else loadHome()
     }
 
-    private fun api() = Api(BuildConfig.API_BASE, store.token)
+    private fun api() = Api(store.apiBase, store.token)
 
     /** Run [work] off the main thread, then [done] on it. Shows API errors as a toast. */
     private fun <T> bg(work: () -> T, done: (T) -> Unit) {
@@ -78,9 +78,12 @@ class MainActivity : Activity() {
         para(getString(R.string.intro))
         message?.let { para(it, Color.parseColor("#9A3412")) }
         val mobile = input(getString(R.string.mobile_number), InputType.TYPE_CLASS_PHONE, store.mobile)
+        // Debug builds only: point the app at a test server (e.g. the registry on your PC over Wi-Fi).
+        val server = if (BuildConfig.DEBUG) input("Server address (testing)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI, store.apiBase) else null
         button(getString(R.string.send_code)) {
             val m = mobile.text.toString().trim()
-            bg({ Api(BuildConfig.API_BASE, null).post("/v1/auth/otp", JSONObject().put("mobile", m).put("language", Wire.language())) as JSONObject }) {
+            server?.let { store.apiBase = it.text.toString().trim().trimEnd('/') }
+            bg({ Api(store.apiBase, null).post("/v1/auth/otp", JSONObject().put("mobile", m).put("language", Wire.language())) as JSONObject }) {
                 store.mobile = m
                 showCode(m, it.optString("dev_code").ifBlank { null })
             }
@@ -110,7 +113,7 @@ class MainActivity : Activity() {
 
     /** OTP + device key proof. The key is created (and attested) on first use. */
     private fun signIn(mobile: String, code: String, name: String): JSONObject {
-        val anon = Api(BuildConfig.API_BASE, null)
+        val anon = Api(store.apiBase, null)
         val challenge = (anon.post("/v1/auth/challenge") as JSONObject).getString("challenge")
         val attestation = if (!key.exists) key.create(challenge) else null
         val body = Wire.verifyBody(mobile, code, name, store.deviceId, key.publicKey(), challenge,

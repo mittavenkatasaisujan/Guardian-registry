@@ -110,6 +110,12 @@ jobs:
           gradle-version: "8.11.1"
       - name: Build the Android app and run its unit tests
         run: gradle -p android :app:assembleDebug :app:testDebugUnitTest --no-daemon
+      - name: Keep the debug APK (install it on a test phone)
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardian-registry-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
 
   ios:
     runs-on: macos-15-intel   # arm64 macOS runners were repeatedly unavailable (GitHub capacity)
@@ -210,6 +216,27 @@ jobs:
         run: docker compose -f deploy/docker-compose.yml up -d --build --wait --wait-timeout 240
       - name: Smoke test through nginx
         run: python scripts/smoke_deploy.py https://localhost:8443
+      - name: OWASP ZAP baseline scan of the running deployment (passive; warnings are reported, failures fail)
+        run: |
+          mkdir -p zap && chmod 777 zap
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t https://localhost:8443/app/ -I -r zap-report.html -J zap-report.json
+          python - <<'PY'
+          import json
+          r = json.load(open("zap/zap-report.json"))
+          alerts = [a for s in r.get("site", []) for a in s.get("alerts", [])]
+          for a in sorted(alerts, key=lambda a: -int(a.get("riskcode", 0))):
+              print(f"risk {a['riskcode']}: {a['name']} ({a.get('count', '?')})")
+          high = [a for a in alerts if int(a.get("riskcode", 0)) >= 3]
+          assert not high, f"{len(high)} high-risk ZAP findings"
+          PY
+      - name: Keep the ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: zap/
+          retention-days: 14
       - name: Both API nodes served traffic
         run: |
           for n in api1 api2; do docker compose -f deploy/docker-compose.yml logs $n | grep -q "GET /healthz" || { echo "$n served nothing"; exit 1; }; done

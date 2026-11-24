@@ -70,7 +70,7 @@ class PushService : FirebaseMessagingService() {
             val push = store.pushToken ?: return
             io.execute {
                 try {
-                    Api(BuildConfig.API_BASE, session).post(
+                    Api(store.apiBase, session).post(
                         "/v1/me/alerts/push", JSONObject().put("token", push).put("platform", "android")
                     )
                 } catch (e: Exception) {

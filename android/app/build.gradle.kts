@@ -14,7 +14,7 @@ android {
         minSdk = 28            // StrongBox and modern Key Attestation
         targetSdk = 35
         versionCode = 1
-        versionName = "0.23.0"
+        versionName = "0.24.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "FCM_PROJECT_ID", "\"${prop("grFcmProjectId")}\"")
         buildConfigField("String", "FCM_APP_ID", "\"${prop("grFcmAppId")}\"")
