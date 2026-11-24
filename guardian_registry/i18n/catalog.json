@@ -1220,6 +1220,13 @@
    "server:error"
   ]
  },
+ "7295c78abd": {
+  "en": "Not on this sign-in yet: it is restricted (see the note at the top).",
+  "where": [
+   "web",
+   "android:restricted_action"
+  ]
+ },
  "73ba4e4af8": {
   "en": "Not sure? Call them on a number you know before approving.",
   "where": [

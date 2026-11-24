@@ -149,4 +149,5 @@
     <string name="no_devices">No device keys yet.</string>
     <string name="sign_out_here">Sign out here</string>
     <string name="sign_out_everywhere">Sign out everywhere</string>
+    <string name="restricted_action">Not on this sign-in yet: it is restricted (see the note at the top).</string>
 </resources>

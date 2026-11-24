@@ -42,4 +42,13 @@ class WireTest {
         // SHA-256 of the bytes 1, 2, 3
         assertEquals("039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81", Wire.keyId("AQID"))
     }
+
+    @Test
+    fun reasonsShowReadableTimes() {
+        val out = Wire.readableTimes("new device: restricted until 2026-11-25T15:23:36.989624+00:00",
+            java.time.ZoneOffset.UTC, java.util.Locale.ENGLISH)
+        org.junit.Assert.assertFalse(out, out.contains("T15:23"))
+        org.junit.Assert.assertTrue(out, out.startsWith("new device: restricted until ") && out.contains("2026") && out.contains("3:23"))
+        assertEquals("no times here", Wire.readableTimes("no times here"))
+    }
 }

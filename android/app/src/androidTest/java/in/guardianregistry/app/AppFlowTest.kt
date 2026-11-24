@@ -342,4 +342,50 @@ class AppFlowTest {
             lc = ctx
         }
     }
+
+    /** Sign in with a software P-256 key (a stand-in for a phone's Keystore key). */
+    private fun keySignIn(mobile: String, name: String?, device: String): JSONObject {
+        val pair = java.security.KeyPairGenerator.getInstance("EC").apply {
+            initialize(java.security.spec.ECGenParameterSpec("secp256r1"))
+        }.generateKeyPair()
+        val code = (anon.post("/v1/auth/otp", JSONObject().put("mobile", mobile)) as JSONObject).getString("dev_code")
+        val ch = (anon.post("/v1/auth/challenge") as JSONObject).getString("challenge")
+        val sig = java.security.Signature.getInstance("SHA256withECDSA").run {
+            initSign(pair.private); update(Wire.signingInput(ch)); sign()
+        }
+        return anon.post("/v1/auth/verify", Wire.verifyBody(mobile, code, name, device, Wire.b64(pair.public.encoded), ch,
+            Wire.b64(sig), null)) as JSONObject
+    }
+
+    /** A second phone for the same person is on probation: the banner shows a readable time and
+     *  the actions the registry would refuse become a note (Decline stays). */
+    @Test
+    fun aRestrictedSignInShowsANoteInsteadOfApprove() {
+        val pm = mobile(); val gm = mobile()
+        val p = person(pm, "Usha $run")
+        keySignIn(gm, "Vikram $run", "phone-1")           // first phone: trusted at once
+        val P = Api(base, p)
+        P.post("/v1/me/guardians", JSONObject().put("mobile", gm))
+        Thread.sleep(31_000)                              // the registry's resend cooldown for the same number
+        val second = keySignIn(gm, null, "phone-2")        // a new phone: 24 h probation
+        assertTrue(second.getBoolean("restricted"))
+
+        val app = launchAs(second.getString("token"))
+        tab(R.string.tab_guardian)
+        see(s(R.string.asked_guardian, "Usha $run"))
+        see(s(R.string.restricted_action))
+        eventually {
+            onView(inContent(allOf(withText(s(R.string.accept)), isAssignableFrom(Button::class.java))))
+                .check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist())
+        }
+        see(s(R.string.decline))
+        eventually {
+            onView(withText(startsWith(s(R.string.restricted_banner, "").substringBefore(". ")))).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+            onView(withText(org.hamcrest.Matchers.containsString("+00:00"))).check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist())
+        }
+        shot("11-restricted-sign-in")
+        tab(R.string.tab_me)
+        see(s(R.string.restricted_action))                // no invite form on a restricted sign-in
+        app.close()
+    }
 }

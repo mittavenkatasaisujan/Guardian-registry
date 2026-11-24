@@ -148,4 +148,5 @@
     <string name="no_devices">अभी कोई डिवाइस कुंजी नहीं।</string>
     <string name="sign_out_here">यहाँ साइन आउट करें</string>
     <string name="sign_out_everywhere">हर जगह साइन आउट करें</string>
+    <string name="restricted_action">इस साइन-इन पर अभी नहीं: यह सीमित है (ऊपर की सूचना देखें)।</string>
 </resources>

@@ -313,7 +313,7 @@ async function meView() {
   const pending = changes.filter((c) => c.status === "pending");
 
   const killButton = paused
-    ? h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("POST", "/v1/me/kill-switch/off"),
+    ? RESTRICTED ? h("p", { class: "muted small" }, t("Not on this sign-in yet: it is restricted (see the note at the top).")) : h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("POST", "/v1/me/kill-switch/off"),
         (out) => (out.applied ? t("Payments are back on.") : t("Your request is held for 24 hours. Your guardians can approve it sooner."))) },
         t("Switch payments back on"))
     : h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", "/v1/me/kill-switch/on"),
@@ -350,8 +350,8 @@ async function meView() {
       h("p", {}, t("Until {time}, larger payments are held and new sign-ins can't approve anything.", { time: when(security.window_ends_at) })),
       h("p", { class: "muted" }, t("If you changed your SIM yourself, confirm it from this phone. If you didn't, call your mobile operator now.")),
       h("div", { class: "row" },
-        h("button", { onclick: (e) => act(e.target, () => api("POST", "/v1/me/security/confirm-sim-change"),
-          t("Thanks. Normal protection applies again.")) }, t("Yes, I changed my SIM")))) : null,
+        trusted(h("button", { onclick: (e) => act(e.target, () => api("POST", "/v1/me/security/confirm-sim-change"),
+          t("Thanks. Normal protection applies again.")) }, t("Yes, I changed my SIM"))))) : null,
 
     pending.length ? h("section", { class: "card alert-warn" },
       h("h2", {}, t("Changes waiting")),
@@ -375,7 +375,7 @@ async function meView() {
         h("span", {}, h("strong", {}, g.guardian_name), " ", h("span", { class: "muted small" }, identityText(g.guardian_identity_level))),
         h("span", { class: `pill ${g.status === "active" ? "ok" : g.status === "invited" ? "warn" : ""}` }, t(g.status)))))
         : h("p", { class: "muted" }, t("No guardians yet. A guardian can approve large payments and pause payments for you.")),
-      inviteForm),
+      RESTRICTED ? h("p", { class: "muted small" }, t("Not on this sign-in yet: it is restricted (see the note at the top).")) : inviteForm),
 
     h("section", { class: "card" },
       h("h2", {}, t("Recent payments")),
@@ -404,7 +404,9 @@ function paymentItem(p, extra) {
 
 // ------------------------------------------------------------------ guardian
 async function guardianView() {
-  const [inbox, wards] = await Promise.all([api("GET", "/v1/guardian/inbox"), api("GET", "/v1/guardian/wards")]);
+  const [inbox, wards, security] = await Promise.all([api("GET", "/v1/guardian/inbox"), api("GET", "/v1/guardian/wards"),
+    api("GET", "/v1/me/security")]);
+  setBanner(security.this_session);
   const names = Object.fromEntries(wards.map((w) => [w.principal_id, w.principal_name]));
   const active = wards.filter((w) => w.status === "active");
   const out = [h("h1", {}, t("People I protect"))];
@@ -414,7 +416,7 @@ async function guardianView() {
       h("ul", { class: "list" }, inbox.invitations.map((g) => h("li", {},
         h("p", {}, t("{name} asked you to be their payment guardian.", { name: g.principal_name })),
         h("div", { class: "row" },
-          h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/invitations/${g.id}/accept`), t("You now protect {name}.", { name: g.principal_name })) }, t("Accept")),
+          trusted(h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/invitations/${g.id}/accept`), t("You now protect {name}.", { name: g.principal_name })) }, t("Accept"))),
           h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/invitations/${g.id}/decline`), t("Declined.")) }, t("Decline"))))))));
   }
 
@@ -423,7 +425,7 @@ async function guardianView() {
     waiting.length ? h("ul", { class: "list" }, waiting.map((p) => {
       const li = paymentItem(p, names[p.principal_id] ? t("from {name}", { name: names[p.principal_id] }) : null);
       const buttons = p.status === "pending_approval"
-        ? [h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/payments/${p.check_id}/approve`), t("Approved.")) }, t("Approve")),
+        ? [trusted(h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/payments/${p.check_id}/approve`), t("Approved.")) }, t("Approve"))),
            h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/payments/${p.check_id}/deny`), t("Denied. The payment will not go through.")) }, t("Deny"))]
         : [h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/payments/${p.check_id}/cancel`), t("Cancelled.")) }, t("Stop this payment"))];
       if (p.approval_expires_at) li.append(h("p", { class: "muted small" }, t("Answer by {time}", { time: when(p.approval_expires_at) })));
@@ -439,7 +441,7 @@ async function guardianView() {
         h("p", { class: "muted small" }, t("Happens {time} unless you stop it. Scammers often ask people to do this.", { time: when(c.effective_at) })),
         h("div", { class: "row" },
           h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/changes/${c.id}/veto`), t("Stopped.")) }, t("Stop it")),
-          h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/changes/${c.id}/approve`), t("Approved.")) }, t("Approve now"))))))));
+          trusted(h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/changes/${c.id}/approve`), t("Approved.")) }, t("Approve now")))))))));
   }
 
   if (inbox.recoveries && inbox.recoveries.length) {
@@ -450,7 +452,7 @@ async function guardianView() {
         r.status === "pending" && new Date(r.vouching_opens_at) > new Date()
           ? h("p", { class: "muted small" }, t("You can approve from {time}.", { time: when(r.vouching_opens_at) })) : null,
         h("div", { class: "row" },
-          r.status === "pending" ? h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/recoveries/${r.recovery_id}/approve`), t("Thank you. Your vouch is recorded.")) }, t("I spoke to them: approve")) : null,
+          r.status === "pending" ? trusted(h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/recoveries/${r.recovery_id}/approve`), t("Thank you. Your vouch is recorded.")) }, t("I spoke to them: approve"))) : null,
           h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/recoveries/${r.recovery_id}/deny`), t("Stopped.")) }, t("Deny"))))))));
   }
 
@@ -492,7 +494,7 @@ async function devicesView() {
           h("br"), h("span", { class: "muted small" }, t("Added {time}", { time: when(d.created_at) }) + (d.last_used_at ? t(" · last used {time}", { time: when(d.last_used_at) }) : ""))),
         h("span", { class: "row" },
           h("span", { class: `pill ${d.status === "trusted" ? "ok" : d.status === "probation" ? "warn" : ""}` }, t(d.status)),
-          d.status !== "revoked" && d.key_id !== mine
+          d.status !== "revoked" && d.key_id !== mine && !RESTRICTED
             ? h("button", { class: "secondary", onclick: (e) => act(e.target, () => api("DELETE", `/v1/me/devices/${d.key_id}`), t("Removed and signed out.")) }, t("Remove"))
             : null))))
         : h("p", { class: "empty" }, t("No device keys yet."))),
@@ -511,11 +513,26 @@ async function signOut(everywhere) {
 }
 
 // ------------------------------------------------------------------ chrome
+/** Server reasons carry ISO times ("restricted until 2026-11-25T15:23:36+00:00"): show them like every other time. */
+function readableTimes(text) {
+  return String(text).replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?/g, (iso) => when(iso));
+}
+
+/** True while this sign-in is restricted (new device, or after a SIM change): the registry
+ *  refuses approvals and other high-trust actions, so the views show a note instead. */
+let RESTRICTED = false;
+
+/** [button] on a trusted sign-in; on a restricted one, a note saying why it isn't there. */
+function trusted(...buttons) {
+  return RESTRICTED ? h("p", { class: "muted small" }, t("Not on this sign-in yet: it is restricted (see the note at the top).")) : buttons;
+}
+
 function setBanner(session) {
   const b = $("#banner");
+  RESTRICTED = !!(session && session.restricted);
   if (session && session.restricted) {
     b.textContent = t("This sign-in is restricted for now: {reasons}. You can still pause payments, deny or stop payments, and make rules stricter.",
-      { reasons: session.reasons.join("; ") });
+      { reasons: session.reasons.map(readableTimes).join("; ") });
     b.hidden = false;
   } else {
     b.hidden = true;

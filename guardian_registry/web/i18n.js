@@ -83,6 +83,7 @@ const STRINGS = {
     "Approved.": "मंज़ूर किया।", "Approve": "मंज़ूर करें", "Denied. The payment will not go through.": "अस्वीकार किया। यह भुगतान नहीं होगा।",
     "Deny": "अस्वीकार करें", "Cancelled.": "रद्द किया।", "Stop this payment": "यह भुगतान रोकें",
     "Answer by {time}": "{time} तक जवाब दें", "Goes through at {time} unless stopped": "{time} पर हो जाएगा, जब तक रोका न जाए",
+    "Not on this sign-in yet: it is restricted (see the note at the top).": "इस साइन-इन पर अभी नहीं: यह सीमित है (ऊपर की सूचना देखें)।",
     "Not sure? Call them on a number you know before approving.": "पक्का नहीं? मंज़ूरी से पहले उन्हें किसी जाने-पहचाने नंबर पर कॉल करें।",
     "Nothing is waiting for you.": "आपके लिए कुछ भी प्रतीक्षा में नहीं है।", "Protection changes waiting": "प्रतीक्षा में सुरक्षा बदलाव",
     "Someone": "कोई", "{name} wants to: {what}": "{name} यह करना चाहते हैं: {what}",

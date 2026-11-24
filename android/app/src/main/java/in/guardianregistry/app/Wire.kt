@@ -60,6 +60,12 @@ object Wire {
             .withLocale(locale).withZone(zone).format(t)
     }
 
+    private val ISO_TIME = Regex("""\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?""")
+
+    /** Server reasons carry ISO times ("restricted until 2026-11-25T15:23:36+00:00"): show them readably. */
+    fun readableTimes(text: String, zone: java.time.ZoneId = java.time.ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String =
+        ISO_TIME.replace(text) { time(it.value, zone, locale) }
+
     fun isFuture(iso: String, now: java.time.Instant = java.time.Instant.now()): Boolean = instant(iso)?.isAfter(now) == true
 
     /** Amounts are in paise. */

@@ -46,6 +46,10 @@ class MainActivity : Activity() {
     private var resumed = false
     private val tabButtons = HashMap<String, Button>()
     private var insetTop = 0
+
+    /** This sign-in is restricted (new device, or after a SIM change): the registry refuses
+     *  approvals and other high-trust actions, so those buttons become a note instead. */
+    private var restricted = false
     private var outer: View? = null
 
     /** Tabs on (signed in) or off (sign-in screens); the status-bar space goes to whichever is on top. */
@@ -207,7 +211,8 @@ class MainActivity : Activity() {
                 when {
                     out.optBoolean("new_user") -> toast(getString(R.string.welcome))
                     out.optBoolean("restricted") ->
-                        toast(getString(R.string.signed_in_limits, out.optJSONArray("restriction_reasons")?.join(", ")?.replace("\"", "") ?: ""))
+                        toast(getString(R.string.signed_in_limits, out.optJSONArray("restriction_reasons")?.let { r ->
+                            (0 until r.length()).joinToString("; ") { Wire.readableTimes(r.optString(it)) } } ?: ""))
                 }
                 tab = "me"
                 render()
@@ -259,6 +264,7 @@ class MainActivity : Activity() {
         bg({ load(which) }, quiet = quiet) { data ->
             if (which != tab || store.token == null) return@bg
             val y = scroll.scrollY
+            restricted = data.security?.optJSONObject("this_session")?.optBoolean("restricted") == true
             root.removeAllViews()
             when (which) {
                 "guardian" -> guardianView(data)
@@ -285,8 +291,8 @@ class MainActivity : Activity() {
         val inbox = a.obj("/v1/guardian/inbox")
         val unread = a.arr("/v1/me/notifications?unread_only=true&limit=100").length()
         return when (which) {
-            "guardian" -> Data(inbox, unread, wards = a.arr("/v1/guardian/wards"))
-            "alerts" -> Data(inbox, unread, alerts = a.arr("/v1/me/notifications?limit=50"))
+            "guardian" -> Data(inbox, unread, security = a.obj("/v1/me/security"), wards = a.arr("/v1/guardian/wards"))
+            "alerts" -> Data(inbox, unread, security = a.obj("/v1/me/security"), alerts = a.arr("/v1/me/notifications?limit=50"))
             "devices" -> Data(inbox, unread, security = a.obj("/v1/me/security"), devices = a.arr("/v1/me/devices"),
                               myKeyId = if (key.exists) Wire.keyId(key.publicKey()) else null)
             else -> Data(inbox, unread, security = a.obj("/v1/me/security"), me = a.obj("/v1/me"),
@@ -299,7 +305,7 @@ class MainActivity : Activity() {
     private fun setBanner(security: JSONObject?) {
         val session = security?.optJSONObject("this_session") ?: return
         if (session.optBoolean("restricted")) {
-            val reasons = session.optJSONArray("reasons")?.let { r -> (0 until r.length()).joinToString("; ") { r.optString(it) } } ?: ""
+            val reasons = session.optJSONArray("reasons")?.let { r -> (0 until r.length()).joinToString("; ") { Wire.readableTimes(r.optString(it)) } } ?: ""
             banner.text = getString(R.string.restricted_banner, reasons)
             banner.visibility = View.VISIBLE
         } else {
@@ -325,7 +331,9 @@ class MainActivity : Activity() {
         val status = card(if (paused) BAD else OK)
         bigStatus(status, if (paused) getString(R.string.payments_paused) else getString(R.string.payments_on), if (paused) BAD else OK)
         para(status, if (paused) getString(R.string.paused_explain) else getString(R.string.on_explain), MUTED)
-        if (paused) {
+        if (paused && restricted) {
+            restrictedNote(status)
+        } else if (paused) {
             button(status, getString(R.string.switch_back_on), style = Style.SECONDARY) { b ->
                 act(b, { api().post("/v1/me/kill-switch/off") as JSONObject }) {
                     if (it.optBoolean("applied")) getString(R.string.back_on) else getString(R.string.held_24h)
@@ -342,7 +350,7 @@ class MainActivity : Activity() {
             heading(c, getString(R.string.sim_title))
             para(c, getString(R.string.sim_until, Wire.time(security.str("window_ends_at"))))
             para(c, getString(R.string.sim_explain), MUTED)
-            button(c, getString(R.string.sim_confirm)) { b ->
+            if (restricted) restrictedNote(c) else button(c, getString(R.string.sim_confirm)) { b ->
                 act(b, { api().post("/v1/me/security/confirm-sim-change") }) { getString(R.string.sim_confirmed) }
             }
         }
@@ -412,11 +420,15 @@ class MainActivity : Activity() {
                 when (st) { "active" -> OK; "invited" -> WARN; else -> MUTED })
         }
         para(g, getString(R.string.invite_label), bold = true).apply { setPadding(0, dp(14), 0, dp(4)) }
-        val gm = input(g, getString(R.string.mobile_number), InputType.TYPE_CLASS_PHONE, null)
-        button(g, getString(R.string.invite)) { b ->
-            val m = gm.text.toString().trim()
-            if (m.isEmpty()) { gm.requestFocus(); return@button }
-            act(b, { api().post("/v1/me/guardians", JSONObject().put("mobile", m)) }) { getString(R.string.invite_sent) }
+        if (restricted) {
+            restrictedNote(g)
+        } else {
+            val gm = input(g, getString(R.string.mobile_number), InputType.TYPE_CLASS_PHONE, null)
+            button(g, getString(R.string.invite)) { b ->
+                val m = gm.text.toString().trim()
+                if (m.isEmpty()) { gm.requestFocus(); return@button }
+                act(b, { api().post("/v1/me/guardians", JSONObject().put("mobile", m)) }) { getString(R.string.invite_sent) }
+            }
         }
 
         val p = card()
@@ -452,9 +464,9 @@ class MainActivity : Activity() {
                 val who = inv.str("principal_name")
                 para(c, getString(R.string.asked_guardian, who))
                 val id = inv.getString("id")
-                row(c,
-                    action(getString(R.string.accept), Style.OK) { b -> act(b, { api().post("/v1/guardian/invitations/$id/accept") }) { getString(R.string.you_protect_name, who) } },
-                    action(getString(R.string.decline), Style.SECONDARY) { b -> act(b, { api().post("/v1/guardian/invitations/$id/decline") }) { getString(R.string.declined) } })
+                val accept = action(getString(R.string.accept), Style.OK) { b -> act(b, { api().post("/v1/guardian/invitations/$id/accept") }) { getString(R.string.you_protect_name, who) } }
+                val decline = action(getString(R.string.decline), Style.SECONDARY) { b -> act(b, { api().post("/v1/guardian/invitations/$id/decline") }) { getString(R.string.declined) } }
+                if (restricted) { restrictedNote(c); row(c, decline) } else row(c, accept, decline)
             }
         }
 
@@ -469,11 +481,11 @@ class MainActivity : Activity() {
             para(w, getString(R.string.not_sure), MUTED, 13f)
             val id = p.getString("check_id")
             if (p.str("status") == "pending_approval") {
-                row(w,
-                    action(getString(R.string.approve), Style.OK) { b ->
-                        confirm(getString(R.string.approve_q)) { act(b, { api().post("/v1/guardian/payments/$id/approve") }) { getString(R.string.approved) } }
-                    },
-                    action(getString(R.string.deny), Style.DANGER) { b -> act(b, { api().post("/v1/guardian/payments/$id/deny") }) { getString(R.string.denied) } })
+                val approve = action(getString(R.string.approve), Style.OK) { b ->
+                    confirm(getString(R.string.approve_q)) { act(b, { api().post("/v1/guardian/payments/$id/approve") }) { getString(R.string.approved) } }
+                }
+                val deny = action(getString(R.string.deny), Style.DANGER) { b -> act(b, { api().post("/v1/guardian/payments/$id/deny") }) { getString(R.string.denied) } }
+                if (restricted) { restrictedNote(w); row(w, deny) } else row(w, approve, deny)
             } else {
                 button(w, getString(R.string.stop_payment), style = Style.DANGER) { b ->
                     act(b, { api().post("/v1/guardian/payments/$id/cancel") }) { getString(R.string.cancelled) }
@@ -490,9 +502,9 @@ class MainActivity : Activity() {
                 para(c, getString(R.string.wants_to, names[ch.str("principal_id")] ?: getString(R.string.someone), changeLabel(ch.str("kind"))))
                 para(c, getString(R.string.happens_unless, Wire.time(ch.str("effective_at"))), MUTED, 13f)
                 val id = ch.getString("id")
-                row(c,
-                    action(getString(R.string.stop_it), Style.DANGER) { b -> act(b, { api().post("/v1/guardian/changes/$id/veto") }) { getString(R.string.stopped) } },
-                    action(getString(R.string.approve_now), Style.SECONDARY) { b -> act(b, { api().post("/v1/guardian/changes/$id/approve") }) { getString(R.string.approved) } })
+                val stop = action(getString(R.string.stop_it), Style.DANGER) { b -> act(b, { api().post("/v1/guardian/changes/$id/veto") }) { getString(R.string.stopped) } }
+                val approveNow = action(getString(R.string.approve_now), Style.SECONDARY) { b -> act(b, { api().post("/v1/guardian/changes/$id/approve") }) { getString(R.string.approved) } }
+                if (restricted) { restrictedNote(c); row(c, stop) } else row(c, stop, approveNow)
             }
         }
 
@@ -509,7 +521,10 @@ class MainActivity : Activity() {
                 if (pendingNow && Wire.isFuture(opens)) para(c, getString(R.string.recovery_from, Wire.time(opens)), MUTED, 13f)
                 val id = rc.getString("recovery_id")
                 val deny = action(getString(R.string.deny), Style.DANGER) { b -> act(b, { api().post("/v1/guardian/recoveries/$id/deny") }) { getString(R.string.stopped) } }
-                if (pendingNow) {
+                if (pendingNow && restricted) {
+                    restrictedNote(c)
+                    row(c, deny)
+                } else if (pendingNow) {
                     row(c, action(getString(R.string.recovery_approve), Style.OK) { b ->
                         act(b, { api().post("/v1/guardian/recoveries/$id/approve") }) { getString(R.string.recovery_done) }
                     }, deny)
@@ -570,7 +585,7 @@ class MainActivity : Activity() {
             rowWithPill(c, if (mine) getString(R.string.this_device) else getString(R.string.device_id, kid.take(8)),
                 getString(R.string.added_at, Wire.time(x.str("created_at"))), statusWord(st),
                 when (st) { "trusted" -> OK; "probation" -> WARN; else -> MUTED })
-            if (st != "revoked" && !mine) {
+            if (st != "revoked" && !mine && !restricted) {
                 button(c, getString(R.string.remove), style = Style.SECONDARY) { b ->
                     act(b, { api().delete("/v1/me/devices/$kid") }) { getString(R.string.removed) }
                 }
@@ -602,6 +617,8 @@ class MainActivity : Activity() {
         val reasons = p.optJSONArray("reasons")?.let { r -> (0 until r.length()).joinToString("; ") { r.optString(it) } }.orEmpty()
         para(parent, Wire.time(p.str("created_at")) + if (reasons.isNotEmpty()) " · $reasons" else "", MUTED, 13f)
     }
+
+    private fun restrictedNote(parent: LinearLayout) = para(parent, getString(R.string.restricted_action), WARN_TEXT, 13f)
 
     private fun statusPill(status: String): Pair<String, Int> = when (status) {
         "allowed" -> getString(R.string.st_allowed) to OK
