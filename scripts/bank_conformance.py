@@ -122,7 +122,9 @@ def main(argv=None) -> int:
     must(h.post(f"/v1/guardian/invitations/{inv['id']}/accept", headers=C))
     must(h.patch("/v1/me/rules", headers=E, json={"approval_threshold": 10_000 * R}))
     if a.setup_env:
-        with open(a.setup_env, "w") as f:
+        # it holds a test API key and session token: readable by this user only
+        fd = os.open(a.setup_env, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
             f.write(f"GR_LIVE_URL={base}\nGR_LIVE_API_KEY={api_key}\nGR_LIVE_MOBILE={elder}\n"
                     f"GR_LIVE_GUARDIAN_TOKEN={carer_tok}\n")
 

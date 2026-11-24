@@ -320,7 +320,8 @@ NOT_FOR_PEOPLE = {
     "participant_txn_id was already used for a different payment", "payee is required",
     "payment was not cleared to execute (status: {0})", "kind must be one of {0}", "token is required", "unknown rule fields: {0}",
     "verified_on cannot be in the future",
-    "webhook url must be https:// (http://localhost allowed outside production)", "{0} must be a date like 1951-04-23",
+    "webhook url must be https:// (http://localhost allowed outside production)",
+    "webhook url must point to a public address, not a private or internal one", "{0} must be a date like 1951-04-23",
     "{0} must be base64",
 }
 
@@ -356,7 +357,10 @@ def _catalog_table(lang: str, table_id: int) -> dict[str, str]:
     """English -> translation for one server table, from i18n/catalog.json + i18n/<lang>.json."""
     if lang == "hi":
         return {1: ALERTS_HI, 2: FRAGMENTS_HI, 3: ERRORS_HI, 4: ERROR_FRAGMENTS_HI}[table_id]
-    path = I18N_DIR / f"{lang}.json"
+    known = next((code for code in language_meta() if code == lang), None)   # never the caller's string
+    if known is None:
+        return {}
+    path = I18N_DIR / f"{known}.json"
     if not path.exists():
         return {}
     catalog = json.loads((I18N_DIR / "catalog.json").read_text(encoding="utf-8"))

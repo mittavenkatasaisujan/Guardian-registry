@@ -32,7 +32,7 @@ import httpx
 from . import messages
 from .clock import Clock, iso
 from .db import Database
-from .security import decrypt_mobile, decrypt_text, mask_mobile, new_id, sign_webhook
+from .security import decrypt_mobile, decrypt_text, mask_mobile, new_id, sign_webhook, log_safe
 
 log = logging.getLogger("guardian_registry.notify")
 
@@ -80,7 +80,7 @@ class LogSmsSender(SmsSender):
 
     def send(self, to: str, text: str) -> None:
         self.sent.append((to, text))
-        log.info("SMS to %s: %s", mask_mobile(to), text)
+        log.info("SMS to %s: %s", log_safe(mask_mobile(to)), log_safe(text))
 
 
 class HttpSmsSender(SmsSender):
@@ -341,6 +341,10 @@ class Dispatcher:
             p = self.db.one("SELECT webhook_url, webhook_secret FROM participants WHERE id=?", (n["recipient_id"],))
             if not p or not p["webhook_url"]:
                 return False
+            from .security import webhook_url_problem
+            problem = webhook_url_problem(p["webhook_url"])   # again at delivery: DNS can change after setup
+            if problem:
+                raise RuntimeError(problem)
             body = json.dumps({"id": n["id"], "event": n["kind"], "created_at": n["created_at"],
                                "data": json.loads(n["payload"])}, ensure_ascii=False).encode()
             r = self.http.post(p["webhook_url"], content=body, headers={

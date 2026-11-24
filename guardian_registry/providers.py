@@ -27,7 +27,7 @@ import httpx
 import jwt
 
 from .notify import PushSender, SmsSender, WhatsAppSender
-from .security import mask_mobile
+from .security import log_safe, mask_mobile
 
 log = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ class TwilioVerifySms(SmsSender):
 
     def send(self, to: str, text: str) -> None:
         log.info("SMS alert to %s skipped: Twilio Verify sends sign-in codes only (alerts go in-app and by push)",
-                 mask_mobile(to))
+                 log_safe(mask_mobile(to)))
 
     def send_otp(self, to: str, code: str, minutes: int, language: str = "en") -> None:
         data = {"To": to, "Channel": "sms"}

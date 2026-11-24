@@ -44,7 +44,7 @@ from .policy import _rupees as rupees, evaluate
 from .presets import PRESETS
 from .security import (
     encrypt_mobile, is_production, mobile_hash, new_id, new_otp, new_secret, normalize_mobile,
-    otp_hash, secret_hash,
+    otp_hash, secret_hash, webhook_url_problem,
 )
 
 LOOSENING_DELAY_HOURS = 24
@@ -173,9 +173,9 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         """Register (or clear) the URL that receives signed check.updated events."""
         if url:
             url = url.strip()
-            local = url.startswith(("http://localhost", "http://127.0.0.1"))
-            if not (url.startswith("https://") or (local and not is_production())):
-                raise Invalid("webhook url must be https:// (http://localhost allowed outside production)")
+            problem = webhook_url_problem(url)
+            if problem:
+                raise Invalid(problem)
         secret = new_secret("whs") if url else None
         with self.db.tx() as c:
             c.execute("UPDATE participants SET webhook_url=?, webhook_secret=? WHERE id=?", (url, secret, participant_id))

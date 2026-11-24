@@ -22,6 +22,12 @@ _DEV_PEPPER = "dev-only-pepper-change-me"
 _DEV_DATA_KEY = base64.urlsafe_b64encode(hashlib.sha256(b"dev-only-data-key").digest()).decode()
 
 
+# SHA-256 of android/app/debug.keystore's certificate. That keystore is in the repository on purpose
+# (test builds install over each other), so anyone can sign an app with it: it must never count as
+# the genuine app.
+PUBLIC_DEBUG_CERT_SHA256 = "19b1bf559a10812387cb29f90ad468d6697db7b82123806d574efe1404367f32"
+
+
 def is_production() -> bool:
     return os.environ.get("GR_ENV", "development").lower() == "production"
 
@@ -40,8 +46,58 @@ def check_production_config() -> None:
     if not (os.environ.get("GR_SMS_URL") or os.environ.get("GR_SMS_PROVIDER")):
         problems.append("GR_SMS_PROVIDER or GR_SMS_URL must be set (otherwise alerts and sign-in codes are "
                         "only logged)")
+    if os.environ.get("GR_SMS_PROVIDER", "").strip().lower() == "twilio_verify":
+        problems.append("GR_SMS_PROVIDER=twilio_verify sends sign-in codes only, not alerts (a SIM-swap warning "
+                        "would never be texted): use twilio or msg91 in production")
+    digests = {d.strip().lower().replace(":", "") for d in os.environ.get("GR_ANDROID_CERT_DIGESTS", "").split(",")}
+    if PUBLIC_DEBUG_CERT_SHA256 in digests:
+        problems.append("GR_ANDROID_CERT_DIGESTS includes the public debug certificate: anyone can sign an app "
+                        "with it, so it must not count as genuine")
     if problems:
         raise RuntimeError("unsafe production config: " + "; ".join(problems))
+
+
+def webhook_url_problem(url: str) -> str | None:
+    """Why this webhook URL can't be used, or None. Outside production, http://localhost is allowed
+    for testing. In production the host must resolve only to public addresses, so a participant
+    can't make the registry send requests into its own network (cloud metadata at 169.254.169.254,
+    internal services, the registry itself)."""
+    from urllib.parse import urlsplit
+    local = url.startswith(("http://localhost", "http://127.0.0.1"))
+    if not (url.startswith("https://") or (local and not is_production())):
+        return "webhook url must be https:// (http://localhost allowed outside production)"
+    if not is_production():
+        return None
+    host = urlsplit(url).hostname
+    if not host:
+        return "webhook url must be https:// (http://localhost allowed outside production)"
+    for ip in resolve_host(host):
+        if not ip.is_global:
+            return "webhook url must point to a public address, not a private or internal one"
+    return None
+
+
+def resolve_host(host: str) -> list:
+    """Every address a hostname resolves to (an IP literal resolves to itself). Fails closed:
+    a name that doesn't resolve gives a non-global placeholder."""
+    import ipaddress
+    import socket
+    try:
+        return [ipaddress.ip_address(host)]
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
+    except OSError:
+        return [ipaddress.IPv4Address(0)]   # the unspecified address: not global, so refused
+    return [ipaddress.ip_address(i[4][0].split("%")[0]) for i in infos] or [ipaddress.IPv4Address(0)]
+
+
+def log_safe(value: object) -> str:
+    """For log lines: no line breaks or other control characters from user-supplied text, so
+    nobody can forge an extra log entry with a crafted name, number or message."""
+    text = str(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+    return "".join(ch if ch.isprintable() else "?" for ch in text)
 
 
 def pepper() -> bytes:

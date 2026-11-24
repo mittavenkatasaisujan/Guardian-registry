@@ -179,11 +179,14 @@ class SimFeedMixin:
         now = self.clock.now()
         try:
             mobile = normalize_mobile(str(ev.get("mobile") or ""))
+        except ValueError:
+            return {**out, "result": "invalid", "detail": "mobile must be a valid Indian mobile number"}
+        try:
             when = _parse_when(ev.get("occurred_at"), now)
-        except ValueError as e:
-            return {**out, "result": "invalid", "detail": str(e)}
-        except Invalid as e:
-            return {**out, "result": "invalid", "detail": str(e)}
+        except Invalid as e:   # our own messages ("occurred_at is required", ...), no internals
+            return {**out, "result": "invalid", "detail": e.args[0] if e.args else "occurred_at is invalid"}
+        except ValueError:
+            return {**out, "result": "invalid", "detail": "occurred_at must be an ISO 8601 timestamp"}
 
         with self.db.tx() as c:
             uid = self.user_by_mobile(mobile)

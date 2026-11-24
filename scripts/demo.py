@@ -134,7 +134,7 @@ print("with the certificate (forwarded by the proxy on 127.0.0.1) ->",
 step("Bank A registers a webhook (a real local HTTP receiver that checks signatures)")
 hook = call("PUT", "/v1/participant/webhook", headers=sbi, json={"url": f"http://127.0.0.1:{HOOK_PORT}/gr"})
 HOOK_SECRET[0] = hook["webhook_secret"]
-print("webhook secret issued:", hook["webhook_secret"][:8] + "...")
+print("webhook secret issued:", "yes" if hook["webhook_secret"] else "no")
 
 step("Amma and Ravi sign in with an SMS code (server runs with GR_OTP_DEV_ECHO=1)")
 
