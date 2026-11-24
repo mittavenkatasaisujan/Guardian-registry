@@ -14,7 +14,6 @@
     <string name="sign_in">Sign in</string>
     <string name="back">Back</string>
     <string name="accept">Accept</string>
-    <string name="you_protect_them">You now protect them.</string>
     <string name="decline">Decline</string>
     <string name="declined">Declined.</string>
     <string name="nothing_waiting">Nothing is waiting for you.</string>
@@ -25,22 +24,10 @@
     <string name="denied">Denied. The payment will not go through.</string>
     <string name="stop_payment">Stop this payment</string>
     <string name="cancelled">Cancelled.</string>
-    <string name="my_protection">My protection</string>
-    <string name="all_paused">All payments from your account are paused.</string>
-    <string name="resume">Resume payments</string>
-    <string name="resume_requested">Resume requested.</string>
-    <string name="pause_all">Pause all my payments</string>
-    <string name="pause_q">Pause every payment from your account until you resume?</string>
-    <string name="paused">Payments paused.</string>
     <string name="alerts">Alerts</string>
-    <string name="no_alerts">No alerts.</string>
-    <string name="security">Security</string>
-    <string name="lost_phone">I lost my phone</string>
-    <string name="lost_q">Sign out every device and block approvals from this number for a while?</string>
     <string name="lost_done">Done. Every device is signed out.</string>
     <string name="sign_out">Sign out</string>
     <string name="signed_out">Signed out.</string>
-    <string name="refresh">Refresh</string>
     <string name="yes">Yes</string>
     <string name="no">No</string>
     <string name="signed_out_reason" formatted="true">Signed out: %1$s</string>
@@ -48,6 +35,118 @@
     <string name="signed_in_limits" formatted="true">Signed in with limits: %1$s</string>
     <string name="hello" formatted="true">Hello, %1$s</string>
     <string name="asked_guardian" formatted="true">%1$s asked you to be their payment guardian.</string>
-    <string name="from_person" formatted="true"> from %1$s</string>
-    <string name="amount_to" formatted="true">%1$s to %2$s%3$s</string>
+    <string name="tab_me">My protection</string>
+    <string name="tab_guardian">I protect</string>
+    <string name="tab_devices">Devices</string>
+    <string name="loading">Loading…</string>
+    <string name="restricted_banner" formatted="true">This sign-in is restricted for now: %1$s. You can still pause payments, deny or stop payments, and make rules stricter.</string>
+    <string name="dev_code" formatted="true">Development mode code: %1$s</string>
+    <string name="welcome">Welcome! Your account is set up.</string>
+    <string name="identity" formatted="true">Identity: %1$s</string>
+    <string name="id_bank_verified">verified by a bank</string>
+    <string name="id_bank_min_kyc">basic bank check</string>
+    <string name="id_otp">phone number only</string>
+    <string name="payments_on">Payments are on</string>
+    <string name="payments_paused">Payments are paused</string>
+    <string name="paused_explain">No bank will send money from your accounts until payments are switched back on.</string>
+    <string name="on_explain">If someone is pressuring you to pay, pause everything. You can switch back on later.</string>
+    <string name="switch_back_on">Switch payments back on</string>
+    <string name="pause_all_payments">Pause all payments</string>
+    <string name="back_on">Payments are back on.</string>
+    <string name="held_24h">Your request is held for 24 hours. Your guardians can approve it sooner.</string>
+    <string name="all_paused_toast">All payments are paused.</string>
+    <string name="sim_title">Your SIM card was reported changed</string>
+    <string name="sim_until" formatted="true">Until %1$s, larger payments are held and new sign-ins can\'t approve anything.</string>
+    <string name="sim_explain">If you changed your SIM yourself, confirm it from this phone. If you didn\'t, call your mobile operator now.</string>
+    <string name="sim_confirm">Yes, I changed my SIM</string>
+    <string name="sim_confirmed">Thanks. Normal protection applies again.</string>
+    <string name="changes_waiting">Changes waiting</string>
+    <string name="takes_effect" formatted="true">Takes effect %1$s unless a guardian stops it.</string>
+    <string name="change_update_rules">Loosen payment limits</string>
+    <string name="change_remove_guardian">Remove a guardian</string>
+    <string name="change_change_mobile">Move to a new number</string>
+    <string name="my_rules">My rules</string>
+    <string name="rule_per_txn">Most per payment</string>
+    <string name="rule_daily">Most per day (all banks)</string>
+    <string name="rule_approval">Guardian approves from</string>
+    <string name="rule_new_payee">Wait on new payees from</string>
+    <string name="rule_cooling">Wait time</string>
+    <string name="rule_timeout">Time for guardian to answer</string>
+    <string name="rule_channels">Blocked channels</string>
+    <string name="rule_verified">Only bank-verified guardians approve</string>
+    <string name="rule_sim">Hold payments after a SIM change</string>
+    <string name="rule_scam">Hold payments that look like a scam</string>
+    <string name="minutes" formatted="true">%1$s min</string>
+    <string name="none">None</string>
+    <string name="no_limit">No limit</string>
+    <string name="preset_label">Use a ready-made set</string>
+    <string name="apply">Apply</string>
+    <string name="preset_held">Stricter parts apply now; looser parts wait 24 hours.</string>
+    <string name="applied">Applied.</string>
+    <string name="rules_note">Making rules stricter works at once. Loosening them waits 24 hours, and your guardians can stop it.</string>
+    <string name="my_guardians">My guardians</string>
+    <string name="no_guardians">No guardians yet. A guardian can approve large payments and pause payments for you.</string>
+    <string name="invite_label">Invite a guardian by mobile number</string>
+    <string name="invite">Invite</string>
+    <string name="invite_sent">Invitation sent. They need to accept it in their app.</string>
+    <string name="recent_payments">Recent payments</string>
+    <string name="no_payments">No payments checked yet.</string>
+    <string name="to_payee" formatted="true">To %1$s</string>
+    <string name="st_allowed">Allowed</string>
+    <string name="st_approved">Approved</string>
+    <string name="st_released">Released</string>
+    <string name="st_pending_approval">Waiting for approval</string>
+    <string name="st_cooling_off">On hold</string>
+    <string name="st_blocked">Blocked</string>
+    <string name="st_denied">Denied</string>
+    <string name="st_expired">Expired</string>
+    <string name="st_cancelled">Cancelled</string>
+    <string name="st_failed">Failed</string>
+    <string name="w_active">active</string>
+    <string name="w_invited">invited</string>
+    <string name="w_declined">declined</string>
+    <string name="w_trusted">trusted</string>
+    <string name="w_probation">probation</string>
+    <string name="w_revoked">revoked</string>
+    <string name="lost_title">Lost your phone?</string>
+    <string name="lost_explain">This signs you out everywhere and holds larger payments for 72 hours.</string>
+    <string name="report_lost">Report lost phone</string>
+    <string name="lost_confirm">Sign out of every device and hold larger payments for 72 hours?</string>
+    <string name="people_i_protect">People I protect</string>
+    <string name="guardian_requests">Guardian requests</string>
+    <string name="you_protect_name" formatted="true">You now protect %1$s.</string>
+    <string name="from_name" formatted="true">from %1$s</string>
+    <string name="answer_by" formatted="true">Answer by %1$s</string>
+    <string name="goes_through" formatted="true">Goes through at %1$s unless stopped</string>
+    <string name="not_sure">Not sure? Call them on a number you know before approving.</string>
+    <string name="changes_waiting_g">Protection changes waiting</string>
+    <string name="wants_to" formatted="true">%1$s wants to: %2$s</string>
+    <string name="happens_unless" formatted="true">Happens %1$s unless you stop it. Scammers often ask people to do this.</string>
+    <string name="someone">Someone</string>
+    <string name="stop_it">Stop it</string>
+    <string name="approve_now">Approve now</string>
+    <string name="stopped">Stopped.</string>
+    <string name="recoveries">Account recovery requests</string>
+    <string name="recovery_wants" formatted="true">%1$s wants to move their account to %2$s.</string>
+    <string name="recovery_warn">Only approve if you have spoken to them yourself, on a call YOU placed or in person. If in doubt, deny.</string>
+    <string name="recovery_from" formatted="true">You can approve from %1$s.</string>
+    <string name="recovery_approve">I spoke to them: approve</string>
+    <string name="recovery_done">Thank you. Your vouch is recorded.</string>
+    <string name="pause_theirs">Pause their payments</string>
+    <string name="pause_theirs_q" formatted="true">Pause all payments for %1$s?</string>
+    <string name="paused_for" formatted="true">Payments paused for %1$s.</string>
+    <string name="protect_none">You don\'t protect anyone yet. Someone has to invite you from their app.</string>
+    <string name="mark_all_read">Mark all read</string>
+    <string name="all_read">All marked as read.</string>
+    <string name="new_badge">New</string>
+    <string name="no_alerts_yet">No alerts yet.</string>
+    <string name="devices_explain">Each phone or browser you sign in on has its own key. A new one can\'t approve payments for 24 hours.</string>
+    <string name="this_device">This device</string>
+    <string name="device_id" formatted="true">Device %1$s</string>
+    <string name="added_at" formatted="true">Added %1$s</string>
+    <string name="remove">Remove</string>
+    <string name="removed">Removed and signed out.</string>
+    <string name="no_devices">No device keys yet.</string>
+    <string name="sign_out_here">Sign out here</string>
+    <string name="sign_out_everywhere">Sign out everywhere</string>
 </resources>

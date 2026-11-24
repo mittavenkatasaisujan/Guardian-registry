@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -12,10 +13,12 @@ import android.os.Looper
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONArray
@@ -23,9 +26,10 @@ import org.json.JSONObject
 import java.util.concurrent.Executors
 
 /**
- * One screen, rebuilt from data: sign in, then "Payments waiting" for guardians, your own
- * protection (pause payments), alerts, and lost-phone. Views are built in code to keep
- * the app dependency-free. Labels are string resources (English, and Hindi in values-hi);
+ * The same four screens as the web app: My protection, I protect, Alerts and Devices, with a
+ * tab bar, badges, the restricted-sign-in banner, and a refresh every 15 seconds (not while
+ * typing). Views are built in code to keep the app dependency-free. Labels are string
+ * resources (English, Hindi in values-hi, other languages generated from the catalog);
  * names, payees and alerts come from the server and are shown as plain text.
  */
 class MainActivity : Activity() {
@@ -33,57 +37,121 @@ class MainActivity : Activity() {
     private val main = Handler(Looper.getMainLooper())
     private lateinit var store: Store
     private lateinit var key: DeviceKey
+    private lateinit var tabs: LinearLayout
+    private lateinit var banner: TextView
+    private lateinit var scroll: ScrollView
     private lateinit var root: LinearLayout
+    private var tab = "me"
+    private var dialogOpen = false
+    private var resumed = false
+    private val tabButtons = HashMap<String, Button>()
+
+    private val refresher = object : Runnable {
+        override fun run() {
+            if (resumed && store.token != null && !dialogOpen && currentFocus !is EditText) render(quiet = true)
+            main.postDelayed(this, REFRESH_MS)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = Store(this)
         key = DeviceKey(this)
         PushService.init(this)
+        tab = savedInstanceState?.getString("tab") ?: "me"
+        tabs = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(BRAND)
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+        }
+        for ((id, label) in listOf("me" to R.string.tab_me, "guardian" to R.string.tab_guardian,
+                                   "alerts" to R.string.alerts, "devices" to R.string.tab_devices)) {
+            val b = Button(this).apply {
+                text = getString(label); isAllCaps = false; textSize = 13f; setTextColor(Color.WHITE)
+                background = null; minHeight = dp(44); setPadding(dp(2), 0, dp(2), 0)
+                setOnClickListener { switchTo(id) }
+            }
+            tabButtons[id] = b
+            tabs.addView(b, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        banner = TextView(this).apply {
+            textSize = 14f; setTextColor(Color.parseColor("#7C2D12")); setBackgroundColor(Color.parseColor("#FFEDD5"))
+            setPadding(dp(16), dp(10), dp(16), dp(10)); visibility = View.GONE
+        }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(24), dp(16), dp(24))
+            setPadding(dp(16), dp(16), dp(16), dp(32))
         }
-        setContentView(ScrollView(this).apply { addView(root) })
+        scroll = ScrollView(this).apply { addView(root); setBackgroundColor(PAGE) }
+        setContentView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(tabs, LinearLayout.LayoutParams(-1, -2))
+            addView(banner, LinearLayout.LayoutParams(-1, -2))
+            addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        })
         if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("tab", tab)
     }
 
     override fun onResume() {
         super.onResume()
-        if (store.token == null) showSignIn() else loadHome()
+        resumed = true
+        if (store.token == null) showSignIn() else render()
+        main.removeCallbacks(refresher)
+        main.postDelayed(refresher, REFRESH_MS)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        resumed = false
+        main.removeCallbacks(refresher)
     }
 
     private fun api() = Api(store.apiBase, store.token)
 
     /** Run [work] off the main thread, then [done] on it. Shows API errors as a toast. */
-    private fun <T> bg(work: () -> T, done: (T) -> Unit) {
+    private fun <T> bg(work: () -> T, quiet: Boolean = false, failed: (() -> Unit)? = null, done: (T) -> Unit) {
         io.execute {
             try {
                 val out = work()
                 main.post { done(out) }
             } catch (e: ApiError) {
                 main.post {
-                    if (e.status == 401) signedOut(getString(R.string.signed_out_reason, e.message ?: "")) else toast(e.message ?: getString(R.string.error))
+                    failed?.invoke()
+                    if (e.status == 401) signedOut(getString(R.string.signed_out_reason, e.message ?: ""))
+                    else if (!quiet) toast(e.message ?: getString(R.string.error))
                 }
             } catch (e: Exception) {
-                main.post { toast(getString(R.string.cant_reach)) }
+                main.post {
+                    failed?.invoke()
+                    if (!quiet) toast(getString(R.string.cant_reach))
+                }
             }
         }
     }
 
     // ---------------------------------------------------------------- sign-in
     private fun showSignIn(message: String? = null) {
+        tabs.visibility = View.GONE
+        banner.visibility = View.GONE
         root.removeAllViews()
         title(getString(R.string.app_name))
         para(getString(R.string.intro))
-        message?.let { para(it, Color.parseColor("#9A3412")) }
-        val mobile = input(getString(R.string.mobile_number), InputType.TYPE_CLASS_PHONE, store.mobile)
+        message?.let { para(it, WARN_TEXT) }
+        val c = card()
+        val mobile = input(c, getString(R.string.mobile_number), InputType.TYPE_CLASS_PHONE, store.mobile)
         // Debug builds only: point the app at a test server (e.g. the registry on your PC over Wi-Fi).
-        val server = if (BuildConfig.DEBUG) input("Server address (testing)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI, store.apiBase) else null
-        button(getString(R.string.send_code)) {
+        val server = if (BuildConfig.DEBUG) input(c, "Server address (testing)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI, store.apiBase) else null
+        button(c, getString(R.string.send_code)) { b ->
             val m = mobile.text.toString().trim()
             server?.let { store.apiBase = it.text.toString().trim().trimEnd('/') }
-            bg({ Api(store.apiBase, null).post("/v1/auth/otp", JSONObject().put("mobile", m).put("language", Wire.language())) as JSONObject }) {
+            busy(b)
+            bg({ Api(store.apiBase, null).post("/v1/auth/otp", JSONObject().put("mobile", m).put("language", Wire.language())) as JSONObject },
+               failed = { idle(b) }) {
                 store.mobile = m
                 showCode(m, it.optString("dev_code").ifBlank { null })
             }
@@ -94,21 +162,27 @@ class MainActivity : Activity() {
         root.removeAllViews()
         title(getString(R.string.enter_code))
         para(getString(R.string.code_sent, mobile))
-        val code = input(getString(R.string.code), InputType.TYPE_CLASS_NUMBER, devCode)
-        val name = input(getString(R.string.your_name_first), InputType.TYPE_CLASS_TEXT, null)
-        button(getString(R.string.sign_in)) {
-            val c = code.text.toString().trim()
+        val c = card()
+        devCode?.let { pill(c, getString(R.string.dev_code, it), WARN_BG, WARN_TEXT) }
+        val code = input(c, getString(R.string.code), InputType.TYPE_CLASS_NUMBER, devCode)
+        val name = input(c, getString(R.string.your_name_first), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS, null)
+        button(c, getString(R.string.sign_in)) { b ->
+            val cd = code.text.toString().trim()
             val n = name.text.toString().trim()
-            bg({ signIn(mobile, c, n) }) { out ->
+            busy(b)
+            bg({ signIn(mobile, cd, n) }, failed = { idle(b) }) { out ->
                 store.token = out.getString("token")
                 PushService.refresh(this)
-                if (out.optBoolean("restricted")) {
-                    toast(getString(R.string.signed_in_limits, out.optJSONArray("restriction_reasons")?.join(", ") ?: ""))
+                when {
+                    out.optBoolean("new_user") -> toast(getString(R.string.welcome))
+                    out.optBoolean("restricted") ->
+                        toast(getString(R.string.signed_in_limits, out.optJSONArray("restriction_reasons")?.join(", ")?.replace("\"", "") ?: ""))
                 }
-                loadHome()
+                tab = "me"
+                render()
             }
         }
-        button(getString(R.string.back), secondary = true) { showSignIn() }
+        button(c, getString(R.string.back), style = Style.SECONDARY) { showSignIn() }
     }
 
     /** OTP + device key proof. The key is created (and attested) on first use. */
@@ -131,146 +205,552 @@ class MainActivity : Activity() {
         showSignIn(message)
     }
 
-    // ---------------------------------------------------------------- home
-    private fun loadHome() {
-        bg({
-            val a = api()
-            Home(a.obj("/v1/me"), a.obj("/v1/me/rules"), a.obj("/v1/guardian/inbox"), a.arr("/v1/guardian/wards"),
-                a.arr("/v1/me/notifications?limit=20"))
-        }) { showHome(it) }
+    // ---------------------------------------------------------------- tabs
+    private fun switchTo(id: String) {
+        if (id == tab) { render(); return }
+        tab = id
+        root.removeAllViews()
+        para(getString(R.string.loading), MUTED)
+        scroll.scrollTo(0, 0)
+        render()
     }
 
-    private data class Home(val me: JSONObject, val rules: JSONObject, val inbox: JSONObject, val wards: JSONArray, val alerts: JSONArray)
-
-    private fun showHome(h: Home) {
-        root.removeAllViews()
-        title(getString(R.string.hello, h.me.optString("display_name")))
-        val names = HashMap<String, String>()
-        for (i in 0 until h.wards.length()) {
-            val w = h.wards.getJSONObject(i)
-            names[w.optString("principal_id")] = w.optString("principal_name")
+    /** Load the current tab's data, then draw it (keeping the scroll position on a refresh). */
+    private fun render(quiet: Boolean = false) {
+        tabs.visibility = View.VISIBLE
+        for ((id, b) in tabButtons) {
+            b.typeface = if (id == tab) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            b.alpha = if (id == tab) 1f else 0.8f
         }
-
-        val invites = h.inbox.optJSONArray("invitations") ?: JSONArray()
-        for (i in 0 until invites.length()) {
-            val g = invites.getJSONObject(i)
-            card(getString(R.string.asked_guardian, g.optString("principal_name")))
-            row(
-                getString(R.string.accept) to { act("/v1/guardian/invitations/${g.getString("id")}/accept", getString(R.string.you_protect_them)) },
-                getString(R.string.decline) to { act("/v1/guardian/invitations/${g.getString("id")}/decline", getString(R.string.declined)) },
-            )
+        val which = tab
+        bg({ load(which) }, quiet = quiet) { data ->
+            if (which != tab || store.token == null) return@bg
+            val y = scroll.scrollY
+            root.removeAllViews()
+            when (which) {
+                "guardian" -> guardianView(data)
+                "alerts" -> alertsView(data)
+                "devices" -> devicesView(data)
+                else -> meView(data)
+            }
+            setBanner(data.security)
+            setBadges(data.inbox, data.unread)
+            scroll.post { scroll.scrollTo(0, y) }
         }
+    }
 
-        heading(getString(R.string.payments_waiting))
-        val held = h.inbox.optJSONArray("held_payments") ?: JSONArray()
-        if (held.length() == 0) para(getString(R.string.nothing_waiting), Color.GRAY)
-        for (i in 0 until held.length()) {
-            val p = held.getJSONObject(i)
-            val who = names[p.optString("principal_id")]?.let { getString(R.string.from_person, it) } ?: ""
-            card(getString(R.string.amount_to, Wire.rupees(p.optLong("amount")), p.optString("payee"), who))
-            val id = p.getString("check_id")
-            if (p.optString("status") == "pending_approval") {
-                row(
-                    getString(R.string.approve) to { confirm(getString(R.string.approve_q)) { act("/v1/guardian/payments/$id/approve", getString(R.string.approved)) } },
-                    getString(R.string.deny) to { act("/v1/guardian/payments/$id/deny", getString(R.string.denied)) },
-                )
-            } else {
-                row(getString(R.string.stop_payment) to { act("/v1/guardian/payments/$id/cancel", getString(R.string.cancelled)) })
+    private class Data(
+        val inbox: JSONObject, val unread: Int, val security: JSONObject? = null,
+        val me: JSONObject? = null, val rules: JSONObject? = null, val guardians: JSONArray? = null,
+        val changes: JSONArray? = null, val payments: JSONArray? = null, val presets: JSONObject? = null,
+        val wards: JSONArray? = null, val alerts: JSONArray? = null, val devices: JSONArray? = null,
+        val myKeyId: String? = null,
+    )
+
+    private fun load(which: String): Data {
+        val a = api()
+        val inbox = a.obj("/v1/guardian/inbox")
+        val unread = a.arr("/v1/me/notifications?unread_only=true&limit=100").length()
+        return when (which) {
+            "guardian" -> Data(inbox, unread, wards = a.arr("/v1/guardian/wards"))
+            "alerts" -> Data(inbox, unread, alerts = a.arr("/v1/me/notifications?limit=50"))
+            "devices" -> Data(inbox, unread, security = a.obj("/v1/me/security"), devices = a.arr("/v1/me/devices"),
+                              myKeyId = if (key.exists) Wire.keyId(key.publicKey()) else null)
+            else -> Data(inbox, unread, security = a.obj("/v1/me/security"), me = a.obj("/v1/me"),
+                          rules = a.obj("/v1/me/rules"), guardians = a.arr("/v1/me/guardians"),
+                          changes = a.arr("/v1/me/changes"), payments = a.arr("/v1/me/payments?limit=10"),
+                          presets = a.obj("/v1/presets"))
+        }
+    }
+
+    private fun setBanner(security: JSONObject?) {
+        val session = security?.optJSONObject("this_session") ?: return
+        if (session.optBoolean("restricted")) {
+            val reasons = session.optJSONArray("reasons")?.let { r -> (0 until r.length()).joinToString("; ") { r.optString(it) } } ?: ""
+            banner.text = getString(R.string.restricted_banner, reasons)
+            banner.visibility = View.VISIBLE
+        } else {
+            banner.visibility = View.GONE
+        }
+    }
+
+    private fun setBadges(inbox: JSONObject, unread: Int) {
+        val n = listOf("held_payments", "pending_changes", "invitations", "recoveries").sumOf { inbox.optJSONArray(it)?.length() ?: 0 }
+        tabButtons["guardian"]?.text = getString(R.string.tab_guardian) + if (n > 0) " ($n)" else ""
+        tabButtons["alerts"]?.text = getString(R.string.alerts) + if (unread > 0) " ($unread)" else ""
+    }
+
+    // ---------------------------------------------------------------- My protection
+    private fun meView(d: Data) {
+        val me = d.me!!
+        val rules = d.rules!!
+        val security = d.security!!
+        title(getString(R.string.hello, me.optString("display_name")))
+        para(getString(R.string.identity, identityText(me.optString("identity_level"))), MUTED, 13f)
+
+        val paused = rules.optBoolean("kill_switch")
+        val status = card(if (paused) BAD else OK)
+        bigStatus(status, if (paused) getString(R.string.payments_paused) else getString(R.string.payments_on), if (paused) BAD else OK)
+        para(status, if (paused) getString(R.string.paused_explain) else getString(R.string.on_explain), MUTED)
+        if (paused) {
+            button(status, getString(R.string.switch_back_on), style = Style.SECONDARY) { b ->
+                act(b, { api().post("/v1/me/kill-switch/off") as JSONObject }) {
+                    if (it.optBoolean("applied")) getString(R.string.back_on) else getString(R.string.held_24h)
+                }
+            }
+        } else {
+            button(status, getString(R.string.pause_all_payments), style = Style.DANGER) { b ->
+                act(b, { api().post("/v1/me/kill-switch/on") }) { getString(R.string.all_paused_toast) }
             }
         }
 
-        heading(getString(R.string.my_protection))
-        val paused = h.rules.optBoolean("kill_switch")
-        if (paused) {
-            para(getString(R.string.all_paused), Color.parseColor("#9A3412"))
-            button(getString(R.string.resume), secondary = true) { act("/v1/me/kill-switch/off", getString(R.string.resume_requested)) }
-        } else {
-            button(getString(R.string.pause_all)) {
-                confirm(getString(R.string.pause_q)) {
-                    act("/v1/me/kill-switch/on", getString(R.string.paused))
+        if (security.optBoolean("sim_swap_window_open")) {
+            val c = card(WARN)
+            heading(c, getString(R.string.sim_title))
+            para(c, getString(R.string.sim_until, Wire.time(security.optString("window_ends_at"))))
+            para(c, getString(R.string.sim_explain), MUTED)
+            button(c, getString(R.string.sim_confirm)) { b ->
+                act(b, { api().post("/v1/me/security/confirm-sim-change") }) { getString(R.string.sim_confirmed) }
+            }
+        }
+
+        val pending = d.changes!!.objects().filter { it.optString("status") == "pending" }
+        if (pending.isNotEmpty()) {
+            val c = card(WARN)
+            heading(c, getString(R.string.changes_waiting))
+            for (ch in pending) {
+                item(c)
+                para(c, changeLabel(ch.optString("kind")), bold = true)
+                para(c, getString(R.string.takes_effect, Wire.time(ch.optString("effective_at"))), MUTED, 13f)
+            }
+        }
+
+        val r = card()
+        heading(r, getString(R.string.my_rules))
+        val rows = listOf(
+            R.string.rule_per_txn to money(rules, "per_txn_limit"),
+            R.string.rule_daily to money(rules, "daily_limit"),
+            R.string.rule_approval to money(rules, "approval_threshold"),
+            R.string.rule_new_payee to money(rules, "new_payee_delay_threshold"),
+            R.string.rule_cooling to getString(R.string.minutes, rules.optInt("cooling_off_minutes").toString()),
+            R.string.rule_timeout to getString(R.string.minutes, rules.optInt("approval_timeout_minutes").toString()),
+            R.string.rule_channels to (rules.optJSONArray("blocked_channels")?.let { a ->
+                if (a.length() == 0) null else (0 until a.length()).joinToString(", ") { a.optString(it).uppercase() }
+            } ?: getString(R.string.none)),
+            R.string.rule_verified to yesNo(rules.optBoolean("require_verified_guardian")),
+            R.string.rule_sim to yesNo(rules.optBoolean("sim_swap_hold")),
+            R.string.rule_scam to yesNo(rules.optBoolean("scam_signals")),
+        )
+        for ((label, value) in rows) keyValue(r, getString(label), value)
+        para(r, getString(R.string.preset_label), bold = true).apply { setPadding(0, dp(14), 0, dp(4)) }
+        val presets = d.presets!!
+        val names = presets.keys().asSequence().toList()
+        val spinner = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
+                names.map { presets.optJSONObject(it)?.optString("label") ?: it })
+            contentDescription = getString(R.string.preset_label)
+        }
+        r.addView(spinner, LinearLayout.LayoutParams(-1, -2))
+        button(r, getString(R.string.apply), style = Style.SECONDARY) { b ->
+            val name = names.getOrNull(spinner.selectedItemPosition) ?: return@button
+            act(b, { api().post("/v1/me/rules/preset/" + java.net.URLEncoder.encode(name, "UTF-8")) as JSONObject }) {
+                if (it.optBoolean("held")) getString(R.string.preset_held) else getString(R.string.applied)
+            }
+        }
+        para(r, getString(R.string.rules_note), MUTED, 13f)
+
+        val g = card()
+        heading(g, getString(R.string.my_guardians))
+        val guardians = d.guardians!!.objects()
+        if (guardians.isEmpty()) para(g, getString(R.string.no_guardians), MUTED)
+        for (x in guardians) {
+            item(g)
+            val st = x.optString("status")
+            rowWithPill(g, x.optString("guardian_name"), identityText(x.optString("guardian_identity_level")), statusWord(st),
+                when (st) { "active" -> OK; "invited" -> WARN; else -> MUTED })
+        }
+        para(g, getString(R.string.invite_label), bold = true).apply { setPadding(0, dp(14), 0, dp(4)) }
+        val gm = input(g, getString(R.string.mobile_number), InputType.TYPE_CLASS_PHONE, null)
+        button(g, getString(R.string.invite)) { b ->
+            val m = gm.text.toString().trim()
+            if (m.isEmpty()) { gm.requestFocus(); return@button }
+            act(b, { api().post("/v1/me/guardians", JSONObject().put("mobile", m)) }) { getString(R.string.invite_sent) }
+        }
+
+        val p = card()
+        heading(p, getString(R.string.recent_payments))
+        val payments = d.payments!!.objects()
+        if (payments.isEmpty()) para(p, getString(R.string.no_payments), MUTED)
+        for (x in payments) paymentItem(p, x, null)
+
+        val l = card()
+        heading(l, getString(R.string.lost_title))
+        para(l, getString(R.string.lost_explain), MUTED)
+        button(l, getString(R.string.report_lost), style = Style.DANGER) { b ->
+            confirm(getString(R.string.lost_confirm)) {
+                busy(b)
+                bg({ api().post("/v1/me/security/lost-phone") }, failed = { idle(b) }) { signedOut(getString(R.string.lost_done)) }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- I protect
+    private fun guardianView(d: Data) {
+        val inbox = d.inbox
+        val wards = d.wards!!.objects()
+        val names = wards.associate { it.optString("principal_id") to it.optString("principal_name") }
+        title(getString(R.string.people_i_protect))
+
+        val invites = inbox.optJSONArray("invitations").objects()
+        if (invites.isNotEmpty()) {
+            val c = card(WARN)
+            heading(c, getString(R.string.guardian_requests))
+            for (inv in invites) {
+                item(c)
+                val who = inv.optString("principal_name")
+                para(c, getString(R.string.asked_guardian, who))
+                val id = inv.getString("id")
+                row(c,
+                    action(getString(R.string.accept), Style.OK) { b -> act(b, { api().post("/v1/guardian/invitations/$id/accept") }) { getString(R.string.you_protect_name, who) } },
+                    action(getString(R.string.decline), Style.SECONDARY) { b -> act(b, { api().post("/v1/guardian/invitations/$id/decline") }) { getString(R.string.declined) } })
+            }
+        }
+
+        val held = inbox.optJSONArray("held_payments").objects()
+        val w = card(if (held.isNotEmpty()) WARN else null)
+        heading(w, getString(R.string.payments_waiting))
+        if (held.isEmpty()) para(w, getString(R.string.nothing_waiting), MUTED)
+        for (p in held) {
+            paymentItem(w, p, names[p.optString("principal_id")]?.let { getString(R.string.from_name, it) })
+            p.optString("approval_expires_at").ifBlank { null }?.let { para(w, getString(R.string.answer_by, Wire.time(it)), MUTED, 13f) }
+            p.optString("release_at").ifBlank { null }?.let { para(w, getString(R.string.goes_through, Wire.time(it)), MUTED, 13f) }
+            para(w, getString(R.string.not_sure), MUTED, 13f)
+            val id = p.getString("check_id")
+            if (p.optString("status") == "pending_approval") {
+                row(w,
+                    action(getString(R.string.approve), Style.OK) { b ->
+                        confirm(getString(R.string.approve_q)) { act(b, { api().post("/v1/guardian/payments/$id/approve") }) { getString(R.string.approved) } }
+                    },
+                    action(getString(R.string.deny), Style.DANGER) { b -> act(b, { api().post("/v1/guardian/payments/$id/deny") }) { getString(R.string.denied) } })
+            } else {
+                button(w, getString(R.string.stop_payment), style = Style.DANGER) { b ->
+                    act(b, { api().post("/v1/guardian/payments/$id/cancel") }) { getString(R.string.cancelled) }
                 }
             }
         }
 
-        heading(getString(R.string.alerts))
-        if (h.alerts.length() == 0) para(getString(R.string.no_alerts), Color.GRAY)
-        for (i in 0 until minOf(h.alerts.length(), 10)) {
-            val n = h.alerts.getJSONObject(i)
-            card(n.optString("title") + "\n" + n.optString("body"))
-        }
-
-        heading(getString(R.string.security))
-        button(getString(R.string.lost_phone), secondary = true) {
-            confirm(getString(R.string.lost_q)) {
-                bg({ api().post("/v1/me/security/lost-phone") }) { signedOut(getString(R.string.lost_done)) }
+        val changes = inbox.optJSONArray("pending_changes").objects()
+        if (changes.isNotEmpty()) {
+            val c = card(WARN)
+            heading(c, getString(R.string.changes_waiting_g))
+            for (ch in changes) {
+                item(c)
+                para(c, getString(R.string.wants_to, names[ch.optString("principal_id")] ?: getString(R.string.someone), changeLabel(ch.optString("kind"))))
+                para(c, getString(R.string.happens_unless, Wire.time(ch.optString("effective_at"))), MUTED, 13f)
+                val id = ch.getString("id")
+                row(c,
+                    action(getString(R.string.stop_it), Style.DANGER) { b -> act(b, { api().post("/v1/guardian/changes/$id/veto") }) { getString(R.string.stopped) } },
+                    action(getString(R.string.approve_now), Style.SECONDARY) { b -> act(b, { api().post("/v1/guardian/changes/$id/approve") }) { getString(R.string.approved) } })
             }
         }
-        button(getString(R.string.sign_out), secondary = true) {
-            bg({ api().post("/v1/auth/logout", JSONObject().put("everywhere", false)) }) { signedOut(getString(R.string.signed_out)) }
+
+        val recoveries = inbox.optJSONArray("recoveries").objects()
+        if (recoveries.isNotEmpty()) {
+            val c = card(BAD)
+            heading(c, getString(R.string.recoveries))
+            for (rc in recoveries) {
+                item(c)
+                para(c, getString(R.string.recovery_wants, rc.optString("person_name"), rc.optString("new_number")))
+                para(c, getString(R.string.recovery_warn), MUTED, 13f)
+                val opens = rc.optString("vouching_opens_at")
+                val pendingNow = rc.optString("status") == "pending"
+                if (pendingNow && Wire.isFuture(opens)) para(c, getString(R.string.recovery_from, Wire.time(opens)), MUTED, 13f)
+                val id = rc.getString("recovery_id")
+                val deny = action(getString(R.string.deny), Style.DANGER) { b -> act(b, { api().post("/v1/guardian/recoveries/$id/deny") }) { getString(R.string.stopped) } }
+                if (pendingNow) {
+                    row(c, action(getString(R.string.recovery_approve), Style.OK) { b ->
+                        act(b, { api().post("/v1/guardian/recoveries/$id/approve") }) { getString(R.string.recovery_done) }
+                    }, deny)
+                } else {
+                    row(c, deny)
+                }
+            }
         }
-        button(getString(R.string.refresh), secondary = true) { loadHome() }
+
+        val pc = card()
+        heading(pc, getString(R.string.people_i_protect))
+        val active = wards.filter { it.optString("status") == "active" }
+        if (active.isEmpty()) para(pc, getString(R.string.protect_none), MUTED)
+        for (x in active) {
+            item(pc)
+            val who = x.optString("principal_name")
+            val id = x.optString("principal_id")
+            para(pc, who, bold = true)
+            button(pc, getString(R.string.pause_theirs), style = Style.DANGER) { b ->
+                confirm(getString(R.string.pause_theirs_q, who)) {
+                    act(b, { api().post("/v1/guardian/wards/$id/kill-switch/on") }) { getString(R.string.paused_for, who) }
+                }
+            }
+        }
     }
 
-    private fun act(path: String, done: String) {
-        bg({ api().post(path) }) {
-            toast(done)
-            loadHome()
+    // ---------------------------------------------------------------- Alerts
+    private fun alertsView(d: Data) {
+        val items = d.alerts!!.objects()
+        title(getString(R.string.alerts))
+        if (items.any { !it.optBoolean("read") }) {
+            button(root, getString(R.string.mark_all_read), style = Style.SECONDARY) { b ->
+                act(b, { api().post("/v1/me/notifications/read", JSONObject()) }) { getString(R.string.all_read) }
+            }
+        }
+        val c = card()
+        if (items.isEmpty()) para(c, getString(R.string.no_alerts_yet), MUTED)
+        for (n in items) {
+            item(c)
+            rowWithPill(c, n.optString("title"), null, if (n.optBoolean("read")) null else getString(R.string.new_badge), WARN)
+            para(c, n.optString("body"))
+            para(c, Wire.time(n.optString("created_at")), MUTED, 13f)
         }
     }
+
+    // ---------------------------------------------------------------- Devices
+    private fun devicesView(d: Data) {
+        title(getString(R.string.tab_devices))
+        val c = card()
+        para(c, getString(R.string.devices_explain), MUTED)
+        val devices = d.devices!!.objects()
+        if (devices.isEmpty()) para(c, getString(R.string.no_devices), MUTED)
+        for (x in devices) {
+            item(c)
+            val kid = x.optString("key_id")
+            val mine = kid == d.myKeyId
+            val st = x.optString("status")
+            rowWithPill(c, if (mine) getString(R.string.this_device) else getString(R.string.device_id, kid.take(8)),
+                getString(R.string.added_at, Wire.time(x.optString("created_at"))), statusWord(st),
+                when (st) { "trusted" -> OK; "probation" -> WARN; else -> MUTED })
+            if (st != "revoked" && !mine) {
+                button(c, getString(R.string.remove), style = Style.SECONDARY) { b ->
+                    act(b, { api().delete("/v1/me/devices/$kid") }) { getString(R.string.removed) }
+                }
+            }
+        }
+        val s = card()
+        heading(s, getString(R.string.sign_out))
+        row(s,
+            action(getString(R.string.sign_out_here), Style.SECONDARY) { _ -> signOut(false) },
+            action(getString(R.string.sign_out_everywhere), Style.SECONDARY) { _ -> signOut(true) })
+    }
+
+    private fun signOut(everywhere: Boolean) {
+        val token = store.token
+        store.token = null
+        showSignIn(getString(R.string.signed_out))
+        io.execute {
+            try { Api(store.apiBase, token).post("/v1/auth/logout", JSONObject().put("everywhere", everywhere)) } catch (e: Exception) { /* already signed out */ }
+        }
+    }
+
+    // ---------------------------------------------------------------- shared bits
+    private fun paymentItem(parent: LinearLayout, p: JSONObject, extra: String?) {
+        item(parent)
+        val st = p.optString("status")
+        val (label, color) = statusPill(st)
+        rowWithPill(parent, Wire.rupees(p.optLong("amount")), null, label, color, big = true)
+        para(parent, getString(R.string.to_payee, p.optString("payee")) + (extra?.let { " · $it" } ?: ""))
+        val reasons = p.optJSONArray("reasons")?.let { r -> (0 until r.length()).joinToString("; ") { r.optString(it) } }.orEmpty()
+        para(parent, Wire.time(p.optString("created_at")) + if (reasons.isNotEmpty()) " · $reasons" else "", MUTED, 13f)
+    }
+
+    private fun statusPill(status: String): Pair<String, Int> = when (status) {
+        "allowed" -> getString(R.string.st_allowed) to OK
+        "approved" -> getString(R.string.st_approved) to OK
+        "released" -> getString(R.string.st_released) to OK
+        "pending_approval" -> getString(R.string.st_pending_approval) to WARN
+        "cooling_off" -> getString(R.string.st_cooling_off) to WARN
+        "blocked" -> getString(R.string.st_blocked) to BAD
+        "denied" -> getString(R.string.st_denied) to BAD
+        "expired" -> getString(R.string.st_expired) to BAD
+        "cancelled" -> getString(R.string.st_cancelled) to MUTED
+        "failed" -> getString(R.string.st_failed) to MUTED
+        else -> status to MUTED
+    }
+
+    private fun statusWord(status: String): String = when (status) {
+        "active" -> getString(R.string.w_active)
+        "invited" -> getString(R.string.w_invited)
+        "declined" -> getString(R.string.w_declined)
+        "trusted" -> getString(R.string.w_trusted)
+        "probation" -> getString(R.string.w_probation)
+        "revoked" -> getString(R.string.w_revoked)
+        else -> status
+    }
+
+    private fun identityText(level: String) = when (level) {
+        "bank_verified" -> getString(R.string.id_bank_verified)
+        "bank_min_kyc" -> getString(R.string.id_bank_min_kyc)
+        "otp" -> getString(R.string.id_otp)
+        else -> level
+    }
+
+    private fun changeLabel(kind: String) = when (kind) {
+        "update_rules" -> getString(R.string.change_update_rules)
+        "kill_switch_off" -> getString(R.string.switch_back_on)
+        "remove_guardian" -> getString(R.string.change_remove_guardian)
+        "change_mobile" -> getString(R.string.change_change_mobile)
+        else -> kind
+    }
+
+    private fun money(rules: JSONObject, k: String) =
+        if (rules.isNull(k) || !rules.has(k)) getString(R.string.no_limit) else Wire.rupees(rules.optLong(k))
+
+    private fun yesNo(b: Boolean) = getString(if (b) R.string.yes else R.string.no)
+
+    /** Disable the button, call the API, toast the result and redraw; re-enable on failure. */
+    private fun <T> act(b: Button, call: () -> T, message: (T) -> String) {
+        busy(b)
+        bg(call, failed = { idle(b) }) { out ->
+            toast(message(out))
+            render()
+        }
+    }
+
+    private fun busy(b: Button) { b.isEnabled = false; b.alpha = 0.5f }
+    private fun idle(b: Button) { b.isEnabled = true; b.alpha = 1f }
+
+    private fun JSONArray?.objects(): List<JSONObject> =
+        if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }
 
     // ---------------------------------------------------------------- tiny view kit
+    private enum class Style { PRIMARY, SECONDARY, DANGER, OK }
+
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
+    private fun rounded(fill: Int, stroke: Int? = null, radius: Int = 12) = GradientDrawable().apply {
+        setColor(fill); cornerRadius = dp(radius).toFloat()
+        stroke?.let { setStroke(dp(1), it) }
+    }
+
     private fun title(text: String) = root.addView(TextView(this).apply {
-        this.text = text; textSize = 24f; typeface = Typeface.DEFAULT_BOLD; setPadding(0, 0, 0, dp(12))
+        this.text = text; textSize = 24f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK); setPadding(0, 0, 0, dp(6))
     })
 
-    private fun heading(text: String) = root.addView(TextView(this).apply {
-        this.text = text; textSize = 18f; typeface = Typeface.DEFAULT_BOLD; setPadding(0, dp(20), 0, dp(6))
-    })
+    private fun para(text: String, color: Int = INK, size: Float = 15f) = para(root, text, color, size)
 
-    private fun para(text: String, color: Int = Color.DKGRAY) = root.addView(TextView(this).apply {
-        this.text = text; textSize = 15f; setTextColor(color); setPadding(0, dp(4), 0, dp(8))
-    })
-
-    private fun card(text: String) = root.addView(TextView(this).apply {
-        this.text = text; textSize = 16f; setTextColor(Color.BLACK)
-        setBackgroundColor(Color.parseColor("#F1F5F9")); setPadding(dp(12), dp(12), dp(12), dp(12))
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) }
-    })
-
-    private fun input(hint: String, type: Int, value: String?): EditText = EditText(this).apply {
-        this.hint = hint; inputType = type; setText(value ?: ""); textSize = 18f
-        root.addView(this)
-    }
-
-    private fun button(text: String, secondary: Boolean = false, onClick: () -> Unit) {
-        root.addView(makeButton(text, secondary, onClick).apply {
-            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) }
-        })
-    }
-
-    private fun row(vararg buttons: Pair<String, () -> Unit>) {
-        val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
-        buttons.forEachIndexed { i, (label, onClick) ->
-            r.addView(makeButton(label, i > 0, onClick).apply {
-                layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = if (i > 0) dp(8) else 0 }
-            })
+    private fun para(parent: LinearLayout, text: String, color: Int = INK, size: Float = 15f, bold: Boolean = false): TextView =
+        TextView(this).apply {
+            this.text = text; textSize = size; setTextColor(color); setPadding(0, dp(3), 0, dp(3))
+            if (bold) typeface = Typeface.DEFAULT_BOLD
+            parent.addView(this)
         }
-        root.addView(r)
+
+    private fun heading(parent: LinearLayout, text: String) = parent.addView(TextView(this).apply {
+        this.text = text; textSize = 18f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK); setPadding(0, 0, 0, dp(6))
+    })
+
+    /** A white card; [accent] adds a coloured border like the web app's alert cards. */
+    private fun card(accent: Int? = null): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = rounded(CARD, accent ?: LINE)
+        setPadding(dp(16), dp(14), dp(16), dp(14))
+        root.addView(this, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
     }
 
-    private fun makeButton(text: String, secondary: Boolean, onClick: () -> Unit) = Button(this).apply {
-        this.text = text; isAllCaps = false; textSize = 16f
-        if (!secondary) { setBackgroundColor(Color.parseColor("#1F5FBF")); setTextColor(Color.WHITE) }
-        setOnClickListener(View.OnClickListener { onClick() })
+    /** A divider between list items inside a card (none before the first). */
+    private fun item(parent: LinearLayout) {
+        val hasContentAfterHeading = parent.childCount > 1
+        if (hasContentAfterHeading) parent.addView(View(this).apply { setBackgroundColor(LINE) },
+            LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(8); bottomMargin = dp(8) })
+    }
+
+    private fun bigStatus(parent: LinearLayout, text: String, color: Int) = parent.addView(TextView(this).apply {
+        this.text = "●  $text"; textSize = 20f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK)
+        setPadding(0, 0, 0, dp(4))
+        val span = android.text.SpannableString(this.text)
+        span.setSpan(android.text.style.ForegroundColorSpan(color), 0, 1, 0)
+        this.text = span
+    })
+
+    private fun keyValue(parent: LinearLayout, k: String, v: String) {
+        val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(4), 0, dp(4)) }
+        r.addView(TextView(this).apply { text = k; textSize = 14f; setTextColor(MUTED) }, LinearLayout.LayoutParams(0, -2, 1f))
+        r.addView(TextView(this).apply { text = v; textSize = 14f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK); gravity = Gravity.END })
+        parent.addView(r)
+    }
+
+    private fun rowWithPill(parent: LinearLayout, main: String, sub: String?, pill: String?, color: Int, big: Boolean = false) {
+        val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val left = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        left.addView(TextView(this).apply { text = main; textSize = if (big) 18f else 15f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK) })
+        sub?.let { s -> left.addView(TextView(this).apply { text = s; textSize = 13f; setTextColor(MUTED) }) }
+        r.addView(left, LinearLayout.LayoutParams(0, -2, 1f))
+        pill?.let { r.addView(pillView(it, tint(color), color)) }
+        parent.addView(r)
+    }
+
+    private fun pill(parent: LinearLayout, text: String, bg: Int, fg: Int) =
+        parent.addView(pillView(text, bg, fg), LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = dp(8) })
+
+    private fun pillView(text: String, bg: Int, fg: Int) = TextView(this).apply {
+        this.text = text; textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setTextColor(fg)
+        background = rounded(bg, radius = 999); setPadding(dp(10), dp(3), dp(10), dp(3))
+    }
+
+    private fun tint(c: Int) = Color.argb(40, Color.red(c), Color.green(c), Color.blue(c))
+
+    private fun input(parent: LinearLayout, hint: String, type: Int, value: String?): EditText = EditText(this).apply {
+        this.hint = hint; inputType = type; setText(value ?: ""); textSize = 18f
+        parent.addView(this, LinearLayout.LayoutParams(-1, -2))
+    }
+
+    private fun styled(text: String, style: Style, onClick: (Button) -> Unit) = Button(this).apply {
+        this.text = text; isAllCaps = false; textSize = 16f; minHeight = dp(48)
+        val (bg, fg, line) = when (style) {
+            Style.PRIMARY -> Triple(BRAND, Color.WHITE, null)
+            Style.OK -> Triple(OK, Color.WHITE, null)
+            Style.DANGER -> Triple(BAD, Color.WHITE, null)
+            Style.SECONDARY -> Triple(CARD, BRAND, BRAND)
+        }
+        background = rounded(bg, line, 10); setTextColor(fg)
+        setOnClickListener { onClick(this) }
+    }
+
+    private fun button(parent: LinearLayout, text: String, style: Style = Style.PRIMARY, onClick: (Button) -> Unit) {
+        parent.addView(styled(text, style, onClick), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+    }
+
+    private fun action(label: String, style: Style, onClick: (Button) -> Unit) = Triple(label, style, onClick)
+
+    private fun row(parent: LinearLayout, vararg buttons: Triple<String, Style, (Button) -> Unit>) {
+        val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        buttons.forEachIndexed { i, (label, style, onClick) ->
+            r.addView(styled(label, style, onClick), LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = if (i > 0) dp(8) else 0 })
+        }
+        parent.addView(r, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
     }
 
     private fun confirm(question: String, yes: () -> Unit) {
+        dialogOpen = true
         AlertDialog.Builder(this).setMessage(question)
             .setPositiveButton(getString(R.string.yes)) { _, _ -> yes() }
-            .setNegativeButton(getString(R.string.no), null).show()
+            .setNegativeButton(getString(R.string.no), null)
+            .setOnDismissListener { dialogOpen = false }
+            .show()
     }
 
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+
+    companion object {
+        const val REFRESH_MS = 15_000L
+        val BRAND = Color.parseColor("#1F5FBF")
+        val PAGE = Color.parseColor("#F4F6FA")
+        val CARD = Color.WHITE
+        val LINE = Color.parseColor("#DDE3EC")
+        val INK = Color.parseColor("#111827")
+        val MUTED = Color.parseColor("#5B6472")
+        val OK = Color.parseColor("#15803D")
+        val WARN = Color.parseColor("#B45309")
+        val BAD = Color.parseColor("#B91C1C")
+        val WARN_BG = Color.parseColor("#FEF3C7")
+        val WARN_TEXT = Color.parseColor("#92400E")
+    }
 }

@@ -41,6 +41,27 @@ object Wire {
         put("language", language())
     }
 
+    /** The registry's device key id: SHA-256 of the public key (SPKI DER), in hex. */
+    fun keyId(publicKeyB64: String): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest(Base64.getDecoder().decode(publicKeyB64))
+            .joinToString("") { "%02x".format(it) }
+
+    private fun instant(iso: String): java.time.Instant? = if (iso.isBlank()) null else try {
+        java.time.OffsetDateTime.parse(iso).toInstant()
+    } catch (e: java.time.format.DateTimeParseException) {
+        try { java.time.LocalDateTime.parse(iso).toInstant(java.time.ZoneOffset.UTC) } catch (e2: Exception) { null }
+    }
+
+    /** "24 Nov 2026, 12:08 pm" in the phone's language and time zone, like the web app. */
+    fun time(iso: String, zone: java.time.ZoneId = java.time.ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String {
+        val t = instant(iso) ?: return iso
+        return java.time.format.DateTimeFormatter
+            .ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM, java.time.format.FormatStyle.SHORT)
+            .withLocale(locale).withZone(zone).format(t)
+    }
+
+    fun isFuture(iso: String, now: java.time.Instant = java.time.Instant.now()): Boolean = instant(iso)?.isAfter(now) == true
+
     /** Amounts are in paise. */
     fun rupees(paise: Long): String {
         val f = NumberFormat.getCurrencyInstance(Locale("en", "IN"))

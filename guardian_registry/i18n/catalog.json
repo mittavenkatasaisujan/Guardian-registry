@@ -5,12 +5,6 @@
    "server:phrase"
   ]
  },
- "1b3d1487a0": {
-  "en": " from %1$s",
-  "where": [
-   "android:from_person"
-  ]
- },
  "9447989081": {
   "en": " · from %@",
   "where": [
@@ -29,10 +23,22 @@
    "android:asked_guardian"
   ]
  },
- "06605b49a9": {
-  "en": "%1$s to %2$s%3$s",
+ "5c8f84a116": {
+  "en": "%1$s min",
   "where": [
-   "android:amount_to"
+   "android:minutes"
+  ]
+ },
+ "dad7cb0d3a": {
+  "en": "%1$s wants to move their account to %2$s.",
+  "where": [
+   "android:recovery_wants"
+  ]
+ },
+ "3fa3c907b0": {
+  "en": "%1$s wants to: %2$s",
+  "where": [
+   "android:wants_to"
   ]
  },
  "3b33e45d3f": {
@@ -107,7 +113,8 @@
  "c6dab9de78": {
   "en": "Account recovery requests",
   "where": [
-   "web"
+   "web",
+   "android:recoveries"
   ]
  },
  "f07e38d99a": {
@@ -126,7 +133,14 @@
   "en": "active",
   "where": [
    "server:error-phrase",
-   "web"
+   "web",
+   "android:w_active"
+  ]
+ },
+ "76044af121": {
+  "en": "Added %1$s",
+  "where": [
+   "android:added_at"
   ]
  },
  "c521251053": {
@@ -146,19 +160,20 @@
  "070a184af7": {
   "en": "All marked as read.",
   "where": [
-   "web"
+   "web",
+   "android:all_read"
   ]
  },
  "d6c56f48e9": {
   "en": "All payments are paused.",
   "where": [
-   "web"
+   "web",
+   "android:all_paused_toast"
   ]
  },
  "bf89901f3f": {
   "en": "All payments from your account are paused.",
   "where": [
-   "android:all_paused",
    "ios"
   ]
  },
@@ -171,7 +186,8 @@
  "77c7b4909d": {
   "en": "Allowed",
   "where": [
-   "web"
+   "web",
+   "android:st_allowed"
   ]
  },
  "33de17c9f5": {
@@ -198,6 +214,12 @@
    "server:error"
   ]
  },
+ "7b9900e765": {
+  "en": "Answer by %1$s",
+  "where": [
+   "android:answer_by"
+  ]
+ },
  "eab96e6dc0": {
   "en": "Answer by {time}",
   "where": [
@@ -213,13 +235,15 @@
  "c0d30891ec": {
   "en": "Applied.",
   "where": [
-   "web"
+   "web",
+   "android:applied"
   ]
  },
  "cfea419c3b": {
   "en": "Apply",
   "where": [
-   "web"
+   "web",
+   "android:apply"
   ]
  },
  "4e83bb0161": {
@@ -239,7 +263,8 @@
  "b9face07f3": {
   "en": "Approve now",
   "where": [
-   "web"
+   "web",
+   "android:approve_now"
   ]
  },
  "58cd577f78": {
@@ -265,7 +290,8 @@
  "41b81eb8db": {
   "en": "Approved",
   "where": [
-   "web"
+   "web",
+   "android:st_approved"
   ]
  },
  "0baa5dc0b3": {
@@ -340,7 +366,8 @@
  "22d2d0ad75": {
   "en": "basic bank check",
   "where": [
-   "web"
+   "web",
+   "android:id_bank_min_kyc"
   ]
  },
  "795b95fc7c": {
@@ -358,13 +385,15 @@
  "99613c74ce": {
   "en": "Blocked",
   "where": [
-   "web"
+   "web",
+   "android:st_blocked"
   ]
  },
  "0f350cfc63": {
   "en": "Blocked channels",
   "where": [
-   "web"
+   "web",
+   "android:rule_channels"
   ]
  },
  "d7cd8c8d84": {
@@ -383,7 +412,8 @@
  "a1bf92eff4": {
   "en": "Cancelled",
   "where": [
-   "web"
+   "web",
+   "android:st_cancelled"
   ]
  },
  "d3e4142ff7": {
@@ -421,7 +451,8 @@
  "cf6c240cdf": {
   "en": "Changes waiting",
   "where": [
-   "web"
+   "web",
+   "android:changes_waiting"
   ]
  },
  "56821b2482": {
@@ -508,7 +539,8 @@
   "en": "declined",
   "where": [
    "server:error-phrase",
-   "web"
+   "web",
+   "android:w_declined"
   ]
  },
  "21853edc92": {
@@ -535,7 +567,8 @@
  "63b16bd41e": {
   "en": "Denied",
   "where": [
-   "web"
+   "web",
+   "android:st_denied"
   ]
  },
  "eaf62a2737": {
@@ -554,10 +587,22 @@
    "ios"
   ]
  },
+ "72d2a4d257": {
+  "en": "Development mode code: %1$s",
+  "where": [
+   "android:dev_code"
+  ]
+ },
  "6cfa82a8a3": {
   "en": "Development mode code: {code}",
   "where": [
    "web"
+  ]
+ },
+ "91ca155dd1": {
+  "en": "Device %1$s",
+  "where": [
+   "android:device_id"
   ]
  },
  "d843c4053f": {
@@ -587,7 +632,8 @@
  "df485c8713": {
   "en": "Devices",
   "where": [
-   "web"
+   "web",
+   "android:tab_devices"
   ]
  },
  "1b56714440": {
@@ -607,7 +653,8 @@
  "c36848de06": {
   "en": "Each phone or browser you sign in on has its own key. A new one can't approve payments for 24 hours.",
   "where": [
-   "web"
+   "web",
+   "android:devices_explain"
   ]
  },
  "ba92ed73c9": {
@@ -646,13 +693,15 @@
  "a689a999a5": {
   "en": "Expired",
   "where": [
-   "web"
+   "web",
+   "android:st_expired"
   ]
  },
  "09fef5d8d9": {
   "en": "Failed",
   "where": [
-   "web"
+   "web",
+   "android:st_failed"
   ]
  },
  "e42dd0ebba": {
@@ -667,10 +716,22 @@
    "server:alert"
   ]
  },
+ "5de4edc275": {
+  "en": "from %1$s",
+  "where": [
+   "android:from_name"
+  ]
+ },
  "e57b10137e": {
   "en": "from {name}",
   "where": [
    "web"
+  ]
+ },
+ "5592a7c771": {
+  "en": "Goes through at %1$s unless stopped",
+  "where": [
+   "android:goes_through"
   ]
  },
  "f9ac362d01": {
@@ -688,7 +749,8 @@
  "c43819ba81": {
   "en": "Guardian approves from",
   "where": [
-   "web"
+   "web",
+   "android:rule_approval"
   ]
  },
  "3cdede06c9": {
@@ -719,6 +781,7 @@
   "en": "Guardian requests",
   "where": [
    "web",
+   "android:guardian_requests",
    "ios"
   ]
  },
@@ -758,6 +821,12 @@
    "server:phrase"
   ]
  },
+ "eb2a79af2d": {
+  "en": "Happens %1$s unless you stop it. Scammers often ask people to do this.",
+  "where": [
+   "android:happens_unless"
+  ]
+ },
  "547b2b4476": {
   "en": "Happens {time} unless you stop it. Scammers often ask people to do this.",
   "where": [
@@ -791,32 +860,41 @@
  "40a593c8bc": {
   "en": "Hold payments after a SIM change",
   "where": [
-   "web"
+   "web",
+   "android:rule_sim"
   ]
  },
  "f13c8cb877": {
   "en": "Hold payments that look like a scam",
   "where": [
-   "web"
+   "web",
+   "android:rule_scam"
   ]
  },
  "f11213215e": {
   "en": "I lost my phone",
   "where": [
-   "android:lost_phone",
    "ios"
   ]
  },
  "f4934b2661": {
   "en": "I protect",
   "where": [
-   "web"
+   "web",
+   "android:tab_guardian"
   ]
  },
  "8d6cd2f4f0": {
   "en": "I spoke to them: approve",
   "where": [
-   "web"
+   "web",
+   "android:recovery_approve"
+  ]
+ },
+ "4baabba6b6": {
+  "en": "Identity: %1$s",
+  "where": [
+   "android:identity"
   ]
  },
  "293fa27616": {
@@ -828,13 +906,15 @@
  "8f34167415": {
   "en": "If someone is pressuring you to pay, pause everything. You can switch back on later.",
   "where": [
-   "web"
+   "web",
+   "android:on_explain"
   ]
  },
  "4babee70d2": {
   "en": "If you changed your SIM yourself, confirm it from this phone. If you didn't, call your mobile operator now.",
   "where": [
-   "web"
+   "web",
+   "android:sim_explain"
   ]
  },
  "6d3ab7e193": {
@@ -858,25 +938,29 @@
  "6114db953c": {
   "en": "Invitation sent. They need to accept it in their app.",
   "where": [
-   "web"
+   "web",
+   "android:invite_sent"
   ]
  },
  "b136609f06": {
   "en": "Invite",
   "where": [
-   "web"
+   "web",
+   "android:invite"
   ]
  },
  "1e45b0d4fc": {
   "en": "Invite a guardian by mobile number",
   "where": [
-   "web"
+   "web",
+   "android:invite_label"
   ]
  },
  "200b57390a": {
   "en": "invited",
   "where": [
-   "web"
+   "web",
+   "android:w_invited"
   ]
  },
  "37646536dd": {
@@ -900,13 +984,15 @@
  "33ce417454": {
   "en": "Loading…",
   "where": [
-   "web"
+   "web",
+   "android:loading"
   ]
  },
  "01178b4ff4": {
   "en": "Loosen payment limits",
   "where": [
-   "web"
+   "web",
+   "android:change_update_rules"
   ]
  },
  "d08af46ac9": {
@@ -918,19 +1004,22 @@
  "7f1b7a9f7e": {
   "en": "Lost your phone?",
   "where": [
-   "web"
+   "web",
+   "android:lost_title"
   ]
  },
  "ace3670f56": {
   "en": "Making rules stricter works at once. Loosening them waits 24 hours, and your guardians can stop it.",
   "where": [
-   "web"
+   "web",
+   "android:rules_note"
   ]
  },
  "8958e22c23": {
   "en": "Mark all read",
   "where": [
-   "web"
+   "web",
+   "android:mark_all_read"
   ]
  },
  "e9da2d481e": {
@@ -950,13 +1039,15 @@
  "f1c3264029": {
   "en": "Most per day (all banks)",
   "where": [
-   "web"
+   "web",
+   "android:rule_daily"
   ]
  },
  "cca76e4ecc": {
   "en": "Most per payment",
   "where": [
-   "web"
+   "web",
+   "android:rule_per_txn"
   ]
  },
  "36613672cd": {
@@ -968,7 +1059,8 @@
  "a70299fe22": {
   "en": "Move to a new number",
   "where": [
-   "web"
+   "web",
+   "android:change_change_mobile"
   ]
  },
  "50e30ec963": {
@@ -986,21 +1078,23 @@
  "4614cd57a8": {
   "en": "My guardians",
   "where": [
-   "web"
+   "web",
+   "android:my_guardians"
   ]
  },
  "bd1f5f3fc6": {
   "en": "My protection",
   "where": [
    "web",
-   "android:my_protection",
+   "android:tab_me",
    "ios"
   ]
  },
  "6808394d5b": {
   "en": "My rules",
   "where": [
-   "web"
+   "web",
+   "android:my_rules"
   ]
  },
  "89c67bd02b": {
@@ -1018,7 +1112,8 @@
  "6403f2b7eb": {
   "en": "New",
   "where": [
-   "web"
+   "web",
+   "android:new_badge"
   ]
  },
  "7d47d31cf6": {
@@ -1049,26 +1144,28 @@
  "e0658c65b0": {
   "en": "No alerts yet.",
   "where": [
-   "web"
+   "web",
+   "android:no_alerts_yet"
   ]
  },
  "b9d5d070e8": {
   "en": "No alerts.",
   "where": [
-   "android:no_alerts",
    "ios"
   ]
  },
  "4388169939": {
   "en": "No bank will send money from your accounts until payments are switched back on.",
   "where": [
-   "web"
+   "web",
+   "android:paused_explain"
   ]
  },
  "b96bd391d6": {
   "en": "No device keys yet.",
   "where": [
-   "web"
+   "web",
+   "android:no_devices"
   ]
  },
  "3d32c060a7": {
@@ -1086,13 +1183,15 @@
  "57d0b0297a": {
   "en": "No guardians yet. A guardian can approve large payments and pause payments for you.",
   "where": [
-   "web"
+   "web",
+   "android:no_guardians"
   ]
  },
  "10850b9371": {
   "en": "No limit",
   "where": [
-   "web"
+   "web",
+   "android:no_limit"
   ]
  },
  "3894b08988": {
@@ -1104,13 +1203,15 @@
  "ef37723e28": {
   "en": "No payments checked yet.",
   "where": [
-   "web"
+   "web",
+   "android:no_payments"
   ]
  },
  "6eef664840": {
   "en": "None",
   "where": [
-   "web"
+   "web",
+   "android:none"
   ]
  },
  "ef4fbcd08a": {
@@ -1122,7 +1223,8 @@
  "73ba4e4af8": {
   "en": "Not sure? Call them on a number you know before approving.",
   "where": [
-   "web"
+   "web",
+   "android:not_sure"
   ]
  },
  "cc5796a4fc": {
@@ -1142,7 +1244,8 @@
  "7725fc0eb4": {
   "en": "On hold",
   "where": [
-   "web"
+   "web",
+   "android:st_cooling_off"
   ]
  },
  "b07ce7d4f0": {
@@ -1154,13 +1257,15 @@
  "af3c652388": {
   "en": "Only approve if you have spoken to them yourself, on a call YOU placed or in person. If in doubt, deny.",
   "where": [
-   "web"
+   "web",
+   "android:recovery_warn"
   ]
  },
  "9d06ac0c24": {
   "en": "Only bank-verified guardians approve",
   "where": [
-   "web"
+   "web",
+   "android:rule_verified"
   ]
  },
  "0c6d756ba8": {
@@ -1172,14 +1277,20 @@
  "285529b227": {
   "en": "Pause all my payments",
   "where": [
-   "android:pause_all",
    "ios"
   ]
  },
  "5edad0b497": {
   "en": "Pause all payments",
   "where": [
-   "web"
+   "web",
+   "android:pause_all_payments"
+  ]
+ },
+ "54a219d4f3": {
+  "en": "Pause all payments for %1$s?",
+  "where": [
+   "android:pause_theirs_q"
   ]
  },
  "47e27b7f7e": {
@@ -1191,7 +1302,6 @@
  "7895442aea": {
   "en": "Pause every payment from your account until you resume?",
   "where": [
-   "android:pause_q",
    "ios"
   ]
  },
@@ -1204,7 +1314,8 @@
  "eddc75e5d1": {
   "en": "Pause their payments",
   "where": [
-   "web"
+   "web",
+   "android:pause_theirs"
   ]
  },
  "58843cbcb4": {
@@ -1252,19 +1363,22 @@
  "4a01f35b8f": {
   "en": "Payments are back on.",
   "where": [
-   "web"
+   "web",
+   "android:back_on"
   ]
  },
  "3167e8487d": {
   "en": "Payments are on",
   "where": [
-   "web"
+   "web",
+   "android:payments_on"
   ]
  },
  "578c0a53b4": {
   "en": "Payments are paused",
   "where": [
-   "web"
+   "web",
+   "android:payments_paused"
   ]
  },
  "ac83d3cf4f": {
@@ -1280,6 +1394,12 @@
    "server:alert"
   ]
  },
+ "f66412297a": {
+  "en": "Payments paused for %1$s.",
+  "where": [
+   "android:paused_for"
+  ]
+ },
  "40c26e323e": {
   "en": "Payments paused for {name}.",
   "where": [
@@ -1289,7 +1409,6 @@
  "0ec4b34826": {
   "en": "Payments paused.",
   "where": [
-   "android:paused",
    "ios"
   ]
  },
@@ -1322,13 +1441,15 @@
  "4d9a31558e": {
   "en": "People I protect",
   "where": [
-   "web"
+   "web",
+   "android:people_i_protect"
   ]
  },
  "aa4276e190": {
   "en": "phone number only",
   "where": [
-   "web"
+   "web",
+   "android:id_otp"
   ]
  },
  "06fd3e4358": {
@@ -1346,7 +1467,8 @@
  "24c5512fcc": {
   "en": "probation",
   "where": [
-   "web"
+   "web",
+   "android:w_probation"
   ]
  },
  "fc423e2f64": {
@@ -1370,7 +1492,8 @@
  "c6909ca9a8": {
   "en": "Protection changes waiting",
   "where": [
-   "web"
+   "web",
+   "android:changes_waiting_g"
   ]
  },
  "1ac1ebfc22": {
@@ -1394,7 +1517,8 @@
  "acca8b854a": {
   "en": "Recent payments",
   "where": [
-   "web"
+   "web",
+   "android:recent_payments"
   ]
  },
  "d572d0d339": {
@@ -1427,12 +1551,6 @@
    "server:error"
   ]
  },
- "56e3badc4e": {
-  "en": "Refresh",
-  "where": [
-   "android:refresh"
-  ]
- },
  "1f087a5954": {
   "en": "rejected",
   "where": [
@@ -1448,13 +1566,15 @@
  "35d9bc5159": {
   "en": "Released",
   "where": [
-   "web"
+   "web",
+   "android:st_released"
   ]
  },
  "e963907dac": {
   "en": "Remove",
   "where": [
-   "web"
+   "web",
+   "android:remove"
   ]
  },
  "71822f6649": {
@@ -1466,19 +1586,22 @@
  "82a4fccaaa": {
   "en": "Remove a guardian",
   "where": [
-   "web"
+   "web",
+   "android:change_remove_guardian"
   ]
  },
  "f6be22a00c": {
   "en": "Removed and signed out.",
   "where": [
-   "web"
+   "web",
+   "android:removed"
   ]
  },
  "1db329926a": {
   "en": "Report lost phone",
   "where": [
-   "web"
+   "web",
+   "android:report_lost"
   ]
  },
  "aee62e9a80": {
@@ -1496,14 +1619,12 @@
  "78d568504e": {
   "en": "Resume payments",
   "where": [
-   "android:resume",
    "ios"
   ]
  },
  "88ed6c3872": {
   "en": "Resume requested.",
   "where": [
-   "android:resume_requested",
    "ios"
   ]
  },
@@ -1511,7 +1632,8 @@
   "en": "revoked",
   "where": [
    "server:error-phrase",
-   "web"
+   "web",
+   "android:w_revoked"
   ]
  },
  "87360926ff": {
@@ -1523,7 +1645,6 @@
  "f25ce1b8a3": {
   "en": "Security",
   "where": [
-   "android:security",
    "ios"
   ]
  },
@@ -1572,14 +1693,14 @@
  "4b2d46fc22": {
   "en": "Sign out every device and block approvals from this number for a while?",
   "where": [
-   "android:lost_q",
    "ios"
   ]
  },
  "671a21ea29": {
   "en": "Sign out everywhere",
   "where": [
-   "web"
+   "web",
+   "android:sign_out_everywhere"
   ]
  },
  "0b3fc7cf18": {
@@ -1591,13 +1712,15 @@
  "a6f129719b": {
   "en": "Sign out here",
   "where": [
-   "web"
+   "web",
+   "android:sign_out_here"
   ]
  },
  "8fbe77a9de": {
   "en": "Sign out of every device and hold larger payments for 72 hours?",
   "where": [
-   "web"
+   "web",
+   "android:lost_confirm"
   ]
  },
  "89a563ec63": {
@@ -1659,6 +1782,7 @@
   "en": "Someone",
   "where": [
    "web",
+   "android:someone",
    "ios"
   ]
  },
@@ -1683,7 +1807,8 @@
  "df098732df": {
   "en": "Stop it",
   "where": [
-   "web"
+   "web",
+   "android:stop_it"
   ]
  },
  "51a19c460e": {
@@ -1697,13 +1822,15 @@
  "8fcc7be383": {
   "en": "Stopped.",
   "where": [
-   "web"
+   "web",
+   "android:stopped"
   ]
  },
  "79845f4030": {
   "en": "Stricter parts apply now; looser parts wait 24 hours.",
   "where": [
-   "web"
+   "web",
+   "android:preset_held"
   ]
  },
  "d298e87c3c": {
@@ -1715,7 +1842,14 @@
  "581ee0e35f": {
   "en": "Switch payments back on",
   "where": [
-   "web"
+   "web",
+   "android:switch_back_on"
+  ]
+ },
+ "0d2fcdf03d": {
+  "en": "Takes effect %1$s unless a guardian stops it.",
+  "where": [
+   "android:takes_effect"
   ]
  },
  "c2cb609be4": {
@@ -1727,13 +1861,15 @@
  "a054eb28f9": {
   "en": "Thank you. Your vouch is recorded.",
   "where": [
-   "web"
+   "web",
+   "android:recovery_done"
   ]
  },
  "de52f27c7f": {
   "en": "Thanks. Normal protection applies again.",
   "where": [
-   "web"
+   "web",
+   "android:sim_confirmed"
   ]
  },
  "2206fddf43": {
@@ -1799,7 +1935,8 @@
  "fa5a6dd9d2": {
   "en": "This device",
   "where": [
-   "web"
+   "web",
+   "android:this_device"
   ]
  },
  "7f82a38a6f": {
@@ -1844,6 +1981,12 @@
    "server:error"
   ]
  },
+ "aee2300ed7": {
+  "en": "This sign-in is restricted for now: %1$s. You can still pause payments, deny or stop payments, and make rules stricter.",
+  "where": [
+   "android:restricted_banner"
+  ]
+ },
  "a011f25b8a": {
   "en": "This sign-in is restricted for now: {reasons}. You can still pause payments, deny or stop payments, and make rules stricter.",
   "where": [
@@ -1853,13 +1996,21 @@
  "4842d32f9d": {
   "en": "This signs you out everywhere and holds larger payments for 72 hours.",
   "where": [
-   "web"
+   "web",
+   "android:lost_explain"
   ]
  },
  "e89dbcf61a": {
   "en": "Time for guardian to answer",
   "where": [
-   "web"
+   "web",
+   "android:rule_timeout"
+  ]
+ },
+ "bb8c5457b1": {
+  "en": "To %1$s",
+  "where": [
+   "android:to_payee"
   ]
  },
  "d844e8b8b2": {
@@ -1889,7 +2040,8 @@
  "ac946ad589": {
   "en": "trusted",
   "where": [
-   "web"
+   "web",
+   "android:w_trusted"
   ]
  },
  "ce635edc08": {
@@ -1910,6 +2062,12 @@
    "server:error"
   ]
  },
+ "730a57c894": {
+  "en": "Until %1$s, larger payments are held and new sign-ins can't approve anything.",
+  "where": [
+   "android:sim_until"
+  ]
+ },
  "a0a3190c3b": {
   "en": "Until {time}, larger payments are held and new sign-ins can't approve anything.",
   "where": [
@@ -1925,7 +2083,8 @@
  "551b430a98": {
   "en": "Use a ready-made set",
   "where": [
-   "web"
+   "web",
+   "android:preset_label"
   ]
  },
  "fd7983c6a6": {
@@ -1949,7 +2108,8 @@
  "0de0217713": {
   "en": "verified by a bank",
   "where": [
-   "web"
+   "web",
+   "android:id_bank_verified"
   ]
  },
  "2aa0db7f3c": {
@@ -1967,13 +2127,15 @@
  "c67a699ca2": {
   "en": "Wait on new payees from",
   "where": [
-   "web"
+   "web",
+   "android:rule_new_payee"
   ]
  },
  "1c18fc5d17": {
   "en": "Wait time",
   "where": [
-   "web"
+   "web",
+   "android:rule_cooling"
   ]
  },
  "99bbc923a4": {
@@ -1985,7 +2147,8 @@
  "0a1ea5282f": {
   "en": "Waiting for approval",
   "where": [
-   "web"
+   "web",
+   "android:st_pending_approval"
   ]
  },
  "263be8e8dd": {
@@ -2015,7 +2178,8 @@
  "2e435a106d": {
   "en": "Welcome! Your account is set up.",
   "where": [
-   "web"
+   "web",
+   "android:welcome"
   ]
  },
  "02499f03f9": {
@@ -2040,7 +2204,8 @@
  "1e463fd3c6": {
   "en": "Yes, I changed my SIM",
   "where": [
-   "web"
+   "web",
+   "android:sim_confirm"
   ]
  },
  "1e82df9ea4": {
@@ -2061,6 +2226,12 @@
    "server:error"
   ]
  },
+ "bc68f7bdd3": {
+  "en": "You can approve from %1$s.",
+  "where": [
+   "android:recovery_from"
+  ]
+ },
  "6e4b464b03": {
   "en": "You can approve from {time}.",
   "where": [
@@ -2076,13 +2247,19 @@
  "8c047ea2a2": {
   "en": "You don't protect anyone yet. Someone has to invite you from their app.",
   "where": [
-   "web"
+   "web",
+   "android:protect_none"
+  ]
+ },
+ "a35ace2733": {
+  "en": "You now protect %1$s.",
+  "where": [
+   "android:you_protect_name"
   ]
  },
  "8fd031f2ce": {
   "en": "You now protect them.",
   "where": [
-   "android:you_protect_them",
    "ios"
   ]
  },
@@ -2198,7 +2375,8 @@
  "7099cde9ad": {
   "en": "Your request is held for 24 hours. Your guardians can approve it sooner.",
   "where": [
-   "web"
+   "web",
+   "android:held_24h"
   ]
  },
  "6f3745dbc6": {
@@ -2210,7 +2388,8 @@
  "6d87b2b34d": {
   "en": "Your SIM card was reported changed",
   "where": [
-   "web"
+   "web",
+   "android:sim_title"
   ]
  },
  "3b8370bb24": {

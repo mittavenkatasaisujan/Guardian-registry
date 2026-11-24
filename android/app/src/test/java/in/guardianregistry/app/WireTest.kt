@@ -28,4 +28,18 @@ class WireTest {
         assertEquals("hi", Wire.language("hi-IN"))
         assertEquals("en", Wire.language(""))
     }
+
+    @Test
+    fun timesAndKeyIdsMatchTheServer() {
+        val utc = java.time.ZoneOffset.UTC
+        val t = Wire.time("2026-11-24T06:38:00+00:00", utc, java.util.Locale.ENGLISH)
+        org.junit.Assert.assertTrue(t, t.contains("2026") && t.contains("6:38"))
+        assertEquals(Wire.time("2026-11-24T06:38:00", utc, java.util.Locale.ENGLISH), t)
+        assertEquals("not a time", Wire.time("not a time"))
+        org.junit.Assert.assertTrue(Wire.isFuture("2999-01-01T00:00:00+00:00"))
+        assertFalse(Wire.isFuture("2000-01-01T00:00:00Z"))
+        assertFalse(Wire.isFuture(""))
+        // SHA-256 of the bytes 1, 2, 3
+        assertEquals("039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81", Wire.keyId("AQID"))
+    }
 }

@@ -13,7 +13,6 @@
     <string name="sign_in">साइन इन करें</string>
     <string name="back">वापस</string>
     <string name="accept">स्वीकार करें</string>
-    <string name="you_protect_them">अब आप उनकी सुरक्षा कर रहे हैं।</string>
     <string name="decline">अस्वीकार करें</string>
     <string name="declined">अस्वीकार किया।</string>
     <string name="nothing_waiting">आपके लिए कुछ भी प्रतीक्षा में नहीं है।</string>
@@ -24,22 +23,10 @@
     <string name="denied">अस्वीकार किया। यह भुगतान नहीं होगा।</string>
     <string name="stop_payment">यह भुगतान रोकें</string>
     <string name="cancelled">रद्द किया।</string>
-    <string name="my_protection">मेरी सुरक्षा</string>
-    <string name="all_paused">आपके खाते से सभी भुगतान रुके हुए हैं।</string>
-    <string name="resume">भुगतान फिर से चालू करें</string>
-    <string name="resume_requested">फिर से चालू करने का अनुरोध भेजा गया।</string>
-    <string name="pause_all">मेरे सभी भुगतान रोकें</string>
-    <string name="pause_q">जब तक आप फिर से चालू न करें, आपके खाते से हर भुगतान रोकें?</string>
-    <string name="paused">भुगतान रोक दिए गए।</string>
     <string name="alerts">सूचनाएँ</string>
-    <string name="no_alerts">कोई सूचना नहीं।</string>
-    <string name="security">सुरक्षा</string>
-    <string name="lost_phone">मेरा फ़ोन खो गया</string>
-    <string name="lost_q">हर डिवाइस से साइन आउट करें और कुछ समय के लिए इस नंबर से मंज़ूरियाँ रोकें?</string>
     <string name="lost_done">हो गया। हर डिवाइस से साइन आउट कर दिया गया है।</string>
     <string name="sign_out">साइन आउट</string>
     <string name="signed_out">साइन आउट हो गया।</string>
-    <string name="refresh">रीफ़्रेश करें</string>
     <string name="yes">हाँ</string>
     <string name="no">नहीं</string>
     <string name="signed_out_reason" formatted="true">साइन आउट हो गया: %1$s</string>
@@ -47,6 +34,118 @@
     <string name="signed_in_limits" formatted="true">सीमाओं के साथ साइन इन हुआ: %1$s</string>
     <string name="hello" formatted="true">नमस्ते, %1$s</string>
     <string name="asked_guardian" formatted="true">%1$s ने आपसे उनका भुगतान गार्डियन बनने को कहा है।</string>
-    <string name="from_person" formatted="true"> (%1$s से)</string>
-    <string name="amount_to" formatted="true">%2$s को %1$s%3$s</string>
+    <string name="tab_me">मेरी सुरक्षा</string>
+    <string name="tab_guardian">मेरे द्वारा सुरक्षित</string>
+    <string name="tab_devices">डिवाइस</string>
+    <string name="loading">लोड हो रहा है…</string>
+    <string name="restricted_banner" formatted="true">यह साइन-इन अभी सीमित है: %1$s। आप फिर भी भुगतान रोक सकते हैं, उन्हें अस्वीकार कर सकते हैं और नियम सख़्त कर सकते हैं।</string>
+    <string name="dev_code" formatted="true">डेवलपमेंट मोड कोड: %1$s</string>
+    <string name="welcome">स्वागत है! आपका खाता बन गया है।</string>
+    <string name="identity" formatted="true">पहचान: %1$s</string>
+    <string name="id_bank_verified">बैंक द्वारा सत्यापित</string>
+    <string name="id_bank_min_kyc">बैंक की बुनियादी जाँच</string>
+    <string name="id_otp">केवल फ़ोन नंबर</string>
+    <string name="payments_on">भुगतान चालू हैं</string>
+    <string name="payments_paused">भुगतान रुके हुए हैं</string>
+    <string name="paused_explain">भुगतान फिर से चालू होने तक कोई भी बैंक आपके खातों से पैसे नहीं भेजेगा।</string>
+    <string name="on_explain">अगर कोई आप पर भुगतान का दबाव डाल रहा है, तो सब कुछ रोक दें। बाद में फिर से चालू कर सकते हैं।</string>
+    <string name="switch_back_on">भुगतान फिर से चालू करें</string>
+    <string name="pause_all_payments">सभी भुगतान रोकें</string>
+    <string name="back_on">भुगतान फिर से चालू हैं।</string>
+    <string name="held_24h">आपका अनुरोध 24 घंटे के लिए रोका गया है। आपके गार्डियन इसे पहले मंज़ूर कर सकते हैं।</string>
+    <string name="all_paused_toast">सभी भुगतान रोक दिए गए हैं।</string>
+    <string name="sim_title">आपका सिम कार्ड बदले जाने की सूचना मिली है</string>
+    <string name="sim_until" formatted="true">%1$s तक बड़े भुगतान रोके जाएँगे और नए साइन-इन कुछ भी मंज़ूर नहीं कर सकते।</string>
+    <string name="sim_explain">अगर सिम आपने खुद बदला है, तो इस फ़ोन से पुष्टि करें। अगर नहीं, तो अभी अपने मोबाइल ऑपरेटर को कॉल करें।</string>
+    <string name="sim_confirm">हाँ, मैंने सिम बदला है</string>
+    <string name="sim_confirmed">धन्यवाद। सामान्य सुरक्षा फिर से लागू है।</string>
+    <string name="changes_waiting">प्रतीक्षा में बदलाव</string>
+    <string name="takes_effect" formatted="true">%1$s पर लागू होगा, जब तक कोई गार्डियन इसे न रोके।</string>
+    <string name="change_update_rules">भुगतान सीमाएँ ढीली करना</string>
+    <string name="change_remove_guardian">एक गार्डियन को हटाना</string>
+    <string name="change_change_mobile">नए नंबर पर जाना</string>
+    <string name="my_rules">मेरे नियम</string>
+    <string name="rule_per_txn">एक भुगतान में अधिकतम</string>
+    <string name="rule_daily">एक दिन में अधिकतम (सभी बैंक)</string>
+    <string name="rule_approval">इतनी राशि से गार्डियन की मंज़ूरी</string>
+    <string name="rule_new_payee">नए प्राप्तकर्ता पर इतनी राशि से प्रतीक्षा</string>
+    <string name="rule_cooling">प्रतीक्षा समय</string>
+    <string name="rule_timeout">गार्डियन के जवाब का समय</string>
+    <string name="rule_channels">बंद किए गए माध्यम</string>
+    <string name="rule_verified">केवल बैंक-सत्यापित गार्डियन मंज़ूरी दें</string>
+    <string name="rule_sim">सिम बदलने के बाद भुगतान रोकें</string>
+    <string name="rule_scam">धोखाधड़ी जैसे दिखने वाले भुगतान रोकें</string>
+    <string name="minutes" formatted="true">%1$s मिनट</string>
+    <string name="none">कोई नहीं</string>
+    <string name="no_limit">कोई सीमा नहीं</string>
+    <string name="preset_label">तैयार सेट इस्तेमाल करें</string>
+    <string name="apply">लागू करें</string>
+    <string name="preset_held">सख़्त हिस्से अभी लागू हैं; ढीले हिस्से 24 घंटे बाद लागू होंगे।</string>
+    <string name="applied">लागू किया गया।</string>
+    <string name="rules_note">नियम सख़्त करना तुरंत लागू होता है। ढीला करने में 24 घंटे लगते हैं, और आपके गार्डियन इसे रोक सकते हैं।</string>
+    <string name="my_guardians">मेरे गार्डियन</string>
+    <string name="no_guardians">अभी कोई गार्डियन नहीं है। गार्डियन बड़े भुगतानों को मंज़ूरी दे सकते हैं और आपके भुगतान रोक सकते हैं।</string>
+    <string name="invite_label">मोबाइल नंबर से गार्डियन को आमंत्रित करें</string>
+    <string name="invite">आमंत्रित करें</string>
+    <string name="invite_sent">निमंत्रण भेजा गया। उन्हें अपने ऐप में इसे स्वीकार करना होगा।</string>
+    <string name="recent_payments">हाल के भुगतान</string>
+    <string name="no_payments">अभी तक कोई भुगतान जाँचा नहीं गया।</string>
+    <string name="to_payee" formatted="true">%1$s को</string>
+    <string name="st_allowed">अनुमत</string>
+    <string name="st_approved">मंज़ूर</string>
+    <string name="st_released">जारी</string>
+    <string name="st_pending_approval">मंज़ूरी की प्रतीक्षा</string>
+    <string name="st_cooling_off">रोका गया</string>
+    <string name="st_blocked">अवरुद्ध</string>
+    <string name="st_denied">अस्वीकृत</string>
+    <string name="st_expired">समय समाप्त</string>
+    <string name="st_cancelled">रद्द</string>
+    <string name="st_failed">विफल</string>
+    <string name="w_active">सक्रिय</string>
+    <string name="w_invited">आमंत्रित</string>
+    <string name="w_declined">अस्वीकृत</string>
+    <string name="w_trusted">भरोसेमंद</string>
+    <string name="w_probation">परखा जा रहा</string>
+    <string name="w_revoked">रद्द</string>
+    <string name="lost_title">फ़ोन खो गया?</string>
+    <string name="lost_explain">इससे आप हर जगह से साइन आउट हो जाएँगे और बड़े भुगतान 72 घंटे के लिए रुक जाएँगे।</string>
+    <string name="report_lost">फ़ोन खोने की सूचना दें</string>
+    <string name="lost_confirm">हर डिवाइस से साइन आउट करें और बड़े भुगतान 72 घंटे रोकें?</string>
+    <string name="people_i_protect">मेरे द्वारा सुरक्षित लोग</string>
+    <string name="guardian_requests">गार्डियन अनुरोध</string>
+    <string name="you_protect_name" formatted="true">अब आप %1$s की सुरक्षा कर रहे हैं।</string>
+    <string name="from_name" formatted="true">%1$s से</string>
+    <string name="answer_by" formatted="true">%1$s तक जवाब दें</string>
+    <string name="goes_through" formatted="true">%1$s पर हो जाएगा, जब तक रोका न जाए</string>
+    <string name="not_sure">पक्का नहीं? मंज़ूरी से पहले उन्हें किसी जाने-पहचाने नंबर पर कॉल करें।</string>
+    <string name="changes_waiting_g">प्रतीक्षा में सुरक्षा बदलाव</string>
+    <string name="wants_to" formatted="true">%1$s यह करना चाहते हैं: %2$s</string>
+    <string name="happens_unless" formatted="true">%1$s पर होगा, जब तक आप इसे न रोकें। धोखेबाज़ अक्सर लोगों से ऐसा करवाते हैं।</string>
+    <string name="someone">कोई</string>
+    <string name="stop_it">इसे रोकें</string>
+    <string name="approve_now">अभी मंज़ूर करें</string>
+    <string name="stopped">रोक दिया।</string>
+    <string name="recoveries">खाता वापसी के अनुरोध</string>
+    <string name="recovery_wants" formatted="true">%1$s अपना खाता %2$s पर ले जाना चाहते हैं।</string>
+    <string name="recovery_warn">तभी मंज़ूर करें जब आपने खुद उनसे बात की हो, अपनी की हुई कॉल पर या आमने-सामने। शक हो तो अस्वीकार करें।</string>
+    <string name="recovery_from" formatted="true">आप %1$s से मंज़ूर कर सकते हैं।</string>
+    <string name="recovery_approve">मैंने उनसे बात की: मंज़ूर करें</string>
+    <string name="recovery_done">धन्यवाद। आपकी पुष्टि दर्ज कर ली गई है।</string>
+    <string name="pause_theirs">उनके भुगतान रोकें</string>
+    <string name="pause_theirs_q" formatted="true">%1$s के सभी भुगतान रोकें?</string>
+    <string name="paused_for" formatted="true">%1$s के भुगतान रोक दिए गए।</string>
+    <string name="protect_none">आप अभी किसी की सुरक्षा नहीं कर रहे। किसी को अपने ऐप से आपको आमंत्रित करना होगा।</string>
+    <string name="mark_all_read">सभी को पढ़ा हुआ मानें</string>
+    <string name="all_read">सभी पढ़ी हुई मान ली गईं।</string>
+    <string name="new_badge">नई</string>
+    <string name="no_alerts_yet">अभी कोई सूचना नहीं।</string>
+    <string name="devices_explain">जिस भी फ़ोन या ब्राउज़र पर आप साइन इन करते हैं, उसकी अपनी कुंजी होती है। नया डिवाइस 24 घंटे तक भुगतान मंज़ूर नहीं कर सकता।</string>
+    <string name="this_device">यह डिवाइस</string>
+    <string name="device_id" formatted="true">डिवाइस %1$s</string>
+    <string name="added_at" formatted="true">%1$s को जोड़ा गया</string>
+    <string name="remove">हटाएँ</string>
+    <string name="removed">हटाया गया और साइन आउट किया गया।</string>
+    <string name="no_devices">अभी कोई डिवाइस कुंजी नहीं।</string>
+    <string name="sign_out_here">यहाँ साइन आउट करें</string>
+    <string name="sign_out_everywhere">हर जगह साइन आउट करें</string>
 </resources>

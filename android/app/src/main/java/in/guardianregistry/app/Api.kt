@@ -9,11 +9,12 @@ import java.net.URL
 class ApiError(val status: Int, message: String) : IOException(message)
 
 /** Blocking JSON client. Call it off the main thread. */
-class Api(private val base: String, var token: String?) {
+class Api(private val base: String, var token: String?, private val headers: Map<String, String> = emptyMap()) {
 
     fun get(path: String): Any = call("GET", path, null)
     fun post(path: String, body: JSONObject? = JSONObject()): Any = call("POST", path, body)
     fun delete(path: String): Any = call("DELETE", path, null)
+    fun put(path: String, body: JSONObject): Any = call("PUT", path, body)
 
     fun obj(path: String) = get(path) as JSONObject
     fun arr(path: String) = get(path) as JSONArray
@@ -27,6 +28,7 @@ class Api(private val base: String, var token: String?) {
             conn.setRequestProperty("Accept", "application/json")
             conn.setRequestProperty("Accept-Language", Wire.language())  // server errors in the phone's language
             token?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
+            headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
             if (body != null) {
                 conn.doOutput = true
                 conn.setRequestProperty("Content-Type", "application/json")
