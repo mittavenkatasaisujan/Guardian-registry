@@ -489,6 +489,14 @@
    "ios"
   ]
  },
+ "50501219a1": {
+  "en": "Can't reach Guardian Registry",
+  "where": [
+   "web",
+   "android:offline_title",
+   "ios"
+  ]
+ },
  "d7cd8c8d84": {
   "en": "Can't reach Guardian Registry. Check your connection.",
   "where": [
@@ -559,6 +567,14 @@
   "en": "Change on hold",
   "where": [
    "server:alert"
+  ]
+ },
+ "1cea20d8a8": {
+  "en": "Change server address",
+  "where": [
+   "web",
+   "android:change_server",
+   "ios"
   ]
  },
  "98e2d21380": {
@@ -2390,6 +2406,22 @@
    "ios"
   ]
  },
+ "192da7e072": {
+  "en": "Sign out on this phone",
+  "where": [
+   "web",
+   "android:sign_out_phone",
+   "ios"
+  ]
+ },
+ "ac449d7368": {
+  "en": "Sign out on this phone? You'll need a code to sign in again.",
+  "where": [
+   "web",
+   "android:sign_out_phone_q",
+   "ios"
+  ]
+ },
  "89a563ec63": {
   "en": "signed in after a SIM change: restricted until {0} or until confirmed from a trusted device or by a guardian",
   "where": [
@@ -2603,6 +2635,24 @@
   "en": "that person must enrol before they can be invited as a guardian",
   "where": [
    "server:error"
+  ]
+ },
+ "a40af31486": {
+  "en": "The app is trying %1$s. Check your internet connection. If you're testing with a server on your computer, it may be off or at a new address.",
+  "where": [
+   "android:offline_explain"
+  ]
+ },
+ "614b7e7e58": {
+  "en": "The app is trying %@. Check your internet connection. If you're testing with a server on your computer, it may be off or at a new address.",
+  "where": [
+   "ios"
+  ]
+ },
+ "cf66bbb6b3": {
+  "en": "The app is trying {address}. Check your internet connection. If you're testing with a server on your computer, it may be off or at a new address.",
+  "where": [
+   "web"
   ]
  },
  "b73c55813f": {
@@ -2821,6 +2871,14 @@
   "where": [
    "web",
    "android:rule_scope",
+   "ios"
+  ]
+ },
+ "042c862e44": {
+  "en": "Try again",
+  "where": [
+   "web",
+   "android:try_again",
    "ios"
   ]
  },

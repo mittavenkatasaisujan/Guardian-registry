@@ -117,7 +117,27 @@ struct HomeTabs: View {
 /// The restricted-sign-in banner, at the top of every tab.
 struct RestrictedSection: View {
     @EnvironmentObject var model: AppModel
+    @State private var confirmSignOut = false
     var body: some View {
+        if model.unreachable && !model.loaded {
+            // nothing loaded and the server can't be reached: name the address and offer a way out
+            Section {
+                Text(verbatim: L("The app is trying %@. Check your internet connection. If you're testing with a server on your computer, it may be off or at a new address.",
+                                 model.serverAddress))
+                    .font(.subheadline)
+                Button("Try again") { model.reload() }.bold()
+                #if DEBUG
+                Button("Change server address") { model.signOutHere() }
+                #endif
+                Button("Sign out on this phone", role: .destructive) { confirmSignOut = true }
+            } header: {
+                Heading("Can't reach Guardian Registry")
+            }
+            .confirmationDialog("Sign out on this phone? You'll need a code to sign in again.",
+                                isPresented: $confirmSignOut, titleVisibility: .visible) {
+                Button("Sign out on this phone", role: .destructive) { model.signOutHere() }
+            }
+        }
         if model.restricted {
             Section {
                 Text(verbatim: L("This sign-in is restricted for now: %@. You can still pause payments, deny or stop payments, and make rules stricter.",

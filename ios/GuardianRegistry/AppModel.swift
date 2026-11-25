@@ -26,6 +26,7 @@ final class AppModel: ObservableObject {
     @Published var message: String?
     @Published var busy = false
     @Published var loaded = false
+    @Published var unreachable = false   // signed in, nothing loaded, and the server can't be reached
 
     // data shown on the screens (server JSON)
     @Published var me: [String: Any] = [:]
@@ -58,6 +59,7 @@ final class AppModel: ObservableObject {
     }
 
     private var api: Api { Api(base: Api.configuredBase, token: TokenStore.token) }
+    var serverAddress: String { Api.configuredBase.absoluteString }
 
     private var deviceId: String {
         if let id = UserDefaults.standard.string(forKey: "device_id") { return id }
@@ -97,6 +99,7 @@ final class AppModel: ObservableObject {
             } catch let e as ApiError where e.status == 401 && screen == .home {
                 signedOut(L("Signed out: %@", e.message))
             } catch let e as URLError where e.code != .cancelled {
+                if screen == .home && !loaded { unreachable = true }
                 message = L("Can't reach Guardian Registry. Check your connection.")
             } catch {
                 message = error.localizedDescription
@@ -166,11 +169,20 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Signed out on this phone only (the server can't be reached to end the session there).
+    func signOutHere() {
+        TokenStore.token = nil
+        screen = .mobile
+        loaded = false
+        unreachable = false
+    }
+
     /// `text` is already in the user's language.
     func signedOut(_ text: String) {
         TokenStore.token = nil
         screen = .mobile
         loaded = false
+        unreachable = false
         message = text
     }
 
@@ -183,7 +195,11 @@ final class AppModel: ObservableObject {
     /// Quiet refresh (pull to refresh, the 15-second timer, a push arriving).
     func refresh() async {
         guard screen == .home else { return }
-        try? await load()
+        do {
+            try await load()
+        } catch is URLError {
+            if !loaded { unreachable = true }
+        } catch {}
     }
 
     func reload() { run { try await self.load() } }
@@ -226,6 +242,7 @@ final class AppModel: ObservableObject {
         }
         inbox = ib; unread = un.count; security = se
         loaded = true
+        unreachable = false
     }
 
     // ------------------------------------------------------------ actions

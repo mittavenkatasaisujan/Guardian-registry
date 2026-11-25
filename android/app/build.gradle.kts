@@ -13,8 +13,8 @@ android {
         applicationId = "in.guardianregistry.app"
         minSdk = 28            // StrongBox and modern Key Attestation
         targetSdk = 35
-        versionCode = 30         // rises with every release, so updates install over the last
-        versionName = "0.30.0"
+        versionCode = 31         // rises with every release, so updates install over the last
+        versionName = "0.30.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "FCM_PROJECT_ID", "\"${prop("grFcmProjectId")}\"")
         buildConfigField("String", "FCM_APP_ID", "\"${prop("grFcmAppId")}\"")

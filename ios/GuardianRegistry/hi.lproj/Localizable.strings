@@ -25,12 +25,14 @@
 "Back" = "वापस";
 "Blocked" = "अवरुद्ध";
 "Blocked channels" = "बंद किए गए माध्यम";
+"Can't reach Guardian Registry" = "Guardian Registry तक नहीं पहुँच पा रहे";
 "Can't reach Guardian Registry. Check your connection." = "Guardian Registry तक नहीं पहुँच पा रहे। अपना कनेक्शन जाँचें।";
 "Cancel deletion" = "मिटाना रद्द करें";
 "Cancelled" = "रद्द";
 "Cancelled." = "रद्द किया।";
 "Card" = "कार्ड";
 "Change my limits" = "मेरी सीमाएँ बदलें";
+"Change server address" = "सर्वर का पता बदलें";
 "Changes waiting" = "प्रतीक्षा में बदलाव";
 "Choose at least one payment type, and different start and end times." = "कम से कम एक भुगतान माध्यम चुनें, और शुरू व खत्म होने का अलग-अलग समय।";
 "Complaint sent. We answer within 90 days." = "शिकायत भेज दी गई। हम 90 दिनों के भीतर जवाब देंगे।";
@@ -162,6 +164,8 @@
 "Sign out everywhere" = "हर जगह साइन आउट करें";
 "Sign out here" = "यहाँ साइन आउट करें";
 "Sign out of every device and hold larger payments for 72 hours?" = "हर डिवाइस से साइन आउट करें और बड़े भुगतान 72 घंटे रोकें?";
+"Sign out on this phone" = "इस फ़ोन पर साइन आउट करें";
+"Sign out on this phone? You'll need a code to sign in again." = "इस फ़ोन पर साइन आउट करें? फिर से साइन इन करने के लिए कोड चाहिए होगा।";
 "Signed in with limits: %@" = "सीमाओं के साथ साइन इन हुआ: %@";
 "Signed out." = "साइन आउट हो गया।";
 "Signed out: %@" = "साइन आउट हो गया: %@";
@@ -177,6 +181,7 @@
 "Thank you. Your agreement is recorded." = "धन्यवाद। आपकी सहमति दर्ज हो गई।";
 "Thank you. Your vouch is recorded." = "धन्यवाद। आपकी पुष्टि दर्ज कर ली गई है।";
 "Thanks. Normal protection applies again." = "धन्यवाद। सामान्य सुरक्षा फिर से लागू है।";
+"The app is trying %@. Check your internet connection. If you're testing with a server on your computer, it may be off or at a new address." = "ऐप %@ से जुड़ने की कोशिश कर रहा है। अपना इंटरनेट कनेक्शन जाँचें। अगर आप अपने कंप्यूटर के सर्वर से जाँच कर रहे हैं, तो वह बंद हो सकता है या उसका पता बदल गया हो सकता है।";
 "This device" = "यह डिवाइस";
 "This sign-in is restricted for now: %@. You can still pause payments, deny or stop payments, and make rules stricter." = "यह साइन-इन अभी सीमित है: %@। आप फिर भी भुगतान रोक सकते हैं, उन्हें अस्वीकार कर सकते हैं और नियम सख़्त कर सकते हैं।";
 "This signs you out everywhere and holds larger payments for 72 hours." = "इससे आप हर जगह से साइन आउट हो जाएँगे और बड़े भुगतान 72 घंटे के लिए रुक जाएँगे।";
@@ -185,6 +190,7 @@
 "To %@" = "%@ को";
 "Transfers only (not UPI, shops or recurring)" = "सिर्फ़ ट्रांसफ़र (UPI, दुकानें या नियमित भुगतान नहीं)";
 "Trusted person checks" = "भरोसेमंद व्यक्ति की जाँच";
+"Try again" = "फिर कोशिश करें";
 "Turn off quiet hours" = "बंद रहने का समय हटाएँ";
 "Until %@, larger payments are held and new sign-ins can't approve anything." = "%@ तक बड़े भुगतान रोके जाएँगे और नए साइन-इन कुछ भी मंज़ूर नहीं कर सकते।";
 "Use a ready-made set" = "तैयार सेट इस्तेमाल करें";

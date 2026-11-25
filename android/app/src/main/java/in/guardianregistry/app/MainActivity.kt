@@ -54,6 +54,7 @@ class MainActivity : Activity() {
     /** Something typed into a form and not saved yet: the 15-second refresh waits. */
     private var formDirty = false
     private var noticeOpen = false
+    private var shownTab: String? = null   // the tab whose data is on screen (null: still loading)
 
     /** This sign-in is restricted (new device, or after a SIM change): the registry refuses
      *  approvals and other high-trust actions, so those buttons become a note instead. */
@@ -169,7 +170,8 @@ class MainActivity : Activity() {
     private fun api() = Api(store.apiBase, store.token)
 
     /** Run [work] off the main thread, then [done] on it. Shows API errors as a toast. */
-    private fun <T> bg(work: () -> T, quiet: Boolean = false, failed: (() -> Unit)? = null, done: (T) -> Unit) {
+    private fun <T> bg(work: () -> T, quiet: Boolean = false, failed: (() -> Unit)? = null,
+                       unreachable: (() -> Unit)? = null, done: (T) -> Unit) {
         io.execute {
             try {
                 val out = work()
@@ -183,7 +185,8 @@ class MainActivity : Activity() {
             } catch (e: Exception) {
                 main.post {
                     failed?.invoke()
-                    if (!quiet) toast(getString(R.string.cant_reach))
+                    unreachable?.invoke()
+                    if (!quiet && unreachable == null) toast(getString(R.string.cant_reach))
                 }
             }
         }
@@ -271,6 +274,7 @@ class MainActivity : Activity() {
     private fun switchTo(id: String) {
         if (id == tab) { render(); return }
         tab = id
+        shownTab = null
         root.removeAllViews()
         para(getString(R.string.loading), MUTED)
         scroll.scrollTo(0, 0)
@@ -287,8 +291,12 @@ class MainActivity : Activity() {
             b.background = if (on) rounded(Color.argb(56, 255, 255, 255), radius = 10) else null
         }
         val which = tab
-        bg({ load(which) }, quiet = quiet) { data ->
+        // nothing on screen yet and the server can't be reached: say so, with a way out
+        bg({ load(which) }, quiet = quiet, unreachable = {
+            if (which == tab && store.token != null && shownTab != which) offlineView() else if (!quiet) toast(getString(R.string.cant_reach))
+        }) { data ->
             if (which != tab || store.token == null) return@bg
+            shownTab = which
             val y = scroll.scrollY
             restricted = data.security?.optJSONObject("this_session")?.optBoolean("restricted") == true
             root.removeAllViews()
@@ -302,6 +310,29 @@ class MainActivity : Activity() {
             setBanner(data.security)
             setBadges(data.inbox, data.unread)
             scroll.post { scroll.scrollTo(0, y) }
+        }
+    }
+
+    /** The server can't be reached and there is nothing to show: name the address, offer a retry
+     *  and a way back to the sign-in screen (where test builds can change the address). */
+    private fun offlineView() {
+        root.removeAllViews()
+        val c = card(WARN)
+        heading(c, getString(R.string.offline_title))
+        para(c, getString(R.string.offline_explain, store.apiBase), MUTED)
+        button(c, getString(R.string.try_again)) { _ ->
+            root.removeAllViews()
+            para(getString(R.string.loading), MUTED)
+            render()
+        }
+        if (BuildConfig.DEBUG) {
+            button(c, getString(R.string.change_server), style = Style.SECONDARY) { _ ->
+                store.token = null   // a session belongs to one server: sign in again at the new address
+                showSignIn()
+            }
+        }
+        button(c, getString(R.string.sign_out_phone), style = Style.SECONDARY) { _ ->
+            confirm(getString(R.string.sign_out_phone_q)) { store.token = null; showSignIn() }
         }
     }
 

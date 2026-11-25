@@ -427,6 +427,21 @@ class AppFlowTest {
     }
 
     /** The person's own limits, name correction and nominee, through the screens. */
+    /** Signed in, but the server can't be reached (it moved or is off): the screen says so, names
+     *  the address, and leads back to sign-in, where a test build can change the address. */
+    @Test
+    fun unreachableServerOffersAWayOut() {
+        Store(ctx).apiBase = "http://127.0.0.1:9"   // nothing listens there
+        val app = launchAs("gut_not_used")
+        see(s(R.string.offline_title))
+        see(s(R.string.offline_explain, "http://127.0.0.1:9"))
+        shot("14-unreachable")
+        tap(s(R.string.change_server))
+        see(s(R.string.send_code))
+        check(Store(ctx).token == null)
+        app.close()
+    }
+
     @Test
     fun limitsNameAndNominee() {
         val p = person(mobile(), "Lata $run", agree = false)

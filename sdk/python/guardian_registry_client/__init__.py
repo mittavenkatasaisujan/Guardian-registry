@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
-__version__ = "0.30.0"
+__version__ = "0.30.1"
 WAITING = ("cooling_off", "pending_approval")
 RETRY_STATUSES = (429, 502, 503, 504)
 
