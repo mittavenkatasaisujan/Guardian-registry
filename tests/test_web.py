@@ -75,7 +75,7 @@ def test_webcrypto_signature_conversion_is_accepted(clock):
     r, s = decode_dss_signature(der)
     raw = r.to_bytes(32, "big") + s.to_bytes(32, "big")          # what WebCrypto returns
     assert raw_to_der(raw) == der
-    out = c.post("/v1/auth/verify", json={"mobile": AMMA, "code": code, "display_name": "Amma",
+    out = c.post("/v1/auth/verify", json={"mobile": AMMA, "code": code, "display_name": "Amma", "adult": True,
                                           "device_key": pub, "challenge": ch, "platform": "web",
                                           "device_proof": base64.b64encode(raw_to_der(raw)).decode()})
     assert out.status_code == 200, out.text

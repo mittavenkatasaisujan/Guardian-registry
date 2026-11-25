@@ -221,7 +221,8 @@ class PrivacyMixin:
             "notice_version": NOTICE_VERSION,
             "profile": {"id": u["id"], "display_name": u["display_name"], "enrolled_at": u["created_at"],
                         "mobile": decrypt_mobile(u["mobile_enc"]) if u["mobile_enc"] else None,
-                        "number_status": u["number_status"], "urgent_channel": u["urgent_channel"]},
+                        "number_status": u["number_status"], "urgent_channel": u["urgent_channel"],
+                        "adult_confirmed_at": u["adult_confirmed_at"]},
             "rules": self.get_rules(uid).to_dict(),
             "trusted_payees": rows("SELECT * FROM trusted_payees WHERE principal_id=?", uid),
             "my_guardians": rows("SELECT g.id, g.status, g.invited_at, g.accepted_at, g.ended_at, u.display_name AS guardian "
@@ -312,6 +313,7 @@ class PrivacyMixin:
         c.execute("UPDATE kyc_attestations SET dob_enc=NULL, status=CASE WHEN status IN ('pending_consent','active') "
                   "THEN 'withdrawn' ELSE status END, decided_at=COALESCE(decided_at, ?), "
                   "ended_by=COALESCE(ended_by, 'erasure') WHERE user_id=?", (now, uid))
+        c.execute("UPDATE checks SET narration=NULL WHERE principal_id=?", (uid,))   # free text: may name people
         c.execute("UPDATE checks SET payee='(erased)' WHERE principal_id=? AND status NOT IN "
                   "('cooling_off','pending_approval')", (uid,))
         c.execute("UPDATE recoveries SET new_mobile_enc='', new_mobile_masked='(erased)' WHERE user_id=?", (uid,))

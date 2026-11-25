@@ -106,3 +106,31 @@ def test_sign_in_for_a_new_number_says_not_enrolled_in_any_language(reg):
     finally:
         del os.environ["GR_OTP_DEV_ECHO"]
     assert r.status_code == 422 and r.json()["code"] == "not_enrolled" and "पंजीकृत" in r.json()["detail"]
+
+
+
+# DPDP Act s.9: the service is for adults; a new account must confirm 18 or older
+def test_new_accounts_must_confirm_they_are_adults(reg):
+    import os
+
+    from fastapi.testclient import TestClient
+
+    from guardian_registry.api import create_app
+    os.environ["GR_OTP_DEV_ECHO"] = "1"
+    try:
+        with TestClient(create_app(reg, run_worker=False)) as c:
+            m = "+919811113333"
+            code = c.post("/v1/auth/otp", json={"mobile": m}).json()["dev_code"]
+            r = c.post("/v1/auth/verify", json={"mobile": m, "code": code, "display_name": "Young"},
+                       headers={"Accept-Language": "hi"})
+            assert r.status_code == 422 and r.json()["code"] == "adult_required" and "18" in r.json()["detail"]
+            # the code wasn't used up: confirming and trying again works
+            r = c.post("/v1/auth/verify", json={"mobile": m, "code": code, "display_name": "Grown", "adult": True})
+            assert r.status_code == 200 and r.json()["new_user"]
+            h = {"Authorization": f"Bearer {r.json()['token']}"}
+            assert c.get("/v1/me/data-export", headers=h).json()["profile"]["adult_confirmed_at"]
+            # signing in again later doesn't ask
+            code = c.post("/v1/auth/otp", json={"mobile": m}).json()["dev_code"]
+            assert c.post("/v1/auth/verify", json={"mobile": m, "code": code}).status_code == 200
+    finally:
+        del os.environ["GR_OTP_DEV_ECHO"]

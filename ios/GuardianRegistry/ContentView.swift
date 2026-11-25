@@ -71,6 +71,8 @@ struct CodeView: View {
                 }
                 TextField("6-digit code", text: $model.code).keyboardType(.numberPad).textContentType(.oneTimeCode)
                 TextField("Your name (first time only)", text: $model.name)
+                Toggle("I am 18 or older", isOn: $model.adult)
+                    .accessibilityIdentifier("adult")
                 Button("Sign in") { model.signIn() }.disabled(model.code.count < 4)
                 Button("Back") { model.screen = .mobile }
             }
@@ -710,6 +712,9 @@ struct GuardianView: View {
                     let id = p["check_id"] as? String ?? ""
                     VStack(alignment: .leading, spacing: 8) {
                         PaymentInfo(p: p, from: names[p["principal_id"] as? String ?? ""])
+                        if let note = p["narration"] as? String, !note.isEmpty {
+                            Text(verbatim: L("Note: %@", note)).italic()   // as the bank sent it
+                        }
                         if let t = p["approval_expires_at"] as? String {
                             Text(verbatim: L("Answer by %@", Wire.time(t))).font(.footnote).foregroundStyle(.secondary)
                         }

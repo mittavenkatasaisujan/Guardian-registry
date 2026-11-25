@@ -286,6 +286,7 @@ function signInView() {
           const out = await api("POST", "/v1/auth/verify", {
             mobile: state.mobile, code: f.code.value.trim(),
             display_name: f.name && f.name.value.trim() ? f.name.value.trim() : null, language: LANG, ...proof,
+            adult: !!(f.adult && f.adult.checked),
           });
           localStorage.setItem(TOKEN_KEY, out.token);
           if (out.new_user) toast(t("Welcome! Your account is set up."));
@@ -293,7 +294,9 @@ function signInView() {
           location.hash = "#me";
           route();
         } catch (err) {
-          if (err.body && err.body.code === "not_enrolled") {   // the message is in the person's language
+          if (err.body && err.body.code === "adult_required") {
+            toast(err.message, 7000);
+          } else if (err.body && err.body.code === "not_enrolled") {   // the message is in the person's language
             state.needName = true;
             step2(devCode);
             toast(t("This number is new here. Add your name to create your account."), 7000);
@@ -310,6 +313,9 @@ function signInView() {
         state.needName ? [
           h("label", { for: "name" }, t("Your name")),
           h("input", { id: "name", name: "name", autocomplete: "name", required: true, maxlength: 80 }),
+          h("label", { class: "check mt" }, h("input", { type: "checkbox", name: "adult", required: true }),
+            t("I am 18 or older")),
+          h("p", { class: "muted small" }, t("This service is for adults. Children can't create an account.")),
         ] : null,
         h("div", { class: "row mt" },
           h("button", { type: "submit" }, state.needName ? t("Create account") : t("Sign in")),
@@ -618,6 +624,7 @@ async function guardianView() {
   out.push(h("section", { class: `card ${waiting.length ? "alert-warn" : ""}` }, h("h2", {}, t("Payments waiting")),
     waiting.length ? h("ul", { class: "list" }, waiting.map((p) => {
       const li = paymentItem(p, names[p.principal_id] ? t("from {name}", { name: names[p.principal_id] }) : null);
+      if (p.narration) li.append(h("p", { class: "narration" }, t("Note: {text}", { text: p.narration })));   // as the bank sent it
       const buttons = p.status === "pending_approval"
         ? [trusted(h("button", { class: "ok", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/payments/${p.check_id}/approve`), t("Approved.")) }, t("Approve"))),
            h("button", { class: "danger", onclick: (e) => act(e.target, () => api("POST", `/v1/guardian/payments/${p.check_id}/deny`), t("Denied. The payment will not go through.")) }, t("Deny"))]

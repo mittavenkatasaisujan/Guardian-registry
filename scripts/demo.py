@@ -159,8 +159,8 @@ phones = {1: Phone(), 2: Phone()}
 def sign_in(n, name):
     code = call("POST", "/v1/auth/otp", 202, json={"mobile": mobile(n)})["dev_code"]
     bad = c.post("/v1/auth/verify", json={"mobile": mobile(n), "code": "000000" if code != "000000" else "111111",
-                                          "display_name": name})
-    out = call("POST", "/v1/auth/verify", json={"mobile": mobile(n), "code": code, "display_name": name,
+                                          "display_name": name, "adult": True})
+    out = call("POST", "/v1/auth/verify", json={"mobile": mobile(n), "code": code, "display_name": name, "adult": True,
                                                 **phones[n].proof()})
     print(f"{name}: wrong code -> {bad.status_code}, right code -> new_user={out['new_user']}")
     return out
@@ -336,7 +336,7 @@ for _ in range(25):  # wait out the OTP resend cooldown from the thief's sign-in
 else:
     raise SystemExit(f"FAIL OTP for the stranger: {r.status_code} {r.text}")
 stranger = call("POST", "/v1/auth/verify", json={"mobile": mobile(2), "code": r.json()["dev_code"],
-                                                 "display_name": "New owner"})
+                                                 "display_name": "New owner", "adult": True})
 S = bearer(stranger["token"])
 print("stranger signs in with the old number -> new_user:", stranger["new_user"],
       "| people they guard:", call("GET", "/v1/guardian/wards", headers=S))

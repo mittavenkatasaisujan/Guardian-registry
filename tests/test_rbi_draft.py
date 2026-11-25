@@ -159,3 +159,25 @@ def test_quiet_hours_in_the_registry(reg, family, clock):
                 {"channels": ["upi"], "start": 1}, "night"):
         with pytest.raises(Invalid, match="quiet_hours"):
             reg.update_rules(family["amma"], {"quiet_hours": bad})
+
+
+
+# ------------------------------------------------------------------ narration: the trusted person sees the payment's note
+def test_guardian_sees_the_narration(reg, family):
+    bank = family["bank"]
+    c = reg.check(bank, AMMA, "n1", 20_000 * R, "known@upi", "imps", narration="  Rent for\nNovember ")
+    assert c["narration"] == "Rent for November"           # one line, trimmed
+    held = reg.inbox(family["ravi"])["held_payments"]
+    assert any(h["check_id"] == c["check_id"] and h["narration"] == "Rent for November" for h in held)
+    assert reg.check(bank, AMMA, "n2", 100 * R, "x@upi")["narration"] is None
+    with pytest.raises(Invalid, match="140"):
+        reg.check(bank, AMMA, "n3", 100 * R, "x@upi", narration="x" * 141)
+
+
+def test_erasure_removes_narrations(reg, family, clock):
+    bank = family["bank"]
+    reg.check(bank, AMMA, "n4", 100 * R, "x@upi", narration="for Kumar's fees")
+    reg.request_erasure(family["amma"])
+    clock.advance(days=8)
+    reg.sweep_erasure()
+    assert reg.db.one("SELECT COUNT(*) n FROM checks WHERE narration IS NOT NULL")["n"] == 0

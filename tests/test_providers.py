@@ -270,9 +270,9 @@ def test_sign_in_with_twilio_verify_keeps_the_registrys_limits(reg):
     assert fake.sent == ["+919811122233"]
     for _ in range(OTP_MAX_ATTEMPTS):
         with pytest.raises(Exception, match="wrong code"):
-            reg.verify_otp("+919811122233", "000000", "Verify Person")
+            reg.verify_otp("+919811122233", "000000", "Verify Person", adult=True)
     with pytest.raises(Exception, match="too many wrong codes"):
-        reg.verify_otp("+919811122233", "123456", "Verify Person")
+        reg.verify_otp("+919811122233", "123456", "Verify Person", adult=True)
 
 
 def test_twilio_verify_from_env(monkeypatch):

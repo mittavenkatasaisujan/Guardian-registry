@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 from . import audit, messages, notify
 from .clock import IST, Clock, iso, ist_day
 from .db import Database
-from .errors import Conflict, Forbidden, Invalid, NotEnrolled, NotFound, TooMany, Unauthorized
+from .errors import AdultRequired, Conflict, Forbidden, Invalid, NotEnrolled, NotFound, TooMany, Unauthorized
 from .kyc import KycMixin
 from .certs import CertMixin
 from .registerfeed import RegisterFeedMixin
@@ -183,9 +183,11 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         return {"webhook_url": url, "webhook_secret": secret}
 
     # -------------------------------------------------------------------- users
-    def register_user(self, mobile: str, display_name: str, device_id: str | None = None) -> tuple[str, str]:
+    def register_user(self, mobile: str, display_name: str, device_id: str | None = None,
+                      adult_confirmed: bool = True) -> tuple[str, str]:
         """Enrol a person and open a session. The API only reaches this after the number is
-        proven by OTP (see verify_otp); it is public here for tests and back-office tools."""
+        proven by OTP and the person has confirmed they are 18 or older (see verify_otp); it is
+        public here for tests and back-office tools."""
         try:
             mh = mobile_hash(mobile)
         except ValueError as e:
@@ -197,8 +199,9 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             raise Conflict("this mobile number is already enrolled")
         uid, token = new_id("usr"), new_secret("gut")
         with self.db.tx() as c:
-            c.execute("INSERT INTO users (id, mobile_hash, mobile_enc, display_name, created_at) VALUES (?,?,?,?,?)",
-                      (uid, mh, encrypt_mobile(mobile), display_name, self._now()))
+            c.execute("INSERT INTO users (id, mobile_hash, mobile_enc, display_name, created_at, adult_confirmed_at) "
+                      "VALUES (?,?,?,?,?,?)", (uid, mh, encrypt_mobile(mobile), display_name, self._now(),
+                                               self._now() if adult_confirmed else None))
             c.execute("INSERT INTO rules VALUES (?,?,?)", (uid, json.dumps(Rules().to_dict()), self._now()))
             self._insert_session(c, uid, token, *self._register_device(c, uid, device_id))
             self._audit(c, uid, "user.enrolled", uid)
@@ -310,7 +313,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
     def verify_otp(self, mobile: str, code: str, display_name: str | None = None,
                    device_id: str | None = None, device_key: str | None = None, device_proof: str | None = None,
                    challenge: str | None = None, key_attestation: str | None = None,
-                   platform: str | None = None) -> dict:
+                   platform: str | None = None, adult: bool = False) -> dict:
         """Check the code. Enrolled number -> new session. New number -> enrol (needs display_name).
         `device_id` is a stable app-install id: a sign-in from a device this person hasn't used
         before starts on probation (see simswap.py)."""
@@ -318,6 +321,9 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         uid = self.user_by_mobile(mobile)
         if not uid and not (display_name or "").strip():
             raise NotEnrolled("this number is not enrolled yet: send display_name to enrol")
+        if not uid and adult is not True:
+            # DPDP Act s.9: a child's data needs a parent's verifiable consent, which we don't collect
+            raise AdultRequired("confirm you are 18 or older to create an account")
         key_id = None
         if device_key or device_proof or challenge:
             if not (device_key and device_proof and challenge):
@@ -778,6 +784,7 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             "check_id": r["id"], "enrolled": True,
             "participant_txn_id": r["participant_txn_id"],
             "amount": r["amount"], "payee": r["payee"], "channel": r["channel"], "kind": r["kind"] or "transfer",
+            "narration": r["narration"],
             "outcome": r["outcome"], "status": status.value,
             "may_execute": status.is_final_go and r["completed_at"] is None,
             "reasons": json.loads(r["reasons"]),
@@ -791,9 +798,12 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         return view
 
     def check(self, participant_id: str, mobile: str, participant_txn_id: str,
-              amount: int, payee: str, channel: str = "upi", kind: str = "transfer") -> dict:
+              amount: int, payee: str, channel: str = "upi", kind: str = "transfer",
+              narration: str | None = None) -> dict:
         """Called by a bank/app before moving money. Idempotent on (participant, participant_txn_id).
-        `kind`: transfer, merchant, recurring (a debit under an existing mandate) or new_mandate."""
+        `kind`: transfer, merchant, recurring (a debit under an existing mandate) or new_mandate.
+        `narration`: the payment's note as the customer typed it ("rent for November"); guardians
+        see it when they decide, as RBI's draft asks. At most 140 characters; stored as sent."""
         self._require_participant(participant_id, "checks")
         if not participant_txn_id.strip():
             raise Invalid("participant_txn_id is required")
@@ -810,6 +820,11 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
             normalize_mobile(mobile)
         except ValueError as e:
             raise Invalid(str(e)) from None
+        if narration is not None:
+            narration = " ".join(narration.split())   # one line: no control characters or line breaks
+            if len(narration) > 140:
+                raise Invalid("narration must be at most 140 characters")
+            narration = "".join(ch for ch in narration if ch.isprintable()) or None
 
         principal_id = self.user_by_mobile(mobile)
         if not principal_id:
@@ -835,13 +850,14 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
                 cid = None
             else:
                 cid = self._decide_new_check(c, principal_id, participant_id, participant_txn_id,
-                                             amount, payee, channel, now, day, kind)
+                                             amount, payee, channel, now, day, kind, narration)
         if cid is None:
-            return self.check(participant_id, mobile, participant_txn_id, amount, payee, channel, kind)
+            return self.check(participant_id, mobile, participant_txn_id, amount, payee, channel, kind, narration)
         return self._with_customer_facts(self._check_view(cid, for_participant=True), principal_id)
 
     def _decide_new_check(self, c, principal_id: str, participant_id: str, participant_txn_id: str,
-                          amount: int, payee: str, channel: str, now, day: str, kind: str = "transfer") -> str:
+                          amount: int, payee: str, channel: str, now, day: str, kind: str = "transfer",
+                          narration: str | None = None) -> str:
         self._refresh_principal(c, principal_id)
         spend_statuses = [s.value for s in CheckStatus if s.counts_as_spend]
         spent = c.execute(
@@ -879,11 +895,12 @@ class Registry(ParticipantMixin, KycMixin, SimSwapMixin, SimFeedMixin, RecoveryM
         cid = new_id("chk")
         c.execute(
             "INSERT INTO checks (id, principal_id, participant_id, participant_txn_id, amount, payee, channel, "
-            "outcome, status, reasons, day, created_at, release_at, expires_at, features, signals, kind) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "outcome, status, reasons, day, created_at, release_at, expires_at, features, signals, kind, narration) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (cid, principal_id, participant_id, participant_txn_id, amount, payee, channel,
              decision.outcome.value, status.value, json.dumps(decision.reasons, ensure_ascii=False),
-             day, iso(now), release_at, expires_at, json.dumps(features), json.dumps([c_ for c_, _ in fired]), kind),
+             day, iso(now), release_at, expires_at, json.dumps(features), json.dumps([c_ for c_, _ in fired]), kind,
+             narration),
         )
         self._audit(c, participant_id, "check.decided", principal_id, check_id=cid,
                     amount=amount, payee=payee, channel=channel, outcome=decision.outcome.value)

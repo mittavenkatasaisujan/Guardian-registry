@@ -21,6 +21,7 @@ final class AppModel: ObservableObject {
     @Published var code = ""
     @Published var devCode: String?
     @Published var name = ""
+    @Published var adult = false   // a new account: "I am 18 or older"
     @Published var server = Api.configuredBase.absoluteString
     @Published var message: String?
     @Published var busy = false
@@ -139,6 +140,7 @@ final class AppModel: ObservableObject {
                 "device_proof": try DeviceKey.sign(key, challenge: challenge).base64EncodedString(),
             ]
             if !self.name.trimmingCharacters(in: .whitespaces).isEmpty { body["display_name"] = self.name }
+            if self.adult { body["adult"] = true }
             if let attestation { body["key_attestation"] = attestation }
             let out: [String: Any]?
             do {

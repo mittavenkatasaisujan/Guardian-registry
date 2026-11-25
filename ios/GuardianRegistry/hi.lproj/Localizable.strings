@@ -68,6 +68,7 @@
 "Hold payments that look like a scam" = "धोखाधड़ी जैसे दिखने वाले भुगतान रोकें";
 "How long we keep it" = "हम इसे कितने समय तक रखते हैं";
 "I agree" = "मैं सहमत हूँ";
+"I am 18 or older" = "मेरी उम्र 18 वर्ष या उससे ज़्यादा है";
 "I protect" = "मेरे द्वारा सुरक्षित";
 "I spoke to them: approve" = "मैंने उनसे बात की: मंज़ूर करें";
 "Identity: %@" = "पहचान: %@";
@@ -113,6 +114,7 @@
 "None" = "कोई नहीं";
 "Not on this sign-in yet: it is restricted (see the note at the top)." = "इस साइन-इन पर अभी नहीं: यह सीमित है (ऊपर की सूचना देखें)।";
 "Not sure? Call them on a number you know before approving." = "पक्का नहीं? मंज़ूरी से पहले उन्हें किसी जाने-पहचाने नंबर पर कॉल करें।";
+"Note: %@" = "विवरण: %@";
 "Nothing is waiting for you." = "आपके लिए कुछ भी प्रतीक्षा में नहीं है।";
 "On hold" = "रोका गया";
 "Only approve if you have spoken to them yourself, on a call YOU placed or in person. If in doubt, deny." = "तभी मंज़ूर करें जब आपने खुद उनसे बात की हो, ऐसी कॉल पर जो आपने ख़ुद की हो, या आमने-सामने। शक हो तो अस्वीकार करें।";

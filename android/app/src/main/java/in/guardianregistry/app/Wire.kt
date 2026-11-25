@@ -27,11 +27,12 @@ object Wire {
 
     fun verifyBody(
         mobile: String, code: String, displayName: String?, deviceId: String,
-        deviceKey: String, challenge: String, proof: String, attestation: String?,
+        deviceKey: String, challenge: String, proof: String, attestation: String?, adult: Boolean = false,
     ): JSONObject = JSONObject().apply {
         put("mobile", mobile)
         put("code", code)
         if (!displayName.isNullOrBlank()) put("display_name", displayName)
+        if (adult) put("adult", true)   // a new account: the person confirmed they are 18 or older
         put("device_id", deviceId)
         put("device_key", deviceKey)
         put("challenge", challenge)

@@ -210,7 +210,7 @@ class TestChannels:
         c = TestClient(create_app(Registry(new_db(), clock), admin_token="a", sms=sms, run_worker=False))
         c.post("/v1/auth/otp", json={"mobile": AMMA})
         code = re.search(r"code: (\d{6})", sms.sent[-1][1]).group(1)
-        tok = c.post("/v1/auth/verify", json={"mobile": AMMA, "code": code, "display_name": "Amma"}).json()["token"]
+        tok = c.post("/v1/auth/verify", json={"mobile": AMMA, "code": code, "display_name": "Amma", "adult": True}).json()["token"]
         H = {"Authorization": f"Bearer {tok}"}
         assert c.put("/v1/me/alerts", headers=H, json={"urgent_channel": "whatsapp"}).json()["urgent_channel"] == "whatsapp"
         out = c.post("/v1/me/alerts/push", headers=H, json={"token": "fcm-token-AAAAAAAA", "platform": "android"})

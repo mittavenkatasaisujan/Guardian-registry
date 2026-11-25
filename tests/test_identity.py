@@ -24,39 +24,39 @@ class TestOtp:
     def test_enrol_with_otp(self, reg, sms):
         code = reg.request_otp(AMMA, sms)
         assert sms.sent[-1] == ("+91" + AMMA, sms.sent[-1][1]) and code in sms.sent[-1][1]
-        out = reg.verify_otp(AMMA, code, display_name="Amma")
+        out = reg.verify_otp(AMMA, code, display_name="Amma", adult=True)
         assert out["new_user"] is True and reg.user_by_token(out["token"]) == out["user_id"]
 
     def test_login_existing_user(self, reg, sms):
         uid, _ = reg.register_user(AMMA, "Amma")
-        out = reg.verify_otp(AMMA, reg.request_otp(AMMA, sms))
+        out = reg.verify_otp(AMMA, reg.request_otp(AMMA, sms), adult=True)
         assert out["user_id"] == uid and out["new_user"] is False and reg.user_by_token(out["token"]) == uid
 
     def test_new_number_needs_name(self, reg, sms):
         code = reg.request_otp(AMMA, sms)
         with pytest.raises(Invalid):
-            reg.verify_otp(AMMA, code)
+            reg.verify_otp(AMMA, code, adult=True)
 
     def test_code_is_single_use(self, reg, sms):
         code = reg.request_otp(AMMA, sms)
-        reg.verify_otp(AMMA, code, "Amma")
+        reg.verify_otp(AMMA, code, "Amma", adult=True)
         with pytest.raises(Unauthorized):
-            reg.verify_otp(AMMA, code)
+            reg.verify_otp(AMMA, code, adult=True)
 
     def test_wrong_code_and_lockout(self, reg, sms):
         code = reg.request_otp(AMMA, sms)
         wrong = "000000" if code != "000000" else "111111"
         for _ in range(OTP_MAX_ATTEMPTS):
             with pytest.raises(Unauthorized):
-                reg.verify_otp(AMMA, wrong, "Amma")
+                reg.verify_otp(AMMA, wrong, "Amma", adult=True)
         with pytest.raises(Unauthorized, match="too many"):
-            reg.verify_otp(AMMA, code, "Amma")   # even the right code is refused now
+            reg.verify_otp(AMMA, code, "Amma", adult=True)   # even the right code is refused now
 
     def test_expiry(self, reg, sms, clock):
         code = reg.request_otp(AMMA, sms)
         clock.advance(minutes=OTP_TTL_MINUTES)
         with pytest.raises(Unauthorized, match="expired"):
-            reg.verify_otp(AMMA, code, "Amma")
+            reg.verify_otp(AMMA, code, "Amma", adult=True)
 
     def test_resend_cooldown_and_window_cap(self, reg, sms, clock):
         reg.request_otp(AMMA, sms)
@@ -77,8 +77,8 @@ class TestOtp:
         new = reg.request_otp(AMMA, sms)
         if old != new:
             with pytest.raises(Unauthorized):
-                reg.verify_otp(AMMA, old, "Amma")
-        assert reg.verify_otp(AMMA, new, "Amma")["new_user"]
+                reg.verify_otp(AMMA, old, "Amma", adult=True)
+        assert reg.verify_otp(AMMA, new, "Amma", adult=True)["new_user"]
 
     def test_code_not_stored_in_clear(self, reg, sms):
         code = reg.request_otp(AMMA, sms)
@@ -98,11 +98,11 @@ class TestSessions:
 
     def test_logout_one_and_everywhere(self, reg, sms, clock):
         uid, t1 = reg.register_user(AMMA, "Amma")
-        t2 = reg.verify_otp(AMMA, reg.request_otp(AMMA, sms))["token"]
+        t2 = reg.verify_otp(AMMA, reg.request_otp(AMMA, sms), adult=True)["token"]
         reg.logout(t1)
         assert reg.user_by_token(t1) is None and reg.user_by_token(t2) == uid
         clock.advance(seconds=OTP_RESEND_SECONDS)
-        t3 = reg.verify_otp(AMMA, reg.request_otp(AMMA, sms))["token"]
+        t3 = reg.verify_otp(AMMA, reg.request_otp(AMMA, sms), adult=True)["token"]
         reg.logout(t2, everywhere=True)
         assert reg.user_by_token(t2) is None and reg.user_by_token(t3) is None
 

@@ -24,6 +24,11 @@ class NotEnrolled(Invalid):
     code = "not_enrolled"
 
 
+class AdultRequired(Invalid):
+    """A new account needs the person to confirm they are 18 or older (the service is for adults)."""
+    code = "adult_required"
+
+
 class Unauthorized(RegistryError):
     status = 401
 

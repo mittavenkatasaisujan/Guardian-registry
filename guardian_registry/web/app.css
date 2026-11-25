@@ -168,6 +168,8 @@ details.notice summary { cursor: pointer; font-weight: 600; min-height: 44px; di
 .notice-body ul { margin: 0; padding-left: 1.2em; }
 .notice-body li { margin: 4px 0; }
 
+.narration { margin: 6px 0 0; font-style: italic; overflow-wrap: anywhere; }
+
 fieldset.plain { border: 0; padding: 0; margin: 12px 0 0; min-width: 0; }
 fieldset.plain legend { font-weight: 600; padding: 0; margin-bottom: 6px; }
 .checks { display: flex; flex-wrap: wrap; gap: 4px 18px; }

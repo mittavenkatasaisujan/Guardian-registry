@@ -27,7 +27,7 @@ final class SignInTests: XCTestCase {
             "device_key": try DeviceKey.spki(key).base64EncodedString(),
             "device_proof": try DeviceKey.sign(key, challenge: signOver ?? challenge).base64EncodedString(),
         ]
-        if let name { b["display_name"] = name }
+        if let name { b["display_name"] = name; b["adult"] = true }
         return b
     }
 

@@ -272,7 +272,7 @@ def http():
     def sign_in(mobile, name, device):
         c.post("/v1/auth/otp", json={"mobile": mobile})
         code = re.search(r"code: (\d{6})", sms.sent[-1][1]).group(1)
-        return c.post("/v1/auth/verify", json={"mobile": mobile, "code": code, "display_name": name,
+        return c.post("/v1/auth/verify", json={"mobile": mobile, "code": code, "display_name": name, "adult": True,
                                                "device_id": device}).json()
 
     amma, ravi = sign_in(AMMA, "Amma", "a-phone"), sign_in(RAVI, "Ravi", "r-phone")

@@ -20,7 +20,7 @@ The RBI draft PDF itself and its comment deadline were not read; **check the RBI
 | Covers fund transfers above a threshold the customer sets | `approval_threshold` (customer-set) | `models.Rules` |
 | **Leaves out UPI, merchant payments and recurring payments** | Rule `approval_scope: "rbi"`; banks send `kind` (`transfer`, `merchant`, `recurring`, `new_mandate`) with each check | `policy.evaluate`, `CheckIn.kind`, migration v19 |
 | Trusted person has **one hour**; no answer means rejected | `approval_timeout_minutes: 60` in the `rbi_trusted_person` preset; an unanswered check expires and is never executed | `presets.py`, `Registry.sweep` |
-| Trusted person sees amount, beneficiary, narration | Approval alert shows amount and payee (no narration field yet) | `_decide_new_check` |
+| Trusted person sees amount, beneficiary, narration | Banks send the customer's note as `narration` (up to 140 characters) with the check; the guardian's held-payment screen shows amount, payee and the note (web, Android, iOS). Erasing an account clears its notes | `Registry.check`, `CheckIn.narration` |
 | **24 hours before a trusted person becomes active** | Rule `new_guardian_wait_hours` (24 in the preset): a newer guardian can deny or stop, but not approve | `_approver_ids`, `_decide_check` |
 | Any change, removal, threshold change or opt-out waits 24 hours | Loosening and guardian removal are held 24 hours and guardians can stop them. **Tightening is immediate**, which is stricter than the draft and can't hurt the customer | `update_rules`, `_propose_change` |
 | Trusted person gets no access, no liability | Guardians see only the person's protection screens; they can't move money | authorization matrix, `tests/test_authz.py` |

@@ -606,6 +606,12 @@
    "server:error-phrase"
   ]
  },
+ "2a308790dc": {
+  "en": "confirm you are 18 or older to create an account",
+  "where": [
+   "server:error"
+  ]
+ },
  "f320e9fdce": {
   "en": "Confirm your identity?",
   "where": [
@@ -1150,6 +1156,14 @@
    "ios"
   ]
  },
+ "b710eae86b": {
+  "en": "I am 18 or older",
+  "where": [
+   "web",
+   "android:adult_first",
+   "ios"
+  ]
+ },
  "f4934b2661": {
   "en": "I protect",
   "where": [
@@ -1441,6 +1455,12 @@
    "ios"
   ]
  },
+ "daa4544e6c": {
+  "en": "narration must be at most 140 characters",
+  "where": [
+   "server:error"
+  ]
+ },
  "a98d434074": {
   "en": "Net banking",
   "where": [
@@ -1651,6 +1671,24 @@
    "web",
    "android:not_sure",
    "ios"
+  ]
+ },
+ "baf360d1e5": {
+  "en": "Note: %1$s",
+  "where": [
+   "android:note_text"
+  ]
+ },
+ "b7d7b7e145": {
+  "en": "Note: %@",
+  "where": [
+   "ios"
+  ]
+ },
+ "ea5e76e2b1": {
+  "en": "Note: {text}",
+  "where": [
+   "web"
   ]
  },
  "cc5796a4fc": {
@@ -2582,6 +2620,13 @@
   "en": "this person's rules require a bank-verified guardian to approve payments",
   "where": [
    "server:error"
+  ]
+ },
+ "f0528d24da": {
+  "en": "This service is for adults. Children can't create an account.",
+  "where": [
+   "web",
+   "android:adults_only"
   ]
  },
  "6d5c0e202d": {

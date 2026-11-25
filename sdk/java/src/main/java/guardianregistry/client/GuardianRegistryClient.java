@@ -33,7 +33,7 @@ import org.json.JSONObject;
  * Amounts are long paise.
  */
 public final class GuardianRegistryClient {
-    public static final String VERSION = "0.28.0";
+    public static final String VERSION = "0.29.0";
     private static final int[] RETRY = {429, 502, 503, 504};
 
     private final String base;
@@ -85,10 +85,20 @@ public final class GuardianRegistryClient {
      * customer's payments are paused, as with RBI's draft Stop Switch.
      */
     public CheckResult check(String mobile, String txnId, long amountPaise, String payee, String channel, String kind) {
+        return check(mobile, txnId, amountPaise, payee, channel, kind, null);
+    }
+
+    /**
+     * narration: the payment's note as the customer typed it (up to 140 characters); the
+     * customer's guardian sees it when deciding, as RBI's draft trusted person mechanism asks.
+     */
+    public CheckResult check(String mobile, String txnId, long amountPaise, String payee, String channel, String kind,
+                             String narration) {
         if (amountPaise <= 0) throw new IllegalArgumentException("amountPaise must be positive (paise, not rupees)");
         JSONObject body = new JSONObject().put("mobile", mobile).put("participant_txn_id", txnId)
             .put("amount", amountPaise).put("payee", payee).put("channel", channel == null ? "upi" : channel)
             .put("kind", kind == null ? "transfer" : kind);
+        if (narration != null && !narration.isEmpty()) body.put("narration", narration);
         return new CheckResult(call("POST", "/v1/checks", body, true));
     }
 

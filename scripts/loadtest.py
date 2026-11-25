@@ -75,7 +75,7 @@ async def main_async(a) -> int:
         async with sem:
             code = (await ok(first.post("/v1/auth/otp", json={"mobile": m}), 202))["dev_code"]
             tok = (await ok(first.post("/v1/auth/verify", json={"mobile": m, "code": code,
-                                                                 "display_name": "Load"})))["token"]
+                                                                 "display_name": "Load", "adult": True})))["token"]
             await ok(first.patch("/v1/me/rules", headers={"Authorization": f"Bearer {tok}"},
                                  json={"daily_limit": DAILY_LIMIT}))
     await asyncio.gather(*(enrol(m) for m in mobiles))

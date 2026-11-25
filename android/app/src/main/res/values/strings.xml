@@ -217,4 +217,7 @@
     <string name="deletion_explain">Your account and your protection end 7 days after you ask. Your guardians are told, and you can cancel until then.</string>
     <string name="deletion_confirm">Delete your account in 7 days? Your guardians will stop protecting your payments.</string>
     <string name="deletion_requested">Deletion requested. You can cancel it until then.</string>
+    <string name="adult_first">I am 18 or older</string>
+    <string name="adults_only">This service is for adults. Children can\'t create an account.</string>
+    <string name="note_text" formatted="true">Note: %1$s</string>
 </resources>

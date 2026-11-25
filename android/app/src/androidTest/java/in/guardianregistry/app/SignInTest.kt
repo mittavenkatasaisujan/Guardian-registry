@@ -39,7 +39,7 @@ class SignInTest {
         val attestation = key.create(ch1)
         val first = anon.post(
             "/v1/auth/verify",
-            Wire.verifyBody(mobile, code(mobile), "Emulator Test", "emu-device", key.publicKey(), ch1, key.sign(ch1), attestation)
+            Wire.verifyBody(mobile, code(mobile), "Emulator Test", "emu-device", key.publicKey(), ch1, key.sign(ch1), attestation, adult = true)
         ) as JSONObject
         assertTrue(first.getBoolean("new_user"))
         emit(JSONObject().put("challenge", ch1).put("device_key", key.publicKey()).put("attestation", attestation))
@@ -68,7 +68,7 @@ class SignInTest {
         try {
             anon.post(
                 "/v1/auth/verify",
-                Wire.verifyBody(mobile, code(mobile), "Tamper Test", "emu-2", key.publicKey(), ch, key.sign("not-$ch"), null)
+                Wire.verifyBody(mobile, code(mobile), "Tamper Test", "emu-2", key.publicKey(), ch, key.sign("not-$ch"), null, adult = true)
             )
             fail("the registry accepted a signature over a different challenge")
         } catch (e: ApiError) {

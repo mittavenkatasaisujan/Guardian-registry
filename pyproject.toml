@@ -1,6 +1,6 @@
 [project]
 name = "guardian-registry"
-version = "0.28.0"
+version = "0.29.0"
 description = "Consent-based cross-bank guardian and trusted-person registry for payment protection"
 requires-python = ">=3.11"
 dependencies = ["fastapi>=0.115", "uvicorn>=0.32", "pydantic>=2.10", "httpx[http2]>=0.27", "cryptography>=43", "PyJWT>=2.10"]

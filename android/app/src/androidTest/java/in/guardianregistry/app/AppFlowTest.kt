@@ -62,7 +62,8 @@ class AppFlowTest {
     /** A signed-up person; `agree`: they have also agreed to the privacy notice (as most tests assume). */
     private fun person(mobile: String, name: String, agree: Boolean = true): String {
         val code = (anon.post("/v1/auth/otp", JSONObject().put("mobile", mobile)) as JSONObject).getString("dev_code")
-        val token = (anon.post("/v1/auth/verify", JSONObject().put("mobile", mobile).put("code", code).put("display_name", name)) as JSONObject)
+        val token = (anon.post("/v1/auth/verify", JSONObject().put("mobile", mobile).put("code", code).put("display_name", name)
+            .put("adult", true)) as JSONObject)
             .getString("token")
         if (agree) {
             val p = Api(base, token)
@@ -319,6 +320,7 @@ class AppFlowTest {
         shot("09-sign-in")
         tap(s(R.string.send_code))
         eventually { onView(withHint(s(R.string.your_name_first))).perform(replaceText("Kiran $run"), closeSoftKeyboard()) }
+        onView(withText(s(R.string.adult_first))).perform(scrollTo(), click())
         tap(s(R.string.sign_in))
         see(s(R.string.hello, "Kiran $run"))
         see(s(R.string.no_guardians))
@@ -389,7 +391,7 @@ class AppFlowTest {
             initSign(pair.private); update(Wire.signingInput(ch)); sign()
         }
         return anon.post("/v1/auth/verify", Wire.verifyBody(mobile, code, name, device, Wire.b64(pair.public.encoded), ch,
-            Wire.b64(sig), null)) as JSONObject
+            Wire.b64(sig), null, adult = true)) as JSONObject
     }
 
     /** A second phone for the same person is on probation: the banner shows a readable time and

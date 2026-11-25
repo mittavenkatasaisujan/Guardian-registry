@@ -221,11 +221,17 @@ class MainActivity : Activity() {
         devCode?.let { pill(c, getString(R.string.dev_code, it), WARN_BG, WARN_TEXT) }
         val code = input(c, getString(R.string.code), InputType.TYPE_CLASS_NUMBER, devCode)
         val name = input(c, getString(R.string.your_name_first), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS, null)
+        val adult = CheckBox(this).apply {
+            text = getString(R.string.adult_first); textSize = 16f; setTextColor(INK); minHeight = dp(44)
+            c.addView(this, LinearLayout.LayoutParams(-1, -2))
+        }
+        para(c, getString(R.string.adults_only), MUTED, 13f)
         button(c, getString(R.string.sign_in)) { b ->
             val cd = code.text.toString().trim()
             val n = name.text.toString().trim()
+            val isAdult = adult.isChecked
             busy(b)
-            bg({ signIn(mobile, cd, n) }, failed = { idle(b) }) { out ->
+            bg({ signIn(mobile, cd, n, isAdult) }, failed = { idle(b) }) { out ->
                 store.token = out.getString("token")
                 PushService.refresh(this)
                 when {
@@ -242,12 +248,12 @@ class MainActivity : Activity() {
     }
 
     /** OTP + device key proof. The key is created (and attested) on first use. */
-    private fun signIn(mobile: String, code: String, name: String): JSONObject {
+    private fun signIn(mobile: String, code: String, name: String, adult: Boolean): JSONObject {
         val anon = Api(store.apiBase, null)
         val challenge = (anon.post("/v1/auth/challenge") as JSONObject).getString("challenge")
         val attestation = if (!key.exists) key.create(challenge) else null
         val body = Wire.verifyBody(mobile, code, name, store.deviceId, key.publicKey(), challenge,
-            key.sign(challenge), attestation)
+            key.sign(challenge), attestation, adult)
         return try {
             anon.post("/v1/auth/verify", body) as JSONObject
         } catch (e: ApiError) {
@@ -676,6 +682,7 @@ class MainActivity : Activity() {
         if (held.isEmpty()) para(w, getString(R.string.nothing_waiting), MUTED)
         for (p in held) {
             paymentItem(w, p, names[p.str("principal_id")]?.let { getString(R.string.from_name, it) })
+            p.str("narration").ifBlank { null }?.let { para(w, getString(R.string.note_text, it), INK, 15f).apply { setTypeface(typeface, Typeface.ITALIC) } }
             p.str("approval_expires_at").ifBlank { null }?.let { para(w, getString(R.string.answer_by, Wire.time(it)), MUTED, 13f) }
             p.str("release_at").ifBlank { null }?.let { para(w, getString(R.string.goes_through, Wire.time(it)), MUTED, 13f) }
             para(w, getString(R.string.not_sure), MUTED, 13f)

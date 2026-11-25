@@ -31,6 +31,10 @@ POST /v1/checks
   while the customer's payments are paused (the draft's Stop Switch), and customers who choose the
   RBI scope for their trusted person only have transfers outside UPI sent for approval (the
   draft leaves out UPI, merchant and recurring payments).
+* `narration` (optional, up to 140 characters): the payment's note as the customer typed it ("rent
+  for November"). The customer's guardian sees it next to the amount and payee when deciding, as
+  the draft's trusted person mechanism asks. It is stored as sent (on one line) and removed if the
+  customer erases their account.
 * `participant_txn_id` is your own id for the payment. The call is **idempotent** on it: after a
   timeout, send the same request again; you get the same check back, never a second one.
 * Decide only on **`may_execute`**:

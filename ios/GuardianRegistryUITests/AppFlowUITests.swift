@@ -60,7 +60,8 @@ final class AppFlowUITests: XCTestCase {
     /// A person signed in without a device key (as a web browser on plain http would).
     /// A signed-up person; `agree`: they have also agreed to the privacy notice (as most tests assume).
     private func person(_ mobile: String, _ name: String, agree: Bool = true) throws -> String {
-        let out = try call("POST", "/v1/auth/verify", ["mobile": mobile, "code": try devCode(mobile), "display_name": name]) as? [String: Any]
+        let out = try call("POST", "/v1/auth/verify", ["mobile": mobile, "code": try devCode(mobile), "display_name": name,
+                                                       "adult": true]) as? [String: Any]
         let token = try XCTUnwrap(out?["token"] as? String)
         if agree {
             let version = try XCTUnwrap(try obj("/v1/privacy/notice")["version"] as? String)
@@ -78,7 +79,7 @@ final class AppFlowUITests: XCTestCase {
         var body: [String: Any] = ["mobile": mobile, "code": code, "device_id": device, "platform": "ios", "challenge": ch,
                                    "device_key": key.publicKey.derRepresentation.base64EncodedString(),
                                    "device_proof": sig.base64EncodedString()]
-        if let name { body["display_name"] = name }
+        if let name { body["display_name"] = name; body["adult"] = true }
         return try call("POST", "/v1/auth/verify", body) as? [String: Any] ?? [:]
     }
 
@@ -351,6 +352,11 @@ final class AppFlowUITests: XCTestCase {
         let name = see(app, app.textFields["Your name (first time only)"], "name field")
         name.tap()
         name.typeText("Kiran \(run)")
+        let adult = see(app, app.switches["adult"], "18 or older switch")
+        for _ in 0..<3 where (adult.value as? String) != "1" {
+            adult.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()   // the switch, not the label
+            Thread.sleep(forTimeInterval: 0.8)
+        }
         tap(app, button: "Sign in")
         see(app, text(app, "Hello, Kiran \(run)"), "signed in")
         tab(app, 3)

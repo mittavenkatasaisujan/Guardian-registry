@@ -539,9 +539,16 @@ CREATE TABLE nominees (
 );
 """
 
+SCHEMA_V21 = """
+-- DPDP Act s.9: when the person confirmed, at enrolment, that they are 18 or older
+ALTER TABLE users ADD COLUMN adult_confirmed_at TEXT;
+-- RBI's Nov 2026 draft: the trusted person sees the payment's narration (the note the bank sends)
+ALTER TABLE checks ADD COLUMN narration TEXT;
+"""
+
 MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8, SCHEMA_V9,
               SCHEMA_V10, SCHEMA_V11, SCHEMA_V12, SCHEMA_V13, SCHEMA_V14, SCHEMA_V15, SCHEMA_V16, SCHEMA_V17,
-              SCHEMA_V18, SCHEMA_V19, SCHEMA_V20]
+              SCHEMA_V18, SCHEMA_V19, SCHEMA_V20, SCHEMA_V21]
 
 # Postgres-only follow-ups, run after the baseline or after the portable migration of the
 # same version. v11: audit rows get their global seq from a sequence (SQLite's INTEGER

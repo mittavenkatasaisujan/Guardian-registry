@@ -112,7 +112,7 @@ def main(argv=None) -> int:
 
     def person(mobile, name):
         code = must(h.post("/v1/auth/otp", json={"mobile": mobile}), 202)["dev_code"]
-        return must(h.post("/v1/auth/verify", json={"mobile": mobile, "code": code, "display_name": name}))["token"]
+        return must(h.post("/v1/auth/verify", json={"mobile": mobile, "code": code, "display_name": name, "adult": True}))["token"]
 
     digits = str(uuid.uuid4().int)[:7]
     elder, carer = f"+91971{digits}", f"+91972{digits}"

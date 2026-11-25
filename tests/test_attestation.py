@@ -323,7 +323,7 @@ def _sign_in(reg, phone, make_evidence, platform):
     code = reg.request_otp(RAVI, LogSmsSender())
     return reg.verify_otp(RAVI, code, "Ravi", None, device_key=phone.public, challenge=ch,
                           device_proof=phone.sign(ch) if hasattr(phone, "sign") else _sign(phone, ch),
-                          key_attestation=make_evidence(ch), platform=platform)
+                          key_attestation=make_evidence(ch), platform=platform, adult=True)
 
 
 def _sign(phone, ch):

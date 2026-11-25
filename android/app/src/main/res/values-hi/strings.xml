@@ -216,4 +216,7 @@
     <string name="deletion_explain">माँगने के 7 दिन बाद आपका खाता और आपकी सुरक्षा खत्म हो जाती है। आपके गार्डियन को बताया जाता है, और तब तक आप इसे रद्द कर सकते हैं।</string>
     <string name="deletion_confirm">7 दिन में अपना खाता मिटाएँ? आपके गार्डियन आपके भुगतानों की सुरक्षा बंद कर देंगे।</string>
     <string name="deletion_requested">मिटाने का अनुरोध हो गया। तब तक आप इसे रद्द कर सकते हैं।</string>
+    <string name="adult_first">मेरी उम्र 18 वर्ष या उससे ज़्यादा है</string>
+    <string name="adults_only">यह सेवा वयस्कों के लिए है। बच्चे खाता नहीं बना सकते।</string>
+    <string name="note_text" formatted="true">विवरण: %1$s</string>
 </resources>

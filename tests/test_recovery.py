@@ -300,7 +300,7 @@ def test_http_flow():
         return re.search(r"code: (\d{6})", sms.sent[-1][1]).group(1)
 
     def sign_in(mobile, name, device):
-        return c.post("/v1/auth/verify", json={"mobile": mobile, "code": code_for(mobile), "display_name": name,
+        return c.post("/v1/auth/verify", json={"mobile": mobile, "code": code_for(mobile), "display_name": name, "adult": True,
                                                "device_id": device}).json()
 
     amma, ravi = sign_in(AMMA, "Amma", "a"), sign_in(RAVI, "Ravi", "r")

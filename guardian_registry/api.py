@@ -65,6 +65,8 @@ class VerifyIn(BaseModel):
     mobile: str
     code: str = Field(min_length=4, max_length=10)
     display_name: str | None = Field(default=None, max_length=80)
+    adult: bool = Field(default=False, description="creating an account: the person confirms they are 18 or older "
+                                                  "(required; refused with code adult_required otherwise)")
     language: str | None = Field(default=None, max_length=10,
                                  description="the app's language (e.g. hi-IN); used for alerts and SMS if enabled")
     device_id: str | None = Field(default=None, max_length=200,
@@ -309,6 +311,9 @@ class CheckIn(BaseModel):
         description="transfer, merchant (a payment to a shop), recurring (a debit under an existing mandate or "
                     "standing instruction) or new_mandate. Existing recurring mandates still run while payments are "
                     "paused, and with approval_scope 'rbi' only transfers outside UPI go to the trusted person.")
+    narration: str | None = Field(default=None, max_length=140,
+                                  description="the payment's note as the customer typed it; guardians see it "
+                                              "when they approve (RBI's draft trusted person mechanism)")
 
 
 class OutcomeIn(BaseModel):
@@ -817,7 +822,8 @@ def create_app(
     def verify_otp(body: VerifyIn, request: Request):
         limited(otp_limiter, "verify:" + client_ip(request))
         out = reg.verify_otp(body.mobile, body.code, body.display_name, body.device_id, body.device_key,
-                             body.device_proof, body.challenge, body.key_attestation, body.platform)
+                             body.device_proof, body.challenge, body.key_attestation, body.platform,
+                             adult=body.adult)
         lang = messages.normalise(body.language)
         if lang:  # an app in a language we don't have (yet) keeps English rather than failing sign-in
             reg.set_language(out["user_id"], lang)
@@ -864,7 +870,8 @@ def create_app(
     @app.post("/v1/checks", tags=["banks"])
     def create_check(body: CheckIn, pid: Participant):
         limited(check_limiter, pid)
-        out = reg.check(pid, body.mobile, body.participant_txn_id, body.amount, body.payee, body.channel, body.kind)
+        out = reg.check(pid, body.mobile, body.participant_txn_id, body.amount, body.payee, body.channel, body.kind,
+                        body.narration)
         metrics.inc("gr_checks_total", {"status": str(out.get("status"))})
         return out
 

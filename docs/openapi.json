@@ -207,6 +207,19 @@
             "title": "Mobile",
             "type": "string"
           },
+          "narration": {
+            "anyOf": [
+              {
+                "maxLength": 140,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "the payment's note as the customer typed it; guardians see it when they approve (RBI's draft trusted person mechanism)",
+            "title": "Narration"
+          },
           "participant_txn_id": {
             "maxLength": 100,
             "minLength": 1,
@@ -1336,6 +1349,12 @@
       },
       "VerifyIn": {
         "properties": {
+          "adult": {
+            "default": false,
+            "description": "creating an account: the person confirms they are 18 or older (required; refused with code adult_required otherwise)",
+            "title": "Adult",
+            "type": "boolean"
+          },
           "challenge": {
             "anyOf": [
               {
@@ -1498,7 +1517,7 @@
   "info": {
     "description": "Cross-bank trusted-person and payment-protection registry.",
     "title": "Guardian Registry",
-    "version": "0.28.0"
+    "version": "0.29.0"
   },
   "openapi": "3.1.0",
   "paths": {

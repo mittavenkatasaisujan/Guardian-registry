@@ -134,7 +134,7 @@ def sms_family(clock):
 
     def sign_in(mobile, name, device):
         code = reg.request_otp(mobile, sms)
-        return reg.verify_otp(mobile, code, name, device)
+        return reg.verify_otp(mobile, code, name, device, adult=True)
 
     a = sign_in(AMMA, "Amma", "amma-phone")
     r = sign_in(RAVI, "Ravi", "ravi-phone")
@@ -255,7 +255,7 @@ def http():
     def sign_in(mobile, name, device):
         c.post("/v1/auth/otp", json={"mobile": mobile})
         code = re.search(r"code: (\d{6})", sms.sent[-1][1]).group(1)
-        return c.post("/v1/auth/verify", json={"mobile": mobile, "code": code, "display_name": name,
+        return c.post("/v1/auth/verify", json={"mobile": mobile, "code": code, "display_name": name, "adult": True,
                                                "device_id": device}).json()
 
     amma, ravi = sign_in(AMMA, "Amma", "a-phone"), sign_in(RAVI, "Ravi", "r-phone")

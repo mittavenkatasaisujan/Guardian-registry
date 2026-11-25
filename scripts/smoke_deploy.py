@@ -73,7 +73,7 @@ def main(base: str) -> int:
 
     mobile = "+9195" + str(uuid.uuid4().int)[:8]
     code = ok(plain.post("/v1/auth/otp", json={"mobile": mobile}), 202)["dev_code"]
-    person = ok(plain.post("/v1/auth/verify", json={"mobile": mobile, "code": code, "display_name": "Smoke"}))
+    person = ok(plain.post("/v1/auth/verify", json={"mobile": mobile, "code": code, "display_name": "Smoke", "adult": True}))
     assert person["new_user"]
     chk = ok(bank_tls.post("/v1/checks", headers=key, json={"mobile": mobile, "participant_txn_id": f"s-{run}",
                                                             "amount": 50_00, "payee": "shop@upi"}))

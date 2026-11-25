@@ -41,7 +41,7 @@ def sign_in(reg, mobile, phone=None, name=None, tamper=False):
         ch = reg.new_challenge()["challenge"]
         kw = {"device_key": phone.public, "challenge": ch,
               "device_proof": phone.sign(ch + ("x" if tamper else ""))}
-    return reg.verify_otp(mobile, code, name, None, **kw)
+    return reg.verify_otp(mobile, code, name, None, **kw, adult=True)
 
 
 @pytest.fixture
@@ -77,12 +77,12 @@ class TestProof:
         reg.clock.advance(seconds=OTP_RESEND_SECONDS + 1)
         code = reg.request_otp(RAVI, LogSmsSender())
         proof = people["ravi_phone"].sign(ch)
-        reg.verify_otp(RAVI, code, None, None, device_key=people["ravi_phone"].public, challenge=ch, device_proof=proof)
+        reg.verify_otp(RAVI, code, None, None, device_key=people["ravi_phone"].public, challenge=ch, device_proof=proof, adult=True)
         reg.clock.advance(seconds=OTP_RESEND_SECONDS + 1)
         code = reg.request_otp(RAVI, LogSmsSender())
         with pytest.raises(Unauthorized, match="used or expired"):
             reg.verify_otp(RAVI, code, None, None, device_key=people["ravi_phone"].public, challenge=ch,
-                           device_proof=proof)
+                           device_proof=proof, adult=True)
 
     def test_expired_challenge(self, reg, people):
         ch = reg.new_challenge()["challenge"]
@@ -90,7 +90,7 @@ class TestProof:
         code = reg.request_otp(RAVI, LogSmsSender())
         with pytest.raises(Unauthorized):
             reg.verify_otp(RAVI, code, None, None, device_key=people["ravi_phone"].public, challenge=ch,
-                           device_proof=people["ravi_phone"].sign(ch))
+                           device_proof=people["ravi_phone"].sign(ch), adult=True)
 
     def test_wrong_key_types(self, reg, people):
         rsa_pub = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key().public_bytes(
@@ -100,13 +100,13 @@ class TestProof:
             reg.clock.advance(seconds=OTP_RESEND_SECONDS + 1)
             code = reg.request_otp(RAVI, LogSmsSender())
             with pytest.raises(Invalid):
-                reg.verify_otp(RAVI, code, None, None, device_key=key, challenge=ch, device_proof="AAAA")
+                reg.verify_otp(RAVI, code, None, None, device_key=key, challenge=ch, device_proof="AAAA", adult=True)
 
     def test_all_three_fields_or_none(self, reg, people):
         reg.clock.advance(seconds=OTP_RESEND_SECONDS + 1)
         code = reg.request_otp(RAVI, LogSmsSender())
         with pytest.raises(Invalid, match="together"):
-            reg.verify_otp(RAVI, code, None, None, device_key=people["ravi_phone"].public)
+            reg.verify_otp(RAVI, code, None, None, device_key=people["ravi_phone"].public, adult=True)
 
     def test_no_key_still_works(self, reg, people):
         legacy = sign_in(reg, RAVI)
@@ -164,7 +164,7 @@ class TestAttestation:
         ch = reg.new_challenge()["challenge"]
         code = reg.request_otp(RAVI, LogSmsSender())
         reg.verify_otp(RAVI, code, None, None, device_key=p.public, challenge=ch, device_proof=p.sign(ch),
-                       key_attestation="integrity-token", platform="android")
+                       key_attestation="integrity-token", platform="android", adult=True)
         k = [k for k in reg.device_keys(people["ravi"]["user_id"]) if k["key_id"] == p.key_id][0]
         assert k["platform_attested"] is True
 
@@ -187,7 +187,7 @@ def test_http(clock):
         c.post("/v1/auth/otp", json={"mobile": AMMA})
         code = re.search(r"code: (\d{6})", sms.sent[-1][1]).group(1)
         ch = c.post("/v1/auth/challenge").json()["challenge"]
-        return c.post("/v1/auth/verify", json={"mobile": AMMA, "code": code, "display_name": name,
+        return c.post("/v1/auth/verify", json={"mobile": AMMA, "code": code, "display_name": name, "adult": True,
                                                "device_key": p.public, "challenge": ch,
                                                "device_proof": p.sign(ch), "platform": "android"}).json()
 

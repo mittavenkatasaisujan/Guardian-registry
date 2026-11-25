@@ -35,7 +35,7 @@ def sign_in(client, sms, mobile, name=None):
     """Full OTP flow: request a code, read it from the (fake) SMS, verify it."""
     assert client.post("/v1/auth/otp", json={"mobile": mobile}).status_code == 202
     code = re.search(r"code: (\d{6})", sms.sent[-1][1]).group(1)
-    r = client.post("/v1/auth/verify", json={"mobile": mobile, "code": code, "display_name": name})
+    r = client.post("/v1/auth/verify", json={"mobile": mobile, "code": code, "display_name": name, "adult": True})
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -193,7 +193,7 @@ class TestScenario:
 class TestSignIn:
     def test_wrong_code_401(self, client):
         client.post("/v1/auth/otp", json={"mobile": AMMA})
-        r = client.post("/v1/auth/verify", json={"mobile": AMMA, "code": "abcdef", "display_name": "A"})
+        r = client.post("/v1/auth/verify", json={"mobile": AMMA, "code": "abcdef", "display_name": "A", "adult": True})
         assert r.status_code == 401
 
     def test_resend_too_soon_429(self, client):

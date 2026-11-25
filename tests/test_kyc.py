@@ -236,7 +236,7 @@ class TestHttp:
         client = TestClient(create_app(Registry(new_db(), clock), admin_token="a", sms=sms, run_worker=False))
         client.post("/v1/auth/otp", json={"mobile": AMMA})
         code = re.search(r"code: (\d{6})", sms.sent[-1][1]).group(1)
-        tok = client.post("/v1/auth/verify", json={"mobile": AMMA, "code": code, "display_name": "Amma"}).json()["token"]
+        tok = client.post("/v1/auth/verify", json={"mobile": AMMA, "code": code, "display_name": "Amma", "adult": True}).json()["token"]
         me = {"Authorization": f"Bearer {tok}"}
         bank = {"X-Api-Key": client.post("/v1/admin/participants", json={"name": "B", "regulator_ref": "RBI-TEST-1"},
                                          headers={"X-Admin-Token": "a"}).json()["api_key"]}

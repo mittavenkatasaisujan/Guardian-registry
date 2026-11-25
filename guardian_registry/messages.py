@@ -262,6 +262,8 @@ ERRORS_HI = {
     "a new guardian can approve payments only after the waiting period set in this person's rules":
         "नया गार्डियन इस व्यक्ति के नियमों में तय प्रतीक्षा अवधि के बाद ही भुगतान मंज़ूर कर सकता है",
     "approval_scope must be all or rbi": "मंज़ूरी का दायरा 'सभी' या 'RBI' होना चाहिए",
+    "confirm you are 18 or older to create an account": "खाता बनाने के लिए पुष्टि करें कि आपकी उम्र 18 वर्ष या उससे ज़्यादा है",
+    "narration must be at most 140 characters": "भुगतान का विवरण 140 अक्षरों से ज़्यादा नहीं हो सकता",
     "quiet_hours needs one or more channels and a start and end hour (0 to 23) that differ":
         "बंद रहने के समय के लिए कम से कम एक माध्यम और शुरू व खत्म होने का अलग-अलग घंटा (0 से 23) चाहिए",
     "channel_daily_limits must map channels to positive whole numbers of paise":
