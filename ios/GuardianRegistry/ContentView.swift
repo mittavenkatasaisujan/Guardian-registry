@@ -246,6 +246,7 @@ struct MyProtectionView: View {
     @State private var preset = ""
     @State private var invite = ""
     @State private var confirmLost = false
+    @State private var confirmDelete = false
     @State private var limits: [String: String] = [:]
     @State private var limitsLoaded = false
     @State private var newName = ""
@@ -272,6 +273,7 @@ struct MyProtectionView: View {
                 recent
                 details
                 if model.agreedToNotice { privacy }
+                yourData
                 lost
             }
         }
@@ -293,6 +295,14 @@ struct MyProtectionView: View {
         .confirmationDialog("Sign out of every device and hold larger payments for 72 hours?",
                             isPresented: $confirmLost, titleVisibility: .visible) {
             Button("Report lost phone", role: .destructive) { model.lostPhone() }
+        }
+        .confirmationDialog("Delete your account in 7 days? Your guardians will stop protecting your payments.",
+                            isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete my account", role: .destructive) { model.requestErasure() }
+        }
+        .fileExporter(isPresented: Binding(get: { model.exportFile != nil }, set: { if !$0 { model.exportFile = nil } }),
+                      document: model.exportFile, contentType: .json, defaultFilename: "guardian-registry-my-data") { result in
+            if case .success = result { model.message = L("Saved your data.") }
         }
     }
 
@@ -527,6 +537,36 @@ struct MyProtectionView: View {
             }
         } header: {
             Heading("Privacy notice")
+        }
+    }
+
+    /// DPDP rights: a copy of everything held, and deleting the account (held 7 days, can be cancelled).
+    private var yourData: some View {
+        Section {
+            Text("Everything we hold about you, as a file (JSON). Keep it private: it has your mobile number.")
+                .font(.footnote).foregroundStyle(.secondary)
+            if model.restricted {
+                RestrictedNote()
+            } else {
+                Button("Download my data") { model.prepareExport() }
+            }
+            Text("Delete my account").font(.headline).padding(.top, 6)
+            if let e = model.erasure {
+                Text(verbatim: L("Your account will be deleted on %@.", Wire.time(e["erase_at"] as? String ?? ""))).bold()
+                Text("Your guardians stop protecting your payments then. If someone told you to do this, cancel it.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                Button("Cancel deletion") { model.cancelErasure() }.bold()
+            } else {
+                Text("Your account and your protection end 7 days after you ask. Your guardians are told, and you can cancel until then.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                if model.restricted {
+                    RestrictedNote()
+                } else {
+                    Button("Delete my account", role: .destructive) { confirmDelete = true }
+                }
+            }
+        } header: {
+            Heading("Your data")
         }
     }
 

@@ -1,4 +1,6 @@
 import Foundation
+import SwiftUI
+import UniformTypeIdentifiers
 import Security
 
 /// A translated string (the key is the English text, as in Localizable.strings).
@@ -41,6 +43,8 @@ final class AppModel: ObservableObject {
     @Published var nominee: [String: Any]?
     @Published var notice: [String: Any] = [:]
     @Published var agreedToNotice = true
+    @Published var erasure: [String: Any]?
+    @Published var exportFile: JSONFile?
 
     init() {
         #if DEBUG
@@ -198,8 +202,10 @@ final class AppModel: ObservableObject {
             async let nm = a.object("/v1/me/nominee")
             async let no = a.object("/v1/privacy/notice")
             async let co = a.object("/v1/me/consents")
+            async let er = a.object("/v1/me/erasure")
             let (mm, rr, gg, cc, pp, ps, nn) = try await (m, r, g, c, p, pr, nm)
-            let (nt, cs) = try await (no, co)
+            let (nt, cs, ee) = try await (no, co, er)
+            erasure = ee["erasure"] as? [String: Any]
             me = mm; rules = rr; guardians = gg; changes = cc; payments = pp
             nominee = nn["nominee"] as? [String: Any]
             notice = nt
@@ -300,6 +306,31 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Everything held about this person, ready for the system's "save to Files" sheet.
+    func prepareExport() {
+        run {
+            let all = try await self.api.object("/v1/me/data-export")
+            let data = try JSONSerialization.data(withJSONObject: all, options: [.prettyPrinted, .sortedKeys])
+            self.exportFile = JSONFile(data: data)
+        }
+    }
+
+    func requestErasure() {
+        run {
+            try await self.api.call("POST", "/v1/me/erasure")
+            try await self.load()
+            self.message = L("Deletion requested. You can cancel it until then.")
+        }
+    }
+
+    func cancelErasure() {
+        run {
+            try await self.api.call("DELETE", "/v1/me/erasure")
+            try await self.load()
+            self.message = L("Deletion cancelled.")
+        }
+    }
+
     func saveName(_ name: String) {
         run {
             try await self.api.call("PUT", "/v1/me/name", ["display_name": name.trimmingCharacters(in: .whitespaces)])
@@ -349,4 +380,13 @@ final class AppModel: ObservableObject {
         signedOut(L("Signed out."))
         Task { _ = try? await old.call("POST", "/v1/auth/logout", ["everywhere": everywhere]) }
     }
+}
+
+/// A JSON file for `.fileExporter` (the person's data export).
+struct JSONFile: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+    var data: Data
+    init(data: Data) { self.data = data }
+    init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
 }

@@ -1103,6 +1103,12 @@ def create_app(
         """Delete my account. Held for 7 days (your guardians are told; you can cancel)."""
         return reg.request_erasure(uid)
 
+    @app.get("/v1/me/erasure", tags=["people"])
+    def erasure_status(uid: User):
+        """The waiting deletion, if any: {"erasure": {"status": "pending", "erase_at": ...}} or {"erasure": null}."""
+        e = reg.erasure_request(uid)
+        return {"erasure": e if e and e["status"] == "pending" else None}
+
     @app.delete("/v1/me/erasure", tags=["people"])
     def cancel_erasure(uid: User):
         return reg.cancel_erasure(uid)

@@ -1498,7 +1498,7 @@
   "info": {
     "description": "Cross-bank trusted-person and payment-protection registry.",
     "title": "Guardian Registry",
-    "version": "0.27.0"
+    "version": "0.28.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -7090,6 +7090,52 @@
           }
         },
         "summary": "Cancel Erasure",
+        "tags": [
+          "people"
+        ]
+      },
+      "get": {
+        "description": "The waiting deletion, if any: {\"erasure\": {\"status\": \"pending\", \"erase_at\": ...}} or {\"erasure\": null}.",
+        "operationId": "erasure_status_v1_me_erasure_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Erasure Status",
         "tags": [
           "people"
         ]

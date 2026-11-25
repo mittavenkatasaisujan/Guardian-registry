@@ -204,4 +204,16 @@
     <string name="notice_rights">आपके अधिकार</string>
     <string name="notice_grievance">शिकायत अधिकारी</string>
     <string name="notice_version" formatted="true">संस्करण %1$s</string>
+    <string name="your_data">आपका डेटा</string>
+    <string name="data_explain">हमारे पास आपकी जो भी जानकारी है, एक फ़ाइल (JSON) में। इसे निजी रखें: इसमें आपका मोबाइल नंबर है।</string>
+    <string name="download_data">मेरा डेटा डाउनलोड करें</string>
+    <string name="data_saved">आपका डेटा सहेज लिया।</string>
+    <string name="delete_account">मेरा खाता मिटाएँ</string>
+    <string name="deletion_on" formatted="true">आपका खाता %1$s को मिटा दिया जाएगा।</string>
+    <string name="deletion_warning">तब आपके गार्डियन आपके भुगतानों की सुरक्षा बंद कर देंगे। अगर किसी ने आपसे ऐसा करने को कहा है, तो इसे रद्द करें।</string>
+    <string name="cancel_deletion">मिटाना रद्द करें</string>
+    <string name="deletion_cancelled">मिटाना रद्द हो गया।</string>
+    <string name="deletion_explain">माँगने के 7 दिन बाद आपका खाता और आपकी सुरक्षा खत्म हो जाती है। आपके गार्डियन को बताया जाता है, और तब तक आप इसे रद्द कर सकते हैं।</string>
+    <string name="deletion_confirm">7 दिन में अपना खाता मिटाएँ? आपके गार्डियन आपके भुगतानों की सुरक्षा बंद कर देंगे।</string>
+    <string name="deletion_requested">मिटाने का अनुरोध हो गया। तब तक आप इसे रद्द कर सकते हैं।</string>
 </resources>

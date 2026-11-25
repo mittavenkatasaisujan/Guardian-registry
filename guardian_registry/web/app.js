@@ -328,11 +328,13 @@ function signInView() {
 
 // ------------------------------------------------------------------ my protection
 async function meView() {
-  const [me, rules, security, guardians, changes, payments, presets, nom, notice, consents] = await Promise.all([
+  const [me, rules, security, guardians, changes, payments, presets, nom, notice, consents, era] = await Promise.all([
     api("GET", "/v1/me"), api("GET", "/v1/me/rules"), api("GET", "/v1/me/security"),
     api("GET", "/v1/me/guardians"), api("GET", "/v1/me/changes"), api("GET", "/v1/me/payments?limit=10"),
     api("GET", "/v1/presets"), api("GET", "/v1/me/nominee"), api("GET", "/v1/privacy/notice"), api("GET", "/v1/me/consents"),
+    api("GET", "/v1/me/erasure"),
   ]);
+  const erasure = era && era.erasure;
   const nominee = nom && nom.nominee;
   setBanner(security.this_session);
   const paused = rules.kill_switch;
@@ -522,6 +524,22 @@ async function meView() {
       h("h2", {}, t("Privacy notice")),
       h("details", { class: "notice" }, h("summary", {}, t("Read the privacy notice")), noticeBody(notice))) : null,
 
+    h("section", { class: `card ${erasure ? "alert-bad" : ""}`, id: "your-data" },
+      h("h2", {}, t("Your data")),
+      h("p", { class: "muted small" }, t("Everything we hold about you, as a file (JSON). Keep it private: it has your mobile number.")),
+      trusted(h("button", { class: "secondary", onclick: (e) => downloadMyData(e.target) }, t("Download my data"))),
+      h("h3", {}, t("Delete my account")),
+      erasure
+        ? [h("p", {}, h("strong", {}, t("Your account will be deleted on {date}.", { date: when(erasure.erase_at) }))),
+           h("p", { class: "muted small" }, t("Your guardians stop protecting your payments then. If someone told you to do this, cancel it.")),
+           h("button", { onclick: (e) => act(e.target, () => api("DELETE", "/v1/me/erasure"), t("Deletion cancelled.")) },
+             t("Cancel deletion"))]
+        : [h("p", { class: "muted small" }, t("Your account and your protection end 7 days after you ask. Your guardians are told, and you can cancel until then.")),
+           trusted(h("button", { class: "danger", onclick: (e) => {
+             if (!confirm(t("Delete your account in 7 days? Your guardians will stop protecting your payments."))) return;
+             act(e.target, () => api("POST", "/v1/me/erasure"), t("Deletion requested. You can cancel it until then."));
+           } }, t("Delete my account")))]),
+
     h("section", { class: "card" },
       h("h2", {}, t("Lost your phone?")),
       h("p", { class: "muted" }, t("This signs you out everywhere and holds larger payments for 72 hours.")),
@@ -543,6 +561,28 @@ function noticeBody(n) {
     NOTICE_PARTS.map(([key, title]) => (n[key] ? [h("h3", {}, title), h("ul", {}, n[key].map((x) => h("li", {}, x)))] : null)),
     h("h3", {}, t("Grievance officer")), h("p", {}, n.grievance_officer),
     h("p", { class: "muted small" }, t("Version {v}", { v: n.version })));
+}
+
+/** Save everything held about this person as a JSON file (needs a sign-in that isn't restricted). */
+async function downloadMyData(button) {
+  button.disabled = true;
+  try {
+    const r = await fetch("/v1/me/data-export", {
+      headers: { Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}`, "Accept-Language": LANG },
+    });
+    if (!r.ok) throw new ApiError(r.status, await r.json().catch(() => null));
+    const url = URL.createObjectURL(await r.blob());
+    const a = h("a", { href: url, download: "guardian-registry-my-data.json" });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast(t("Saved your data."));
+  } catch (e) {
+    toast(e.message || t("Something went wrong"), 7000);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function identityText(level) {

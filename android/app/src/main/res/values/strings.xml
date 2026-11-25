@@ -205,4 +205,16 @@
     <string name="notice_rights">Your rights</string>
     <string name="notice_grievance">Grievance officer</string>
     <string name="notice_version" formatted="true">Version %1$s</string>
+    <string name="your_data">Your data</string>
+    <string name="data_explain">Everything we hold about you, as a file (JSON). Keep it private: it has your mobile number.</string>
+    <string name="download_data">Download my data</string>
+    <string name="data_saved">Saved your data.</string>
+    <string name="delete_account">Delete my account</string>
+    <string name="deletion_on" formatted="true">Your account will be deleted on %1$s.</string>
+    <string name="deletion_warning">Your guardians stop protecting your payments then. If someone told you to do this, cancel it.</string>
+    <string name="cancel_deletion">Cancel deletion</string>
+    <string name="deletion_cancelled">Deletion cancelled.</string>
+    <string name="deletion_explain">Your account and your protection end 7 days after you ask. Your guardians are told, and you can cancel until then.</string>
+    <string name="deletion_confirm">Delete your account in 7 days? Your guardians will stop protecting your payments.</string>
+    <string name="deletion_requested">Deletion requested. You can cancel it until then.</string>
 </resources>

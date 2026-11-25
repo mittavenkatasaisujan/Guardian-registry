@@ -443,6 +443,16 @@ final class AppFlowUITests: XCTestCase {
         }
         see(app, app.buttons["Remove nominee"], "nominee shown")
         shot("ios-13-your-details")
+
+        // delete my account: asks first, is held 7 days, and can be cancelled
+        tap(app, button: "Delete my account")
+        confirm(app, "Delete my account")
+        try until("deletion requested") { (try obj("/v1/me/erasure", token: p)["erasure"] as? [String: Any]) != nil }
+        see(app, app.buttons["Cancel deletion"], "deletion waiting")
+        shot("ios-13b-deletion-waiting")
+        try tapUntil(app, button: "Cancel deletion", "deletion cancelled") {
+            (try obj("/v1/me/erasure", token: p)["erasure"] as? [String: Any]) == nil
+        }
         app.terminate()
     }
 }

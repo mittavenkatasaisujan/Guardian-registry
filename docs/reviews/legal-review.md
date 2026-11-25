@@ -21,10 +21,10 @@ the retention periods and the provider contracts before real users.
 | Legitimate uses without consent (s.7) | Banks' checks rely on the person's enrolment | **Counsel:** lawful basis for processing payment checks of enrolled customers. |
 | Security safeguards (s.8(5)) | See [security-review.md](security-review.md) | Independent penetration test before launch. |
 | Breach notification (s.8(6)) | `breach.py`: incident record, notify the Board and affected people, four-eyes approval of notices | **Counsel:** confirm the Rules' timeline (commentary cites 72 hours; verify in the Gazette text). |
-| Retention and erasure (s.8(7)) | Erasure deletes number, name, sessions, devices, push tokens, rules, nominee; alerts deleted after 180 days, sessions after 90 | **Counsel:** payment check records (without number or name) and the audit chain are kept after erasure for banks' record-keeping; confirm the period and basis. |
+| Retention and erasure (s.8(7)) | **"Delete my account"** in the apps (held 7 days, guardians told, can be cancelled; `GET /v1/me/erasure` shows a waiting deletion). Erasure deletes number, name, sessions, devices, push tokens, rules, nominee; alerts deleted after 180 days, sessions after 90 | **Counsel:** payment check records (without number or name) and the audit chain are kept after erasure for banks' record-keeping; confirm the period and basis. |
 | Grievance officer (s.8(10)) | `GR_GRIEVANCE_CONTACT` in the notice | Appoint one. |
 | Children (s.9) | — | **Fixed in the notice:** adults only. **Product decision:** enforce it (an "I am 18 or older" confirmation at enrolment); a child's data would need a parent's verifiable consent. Guardians can be young adults, so this matters. |
-| Access (s.11) | `GET /v1/me/data-export` | — |
+| Access (s.11) | `GET /v1/me/data-export`; **"Download my data"** in the web, Android and iOS apps (v0.28.0) | — |
 | **Correction (s.12)** | **Fixed:** `PUT /v1/me/name` (the notice already promised it; it didn't exist) | Rules are corrected in the app. |
 | **Nomination (s.14)** | **Fixed:** `GET/PUT/DELETE /v1/me/nominee` (name, relation, mobile; encrypted; exported; erased). Gives no account access | **Counsel:** the grievance officer's process for verifying death or incapacity. |
 | Significant Data Fiduciary (s.10) | — | **Counsel:** if notified as one (payments data at scale), a DPO in India, audits and impact assessments follow. |

@@ -470,6 +470,15 @@ class AppFlowTest {
         shot("13-your-details")
         tapUntil(s(R.string.remove_nominee), "nominee removed") { P.obj("/v1/me/nominee").isNull("nominee") }
         see(s(R.string.no_nominee))
+
+        // delete my account: asks first, is held 7 days, and can be cancelled
+        tap(s(R.string.delete_account))
+        yes()
+        eventually { check(!P.obj("/v1/me/erasure").isNull("erasure")) }
+        see(s(R.string.cancel_deletion))
+        shot("13b-deletion-waiting")
+        tapUntil(s(R.string.cancel_deletion), "deletion cancelled") { P.obj("/v1/me/erasure").isNull("erasure") }
+        see(s(R.string.delete_account))
         app.close()
     }
 }

@@ -259,6 +259,10 @@ class PrivacyMixin:
         return None if not r else {"id": r["id"], "status": r["status"], "requested_at": r["requested_at"],
                                    "erase_at": r["erase_at"], "decided_at": r["decided_at"]}
 
+    def erasure_request(self, uid: str) -> dict | None:
+        """The latest deletion request (pending, cancelled or completed), or None."""
+        return self._erasure_view(uid)
+
     def request_erasure(self, uid: str) -> dict:
         now = self.clock.now()
         erase_at = iso(now + timedelta(days=ERASURE_HOLD_DAYS))

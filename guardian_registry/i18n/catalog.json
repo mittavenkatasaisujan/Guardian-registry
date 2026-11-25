@@ -471,6 +471,14 @@
    "ios"
   ]
  },
+ "45b0c39d53": {
+  "en": "Cancel deletion",
+  "where": [
+   "web",
+   "android:cancel_deletion",
+   "ios"
+  ]
+ },
  "8761d26fb8": {
   "en": "cancelled",
   "where": [
@@ -679,6 +687,38 @@
    "ios"
   ]
  },
+ "2ae3a01904": {
+  "en": "Delete my account",
+  "where": [
+   "web",
+   "android:delete_account",
+   "ios"
+  ]
+ },
+ "38513ed8a4": {
+  "en": "Delete your account in 7 days? Your guardians will stop protecting your payments.",
+  "where": [
+   "web",
+   "android:deletion_confirm",
+   "ios"
+  ]
+ },
+ "c6cecf663b": {
+  "en": "Deletion cancelled.",
+  "where": [
+   "web",
+   "android:deletion_cancelled",
+   "ios"
+  ]
+ },
+ "52277d7f2e": {
+  "en": "Deletion requested. You can cancel it until then.",
+  "where": [
+   "web",
+   "android:deletion_requested",
+   "ios"
+  ]
+ },
  "304e06a569": {
   "en": "denied",
   "where": [
@@ -793,6 +833,14 @@
    "ios"
   ]
  },
+ "af53dade83": {
+  "en": "Download my data",
+  "where": [
+   "web",
+   "android:download_data",
+   "ios"
+  ]
+ },
  "c36848de06": {
   "en": "Each phone or browser you sign in on has its own key. A new one can't approve payments for 24 hours.",
   "where": [
@@ -828,6 +876,14 @@
   "en": "Error",
   "where": [
    "android:error"
+  ]
+ },
+ "ab15789f3d": {
+  "en": "Everything we hold about you, as a file (JSON). Keep it private: it has your mobile number.",
+  "where": [
+   "web",
+   "android:data_explain",
+   "ios"
   ]
  },
  "5b373fc1bc": {
@@ -926,7 +982,8 @@
   "en": "Grievance officer",
   "where": [
    "web",
-   "android:notice_grievance"
+   "android:notice_grievance",
+   "ios"
   ]
  },
  "d2a33b17cb": {
@@ -1081,14 +1138,16 @@
   "en": "How long we keep it",
   "where": [
    "web",
-   "android:notice_how_long"
+   "android:notice_how_long",
+   "ios"
   ]
  },
  "6a151a67b7": {
   "en": "I agree",
   "where": [
    "web",
-   "android:privacy_agree"
+   "android:privacy_agree",
+   "ios"
   ]
  },
  "f4934b2661": {
@@ -1853,7 +1912,8 @@
   "en": "Please read how we use your data. Your protection works once you agree.",
   "where": [
    "web",
-   "android:privacy_please"
+   "android:privacy_please",
+   "ios"
   ]
  },
  "bca788763d": {
@@ -1866,7 +1926,8 @@
   "en": "Privacy notice",
   "where": [
    "web",
-   "android:privacy_notice"
+   "android:privacy_notice",
+   "ios"
   ]
  },
  "24c5512fcc": {
@@ -1939,7 +2000,8 @@
   "en": "Read the privacy notice",
   "where": [
    "web",
-   "android:privacy_read"
+   "android:privacy_read",
+   "ios"
   ]
  },
  "acca8b854a": {
@@ -2112,6 +2174,14 @@
   "where": [
    "web",
    "android:save_quiet",
+   "ios"
+  ]
+ },
+ "ab9a3ea413": {
+  "en": "Saved your data.",
+  "where": [
+   "web",
+   "android:data_saved",
    "ios"
   ]
  },
@@ -2378,7 +2448,8 @@
   "en": "Thank you. Your agreement is recorded.",
   "where": [
    "web",
-   "android:privacy_thanks"
+   "android:privacy_thanks",
+   "ios"
   ]
  },
  "a054eb28f9": {
@@ -2717,6 +2788,12 @@
    "android:notice_version"
   ]
  },
+ "e8194ee4c1": {
+  "en": "Version %@",
+  "where": [
+   "ios"
+  ]
+ },
  "40f8bd1431": {
   "en": "Version {v}",
   "where": [
@@ -2801,28 +2878,32 @@
   "en": "What we collect",
   "where": [
    "web",
-   "android:notice_collect"
+   "android:notice_collect",
+   "ios"
   ]
  },
  "b12994c186": {
   "en": "Who can use this service",
   "where": [
    "web",
-   "android:notice_who_can"
+   "android:notice_who_can",
+   "ios"
   ]
  },
  "a9faec6170": {
   "en": "Who sees it",
   "where": [
    "web",
-   "android:notice_who_sees"
+   "android:notice_who_sees",
+   "ios"
   ]
  },
  "b9bc152557": {
   "en": "Why we use it",
   "where": [
    "web",
-   "android:notice_why"
+   "android:notice_why",
+   "ios"
   ]
  },
  "02499f03f9": {
@@ -2915,6 +2996,14 @@
    "web"
   ]
  },
+ "ac59d04d2c": {
+  "en": "Your account and your protection end 7 days after you ask. Your guardians are told, and you can cancel until then.",
+  "where": [
+   "web",
+   "android:deletion_explain",
+   "ios"
+  ]
+ },
  "abc4430cc0": {
   "en": "Your account is being recovered",
   "where": [
@@ -2939,10 +3028,36 @@
    "server:alert"
   ]
  },
+ "37f287f0d2": {
+  "en": "Your account will be deleted on %1$s.",
+  "where": [
+   "android:deletion_on"
+  ]
+ },
+ "696fdd5479": {
+  "en": "Your account will be deleted on %@.",
+  "where": [
+   "ios"
+  ]
+ },
+ "139935cc15": {
+  "en": "Your account will be deleted on {date}.",
+  "where": [
+   "web"
+  ]
+ },
  "189fc3f1a8": {
   "en": "Your bank's identity confirmation is more than a year old. Ask your bank to confirm it again.",
   "where": [
    "server:alert"
+  ]
+ },
+ "48cd18dabc": {
+  "en": "Your data",
+  "where": [
+   "web",
+   "android:your_data",
+   "ios"
   ]
  },
  "2a4c712bfc": {
@@ -2975,6 +3090,14 @@
   "en": "Your guardian's SIM changed",
   "where": [
    "server:alert"
+  ]
+ },
+ "6ce6ee94f4": {
+  "en": "Your guardians stop protecting your payments then. If someone told you to do this, cancel it.",
+  "where": [
+   "web",
+   "android:deletion_warning",
+   "ios"
   ]
  },
  "70ac1b89f5": {
@@ -3046,7 +3169,8 @@
   "en": "Your rights",
   "where": [
    "web",
-   "android:notice_rights"
+   "android:notice_rights",
+   "ios"
   ]
  },
  "6f3745dbc6": {

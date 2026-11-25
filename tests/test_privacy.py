@@ -107,3 +107,16 @@ def test_api(reg):
         assert c.get("/v1/me/data-export").status_code == 401
         assert c.post("/v1/me/erasure", headers=h).json()["status"] == "pending"
         assert c.delete("/v1/me/erasure", headers=h).json()["status"] == "cancelled"
+
+
+def test_erasure_status_for_the_apps(reg):
+    from guardian_registry.api import create_app
+    uid, tok = reg.register_user("+919833333344", "Status Person")
+    h = {"Authorization": f"Bearer {tok}"}
+    with TestClient(create_app(reg, run_worker=False)) as c:
+        assert c.get("/v1/me/erasure", headers=h).json() == {"erasure": None}
+        c.post("/v1/me/erasure", headers=h)
+        e = c.get("/v1/me/erasure", headers=h).json()["erasure"]
+        assert e["status"] == "pending" and e["erase_at"] > e["requested_at"]
+        c.delete("/v1/me/erasure", headers=h)
+        assert c.get("/v1/me/erasure", headers=h).json() == {"erasure": None}   # cancelled: nothing waiting

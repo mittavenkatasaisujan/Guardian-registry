@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -33,6 +34,8 @@ import java.util.concurrent.Executors
  * resources (English, Hindi in values-hi, other languages generated from the catalog);
  * names, payees and alerts come from the server and are shown as plain text.
  */
+private const val SAVE_DATA = 41   // request code: save my data to a file
+
 class MainActivity : Activity() {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -136,6 +139,17 @@ class MainActivity : Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString("tab", tab)
+    }
+
+    @Deprecated("Activity result API; this app has no AndroidX")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data
+        if (requestCode != SAVE_DATA || resultCode != RESULT_OK || uri == null) return
+        bg({
+            val json = api().obj("/v1/me/data-export").toString(2)
+            contentResolver.openOutputStream(uri, "wt")!!.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+        }) { toast(getString(R.string.data_saved)) }
     }
 
     override fun onResume() {
@@ -291,7 +305,7 @@ class MainActivity : Activity() {
         val changes: JSONArray? = null, val payments: JSONArray? = null, val presets: JSONObject? = null,
         val wards: JSONArray? = null, val alerts: JSONArray? = null, val devices: JSONArray? = null,
         val myKeyId: String? = null, val nominee: JSONObject? = null,
-        val notice: JSONObject? = null, val consents: JSONObject? = null,
+        val notice: JSONObject? = null, val consents: JSONObject? = null, val erasure: JSONObject? = null,
     )
 
     private fun load(which: String): Data {
@@ -307,7 +321,8 @@ class MainActivity : Activity() {
                           rules = a.obj("/v1/me/rules"), guardians = a.arr("/v1/me/guardians"),
                           changes = a.arr("/v1/me/changes"), payments = a.arr("/v1/me/payments?limit=10"),
                           presets = a.obj("/v1/presets"), nominee = a.obj("/v1/me/nominee").optJSONObject("nominee"),
-                          notice = a.obj("/v1/privacy/notice"), consents = a.obj("/v1/me/consents"))
+                          notice = a.obj("/v1/privacy/notice"), consents = a.obj("/v1/me/consents"),
+                          erasure = a.obj("/v1/me/erasure").optJSONObject("erasure"))
         }
     }
 
@@ -594,6 +609,32 @@ class MainActivity : Activity() {
             val pc = card()
             heading(pc, getString(R.string.privacy_notice))
             noticeToggle(pc, notice)
+        }
+
+        // DPDP rights: a copy of everything held, and deleting the account (held 7 days)
+        val erasure = d.erasure
+        val dc = card(if (erasure != null) BAD else null)
+        heading(dc, getString(R.string.your_data))
+        para(dc, getString(R.string.data_explain), MUTED, 13f)
+        if (restricted) restrictedNote(dc) else button(dc, getString(R.string.download_data), style = Style.SECONDARY) {
+            // the person picks where to save; the file is written in onActivityResult
+            startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("application/json").putExtra(Intent.EXTRA_TITLE, "guardian-registry-my-data.json"), SAVE_DATA)
+        }
+        para(dc, getString(R.string.delete_account), bold = true).apply { textSize = 16f; setPadding(0, dp(16), 0, dp(2)) }
+        if (erasure != null) {
+            para(dc, getString(R.string.deletion_on, Wire.time(erasure.str("erase_at"))), bold = true)
+            para(dc, getString(R.string.deletion_warning), MUTED, 13f)
+            button(dc, getString(R.string.cancel_deletion)) { b ->
+                act(b, { api().delete("/v1/me/erasure") }) { getString(R.string.deletion_cancelled) }
+            }
+        } else {
+            para(dc, getString(R.string.deletion_explain), MUTED, 13f)
+            if (restricted) restrictedNote(dc) else button(dc, getString(R.string.delete_account), style = Style.DANGER) { b ->
+                confirm(getString(R.string.deletion_confirm)) {
+                    act(b, { api().post("/v1/me/erasure") }) { getString(R.string.deletion_requested) }
+                }
+            }
         }
 
         val l = card()
