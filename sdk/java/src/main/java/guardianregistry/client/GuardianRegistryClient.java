@@ -33,7 +33,7 @@ import org.json.JSONObject;
  * Amounts are long paise.
  */
 public final class GuardianRegistryClient {
-    public static final String VERSION = "0.30.1";
+    public static final String VERSION = "0.31.0";
     private static final int[] RETRY = {429, 502, 503, 504};
 
     private final String base;

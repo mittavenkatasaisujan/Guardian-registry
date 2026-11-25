@@ -40,9 +40,32 @@ const view = () => $("#view");
 function toast(msg, ms = 4000) {
   const t = $("#toast");
   t.textContent = msg;
-  t.hidden = false;
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => { t.hidden = true; }, ms);
+  clearTimeout(toast.hideTimer);
+  if (t.hidden) {
+    t.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add("in")));   // let it slide in
+  } else {
+    t.classList.add("in");
+  }
+  toast.timer = setTimeout(() => {
+    t.classList.remove("in");
+    toast.hideTimer = setTimeout(() => { t.hidden = true; }, 200);   // after the exit transition
+  }, ms);
+}
+
+/** A fresh screen's parts rise in one after another (CSS, and only if motion is wanted). */
+function enter(el) {
+  el.setAttribute("data-enter", "");
+  clearTimeout(enter.timer);
+  enter.timer = setTimeout(() => el.removeAttribute("data-enter"), 900);
+}
+
+/** Placeholder cards with a soft shimmer while a screen loads. */
+function skeleton() {
+  const card = (n) => h("section", { class: "card skeleton", "aria-hidden": "true" },
+    h("div", { class: "bone title" }), Array.from({ length: n }, (_, i) => h("div", { class: `bone${i % 2 ? " short" : ""}` })));
+  return [h("p", { class: "sr-only", role: "status" }, t("Loading…")), card(2), card(4), card(3)];
 }
 
 function rupees(paise) {
@@ -775,16 +798,18 @@ const VIEWS = { me: meView, guardian: guardianView, alerts: alertsView, devices:
 async function route() {
   const signedIn = !!localStorage.getItem(TOKEN_KEY);
   if (!signedIn) {
-    view().replaceChildren(...nodes(signInView()));
+    if (route.current !== "signin") { route.current = "signin"; view().replaceChildren(...nodes(signInView())); enter(view()); }
     return;
   }
   $("#nav").hidden = false;
   const tab = (location.hash || "#me").slice(1);
   const render = VIEWS[tab] || meView;
   document.querySelectorAll("#nav a").forEach((a) => a.toggleAttribute("aria-current", a.dataset.tab === tab));
-  if (route.current !== tab) { route.current = tab; view().replaceChildren(h("p", { class: "empty" }, t("Loading…"))); }
+  const fresh = route.current !== tab;
+  if (fresh) { route.current = tab; view().replaceChildren(...skeleton()); }
   try {
     view().replaceChildren(...nodes(await render()));
+    if (fresh) enter(view());
   } catch (e) {
     if (localStorage.getItem(TOKEN_KEY)) view().replaceChildren(h("section", { class: "card alert-bad" }, h("p", {}, e.message)));
   }

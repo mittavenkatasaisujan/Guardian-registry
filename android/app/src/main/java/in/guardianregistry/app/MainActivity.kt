@@ -85,7 +85,8 @@ class MainActivity : Activity() {
         tabs = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             isBaselineAligned = false
-            setBackgroundColor(BRAND)
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(BRAND, BRAND2))
+            elevation = dp(4).toFloat()
             setPadding(dp(4), dp(4), dp(4), dp(6))
         }
         for ((id, label) in listOf("me" to R.string.tab_me, "guardian" to R.string.tab_guardian,
@@ -96,6 +97,7 @@ class MainActivity : Activity() {
                 minLines = 2; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; gravity = Gravity.CENTER
                 background = null; minHeight = dp(48); minimumHeight = dp(48); setPadding(dp(4), dp(4), dp(4), dp(4))
                 stateListAnimator = null
+                pressable(this)
                 setOnClickListener { switchTo(id) }
             }
             tabButtons[id] = b
@@ -201,6 +203,7 @@ class MainActivity : Activity() {
         para(getString(R.string.intro))
         message?.let { para(it, WARN_TEXT) }
         val c = card()
+        root.post { enterChildren() }
         val mobile = input(c, getString(R.string.mobile_number), InputType.TYPE_CLASS_PHONE, store.mobile)
         // Debug builds only: point the app at a test server (e.g. the registry on your PC over Wi-Fi).
         val server = if (BuildConfig.DEBUG) input(c, "Server address (testing)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI, store.apiBase) else null
@@ -292,6 +295,7 @@ class MainActivity : Activity() {
         }
         val which = tab
         // nothing on screen yet and the server can't be reached: say so, with a way out
+        val fresh = shownTab != which
         bg({ load(which) }, quiet = quiet, unreachable = {
             if (which == tab && store.token != null && shownTab != which) offlineView() else if (!quiet) toast(getString(R.string.cant_reach))
         }) { data ->
@@ -310,6 +314,7 @@ class MainActivity : Activity() {
             setBanner(data.security)
             setBadges(data.inbox, data.unread)
             scroll.post { scroll.scrollTo(0, y) }
+            if (fresh) enterChildren()
         }
     }
 
@@ -955,7 +960,8 @@ class MainActivity : Activity() {
     }
 
     private fun title(text: String) = root.addView(TextView(this).apply {
-        this.text = text; textSize = 24f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK); setPadding(0, 0, 0, dp(6))
+        this.text = text; textSize = 26f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK); setPadding(0, dp(4), 0, dp(4))
+        letterSpacing = -0.02f
     })
 
     private fun para(text: String, color: Int = INK, size: Float = 15f) = para(root, text, color, size)
@@ -968,15 +974,65 @@ class MainActivity : Activity() {
         }
 
     private fun heading(parent: LinearLayout, text: String) = parent.addView(TextView(this).apply {
-        this.text = text; textSize = 18f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK); setPadding(0, 0, 0, dp(6))
+        this.text = text; textSize = 18f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK); setPadding(0, 0, 0, dp(8))
+        letterSpacing = -0.01f
     })
 
     /** A white card; [accent] adds a coloured border like the web app's alert cards. */
     private fun card(accent: Int? = null): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        background = rounded(CARD, accent ?: LINE)
-        setPadding(dp(16), dp(14), dp(16), dp(14))
-        root.addView(this, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        // a soft shadow instead of a border; alert cards get a tinted top and a coloured edge
+        background = if (accent == null) rounded(CARD, radius = 20) else accentCard(accent)
+        elevation = dp(2).toFloat()
+        outlineAmbientShadowColor = Color.argb(60, 15, 26, 42)
+        outlineSpotShadowColor = Color.argb(40, 15, 26, 42)
+        setPadding(dp(if (accent == null) 18 else 22), dp(16), dp(18), dp(16))
+        root.addView(this, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14); marginStart = dp(1); marginEnd = dp(1) })
+    }
+
+    /** The web app's alert card: a 4dp coloured edge on the left and a light tint fading down. */
+    private fun accentCard(accent: Int): android.graphics.drawable.Drawable {
+        val r = dp(20).toFloat()
+        val edge = GradientDrawable().apply { setColor(accent); cornerRadius = r }
+        val tint = Color.argb(26, Color.red(accent), Color.green(accent), Color.blue(accent))
+        val face = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(blend(tint, CARD), CARD, CARD)).apply { cornerRadius = r }
+        return android.graphics.drawable.LayerDrawable(arrayOf(edge, face)).apply { setLayerInset(1, dp(4), 0, 0, 0) }
+    }
+
+    private fun blend(tint: Int, base: Int): Int {
+        val a = Color.alpha(tint) / 255f
+        fun mix(t: Int, b: Int) = (t * a + b * (1 - a)).toInt()
+        return Color.rgb(mix(Color.red(tint), Color.red(base)), mix(Color.green(tint), Color.green(base)), mix(Color.blue(tint), Color.blue(base)))
+    }
+
+    /** Motion is on unless the person (or a test run) turned animations off. */
+    private fun motion() = android.animation.ValueAnimator.areAnimatorsEnabled()
+
+    /** A fresh screen's cards rise in one after another (like the web app); nothing moves on refresh. */
+    private fun enterChildren() {
+        if (!motion()) return
+        for (i in 0 until root.childCount) {
+            val v = root.getChildAt(i)
+            v.alpha = 0f
+            v.translationY = dp(12).toFloat()
+            v.animate().alpha(1f).translationY(0f).setStartDelay(minOf(i, 6) * 45L).setDuration(420)
+                .setInterpolator(EASE_OUT).start()
+        }
+    }
+
+    /** Pressing shrinks a control a little, like a real button; it springs back on release. */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun pressable(v: View) {
+        v.setOnTouchListener { view, e ->
+            when (e.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN ->
+                    if (motion()) view.animate().scaleX(0.97f).scaleY(0.97f).setDuration(110).setInterpolator(EASE_OUT).start()
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                    view.animate().scaleX(1f).scaleY(1f).setDuration(180).setInterpolator(EASE_OUT).start()
+            }
+            false   // the click itself still happens
+        }
     }
 
     /** A divider between list items inside a card (none before the first). */
@@ -989,15 +1045,40 @@ class MainActivity : Activity() {
     /** "● Payments are on": a coloured dot, then the status as its own text. */
     private fun bigStatus(parent: LinearLayout, text: String, color: Int) {
         val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, 0, 0, dp(4)) }
-        r.addView(View(this).apply { background = rounded(color, radius = 999) }, LinearLayout.LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(10) })
-        r.addView(TextView(this).apply { this.text = text; textSize = 20f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK) })
+        // the status dot, with a slow soft ring when payments are on (the web app's "live" dot)
+        val dot = android.widget.FrameLayout(this)
+        val ring = View(this).apply { background = rounded(color, radius = 999); alpha = 0f }
+        dot.addView(ring, android.widget.FrameLayout.LayoutParams(dp(14), dp(14), Gravity.CENTER))
+        dot.addView(View(this).apply { background = rounded(color, radius = 999) },
+            android.widget.FrameLayout.LayoutParams(dp(14), dp(14), Gravity.CENTER))
+        r.addView(dot, LinearLayout.LayoutParams(dp(36), dp(36)).apply { marginEnd = dp(4); marginStart = dp(-11) })
+        r.addView(TextView(this).apply { this.text = text; textSize = 21f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK); letterSpacing = -0.015f })
         parent.addView(r)
+        if (color == OK && motion()) {
+            val pulse = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 2800; repeatCount = android.animation.ValueAnimator.INFINITE; interpolator = EASE_OUT
+                addUpdateListener {
+                    val f = it.animatedValue as Float
+                    val s = 1f + 1.6f * (f / 0.7f).coerceAtMost(1f)
+                    ring.scaleX = s; ring.scaleY = s; ring.alpha = 0.45f * (1f - (f / 0.7f).coerceAtMost(1f))
+                }
+            }
+            ring.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) { pulse.start() }
+                override fun onViewDetachedFromWindow(v: View) { pulse.cancel() }   // no animation left running off screen
+            })
+        }
     }
 
     private fun keyValue(parent: LinearLayout, k: String, v: String) {
-        val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(4), 0, dp(4)) }
-        r.addView(TextView(this).apply { text = k; textSize = 14f; setTextColor(MUTED) }, LinearLayout.LayoutParams(0, -2, 1f))
-        r.addView(TextView(this).apply { text = v; textSize = 14f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK); gravity = Gravity.END },
+        // a hairline between rows, as in the web app's rules list
+        if (parent.childCount > 0 && parent.getChildAt(parent.childCount - 1).tag == "kv") {
+            parent.addView(View(this).apply { setBackgroundColor(LINE) }, LinearLayout.LayoutParams(-1, dp(1)))
+        }
+        val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(10), 0, dp(10)); tag = "kv" }
+        r.addView(TextView(this).apply { text = k; textSize = 15f; setTextColor(MUTED) }, LinearLayout.LayoutParams(0, -2, 1f))
+        r.addView(TextView(this).apply { text = v; textSize = 15f; typeface = Typeface.DEFAULT_BOLD; setTextColor(INK); gravity = Gravity.END
+            fontFeatureSettings = "tnum" },
             LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(16) })
         parent.addView(r)
     }
@@ -1063,23 +1144,45 @@ class MainActivity : Activity() {
 
     private fun input(parent: LinearLayout, hint: String, type: Int, value: String?): EditText = EditText(this).apply {
         this.hint = hint; inputType = type; setText(value ?: ""); textSize = 18f
+        // a soft filled box; the edge turns teal with a glow while typing (the web app's focus ring)
+        val idle = rounded(FIELD, LINE, 12)
+        val focused = rounded(CARD, ACCENT, 12).apply { setStroke(dp(2), ACCENT) }
+        background = idle
+        setHintTextColor(Color.argb(150, 90, 102, 120))
+        setPadding(dp(14), dp(12), dp(14), dp(12))
+        minHeight = dp(52)
+        setOnFocusChangeListener { _, has -> background = if (has) focused else idle }
         addTextChangedListener(object : android.text.TextWatcher {   // after setText: only the person's typing counts
             override fun afterTextChanged(e: android.text.Editable?) { formDirty = true }
             override fun beforeTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
         })
-        parent.addView(this, LinearLayout.LayoutParams(-1, -2))
+        parent.addView(this, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(4) })
     }
 
     private fun styled(text: String, style: Style, onClick: (Button) -> Unit) = Button(this).apply {
-        this.text = text; isAllCaps = false; textSize = 16f; minHeight = dp(48)
-        val (bg, fg, line) = when (style) {
-            Style.PRIMARY -> Triple(BRAND, Color.WHITE, null)
-            Style.OK -> Triple(OK, Color.WHITE, null)
-            Style.DANGER -> Triple(BAD, Color.WHITE, null)
-            Style.SECONDARY -> Triple(CARD, BRAND, BRAND)
+        this.text = text; isAllCaps = false; textSize = 16f; minHeight = dp(50); typeface = Typeface.DEFAULT_BOLD
+        letterSpacing = 0f
+        val (bg, fg) = when (style) {
+            Style.PRIMARY -> BRAND to Color.WHITE
+            Style.OK -> OK to Color.WHITE
+            Style.DANGER -> BAD to Color.WHITE
+            Style.SECONDARY -> CARD to BRAND
         }
-        background = rounded(bg, line, 10); setTextColor(fg)
+        val face = if (style == Style.SECONDARY) {
+            rounded(CARD, Color.argb(140, Color.red(BRAND), Color.green(BRAND), Color.blue(BRAND)), 12).apply { setStroke(dp(2), Color.argb(140, Color.red(BRAND), Color.green(BRAND), Color.blue(BRAND))) }
+        } else {
+            // lighter at the top, like light falling on it
+            GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(blend(Color.argb(40, 255, 255, 255), bg), bg))
+                .apply { cornerRadius = dp(12).toFloat() }
+        }
+        val ripple = if (style == Style.SECONDARY) Color.argb(40, Color.red(BRAND), Color.green(BRAND), Color.blue(BRAND)) else Color.argb(60, 255, 255, 255)
+        background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(ripple), face, rounded(Color.WHITE, radius = 12))
+        setTextColor(fg)
+        stateListAnimator = null
+        elevation = if (style == Style.SECONDARY) 0f else dp(2).toFloat()
+        if (style != Style.SECONDARY) outlineSpotShadowColor = bg
+        pressable(this)
         setOnClickListener { onClick(this) }
     }
 
@@ -1111,15 +1214,20 @@ class MainActivity : Activity() {
 
     companion object {
         const val REFRESH_MS = 15_000L
-        val BRAND = Color.parseColor("#1F5FBF")
-        val PAGE = Color.parseColor("#F4F6FA")
+        val BRAND = Color.parseColor("#0E6B7C")
+        val BRAND2 = Color.parseColor("#2C4FB5")
+        val PAGE = Color.parseColor("#F3F5FA")
         val CARD = Color.WHITE
-        val LINE = Color.parseColor("#DDE3EC")
-        val INK = Color.parseColor("#111827")
-        val MUTED = Color.parseColor("#5B6472")
+        val FIELD = Color.parseColor("#F7F9FC")
+        val LINE = Color.parseColor("#E6EAF0")
+        val INK = Color.parseColor("#0F1A2A")
+        val MUTED = Color.parseColor("#5A6678")
+        val ACCENT = Color.parseColor("#14A3A8")
         val OK = Color.parseColor("#15803D")
-        val WARN = Color.parseColor("#B45309")
-        val BAD = Color.parseColor("#B91C1C")
+        val WARN = Color.parseColor("#A35A00")
+        val BAD = Color.parseColor("#C0352B")
+        /** ease-out: quick start, gentle landing (the web app's --ease-out) */
+        val EASE_OUT = android.view.animation.PathInterpolator(0.23f, 1f, 0.32f, 1f)
         val WARN_BG = Color.parseColor("#FEF3C7")
         val WARN_TEXT = Color.parseColor("#92400E")
     }

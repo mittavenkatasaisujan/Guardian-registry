@@ -1,5 +1,56 @@
 import SwiftUI
 
+// ------------------------------------------------------------------ look and motion
+// The web app's colours and its quick ease-out motion. Motion stays off when the person asks
+// for reduced motion, and in UI test runs (an endless animation would keep the app "busy").
+extension Color {
+    static let brand = Color(red: 0.055, green: 0.420, blue: 0.486)    // #0E6B7C
+    static let brand2 = Color(red: 0.173, green: 0.310, blue: 0.710)   // #2C4FB5
+}
+
+enum Motion {
+    static let testRun = ProcessInfo.processInfo.environment["GR_UI_TEST"] == "1"
+    /// ease-out, ~0.35 s: things arrive quickly and settle gently
+    static let arrive = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.35)
+    static let toast = Animation.spring(response: 0.35, dampingFraction: 0.86)
+}
+
+/// The gradient navigation bar used on every screen (white title and buttons on it).
+struct BrandBar: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .toolbarBackground(LinearGradient(colors: [.brand, .brand2], startPoint: .topLeading, endPoint: .bottomTrailing),
+                               for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+    }
+}
+
+extension View {
+    func brandBar() -> some View { modifier(BrandBar()) }
+}
+
+/// The status dot, with a slow soft ring while payments are on (the web app's "live" dot).
+struct PulseDot: View {
+    let color: Color
+    let live: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var on = false
+    var body: some View {
+        ZStack {
+            if live && !reduceMotion && !Motion.testRun {
+                Circle().fill(color)
+                    .scaleEffect(on ? 2.6 : 1).opacity(on ? 0 : 0.45)
+                    .animation(.timingCurve(0.23, 1, 0.32, 1, duration: 2.8).repeatForever(autoreverses: false), value: on)
+                    .onAppear { on = true }
+            }
+            Circle().fill(color)
+        }
+        .frame(width: 13, height: 13)
+        .accessibilityHidden(true)
+    }
+}
+
 /// Sign-in, then the web app's four tabs. Labels are English keys translated through
 /// Localizable.strings; names, payees and alerts come from the server and are shown verbatim.
 struct ContentView: View {
@@ -8,13 +59,17 @@ struct ContentView: View {
     var body: some View {
         Group {
             switch model.screen {
-            case .mobile: NavigationStack { MobileView() }
-            case .code: NavigationStack { CodeView() }
-            case .home: HomeTabs()
+            case .mobile: NavigationStack { MobileView().brandBar() }.transition(.opacity)
+            case .code: NavigationStack { CodeView().brandBar() }
+                .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
+            case .home: HomeTabs().transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
+        .animation(Motion.testRun ? nil : Motion.arrive, value: model.screen)
+        .tint(.brand)
         .disabled(model.busy)
         .overlay(alignment: .bottom) { Toast() }
+        .animation(Motion.testRun ? nil : Motion.toast, value: model.message)
     }
 }
 
@@ -27,8 +82,9 @@ struct Toast: View {
                 .font(.subheadline)
                 .multilineTextAlignment(.leading)
                 .padding(.horizontal, 16).padding(.vertical, 12)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-                .shadow(radius: 4, y: 2)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
+                .transition(.move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.98)))
                 .padding(.horizontal, 16)
                 .padding(.bottom, model.screen == .home ? 100 : 24)   // clear of the tab bar
                 .allowsHitTesting(false)   // never in the way of a button underneath
@@ -87,18 +143,18 @@ struct HomeTabs: View {
 
     var body: some View {
         TabView(selection: $model.tab) {
-            NavigationStack { MyProtectionView() }
+            NavigationStack { MyProtectionView().brandBar() }
                 .tabItem { Label("My protection", systemImage: "shield.lefthalf.filled") }
                 .tag(AppModel.Tab.me)
-            NavigationStack { GuardianView() }
+            NavigationStack { GuardianView().brandBar() }
                 .tabItem { Label("I protect", systemImage: "person.2.fill") }
                 .badge(model.inboxCount)
                 .tag(AppModel.Tab.guardian)
-            NavigationStack { AlertsView() }
+            NavigationStack { AlertsView().brandBar() }
                 .tabItem { Label("Alerts", systemImage: "bell.fill") }
                 .badge(model.unread)
                 .tag(AppModel.Tab.alerts)
-            NavigationStack { DevicesView() }
+            NavigationStack { DevicesView().brandBar() }
                 .tabItem { Label("Devices", systemImage: "iphone") }
                 .tag(AppModel.Tab.devices)
         }
@@ -333,9 +389,10 @@ struct MyProtectionView: View {
     private var status: some View {
         Section {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    Circle().fill(model.paused ? Color.red : Color.green).frame(width: 12, height: 12)
+                HStack(spacing: 12) {
+                    PulseDot(color: model.paused ? .red : .green, live: !model.paused)
                     (model.paused ? Text("Payments are paused") : Text("Payments are on")).font(.title3.bold())
+                        .contentTransition(.opacity)
                 }
                 (model.paused ? Text("No bank will send money from your accounts until payments are switched back on.")
                               : Text("If someone is pressuring you to pay, pause everything. You can switch back on later."))
@@ -357,6 +414,13 @@ struct MyProtectionView: View {
                 }
             }
             .padding(.vertical, 6)
+            .animation(Motion.testRun ? nil : Motion.arrive, value: model.paused)
+            .listRowBackground(
+                // a soft tint fading down, like the web app's status card
+                LinearGradient(colors: [(model.paused ? Color.red : Color.green).opacity(0.13),
+                                        Color(.secondarySystemGroupedBackground)],
+                               startPoint: .top, endPoint: .bottom)
+                    .overlay(alignment: .leading) { Rectangle().fill(model.paused ? Color.red : Color.green).frame(width: 4) })
         } header: {
             Text(verbatim: L("Identity: %@", Words.identity(model.me["identity_level"] as? String ?? "")))
                 .font(.footnote).fontWeight(.regular).foregroundStyle(.secondary).textCase(nil)
