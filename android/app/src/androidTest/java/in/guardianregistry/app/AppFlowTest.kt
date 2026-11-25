@@ -487,7 +487,7 @@ class AppFlowTest {
         see(s(R.string.cancel_deletion))
         shot("13b-deletion-waiting")
         tapUntil(s(R.string.cancel_deletion), "deletion cancelled") { P.obj("/v1/me/erasure").isNull("erasure") }
-        see(s(R.string.delete_account))
+        seeFirst(s(R.string.delete_account))   // the heading and the button share the words
         app.close()
     }
 }
