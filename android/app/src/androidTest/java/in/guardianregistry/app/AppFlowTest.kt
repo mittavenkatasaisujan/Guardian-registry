@@ -431,7 +431,16 @@ class AppFlowTest {
         val P = Api(base, p)
         val app = launchAs(p)
         // the privacy notice comes first: read it, then agree
-        tap(s(R.string.privacy_read))
+        // the button toggles: a tap retried after a redraw could close it again, so tap only while closed
+        fun noticeOpen() = try {
+            onView(inContent(withText(s(R.string.notice_grievance)))).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+            true
+        } catch (e: Throwable) { false }
+        for (i in 0 until 4) {
+            if (noticeOpen()) break
+            tap(s(R.string.privacy_read))
+            Thread.sleep(1_000)
+        }
         see(s(R.string.notice_grievance))
         shot("11b-privacy-notice")
         tapUntil(s(R.string.privacy_agree), "privacy agreement") { P.obj("/v1/me/consents").optBoolean("accepted_current") }
