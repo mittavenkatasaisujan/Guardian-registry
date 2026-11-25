@@ -50,6 +50,7 @@ class MainActivity : Activity() {
 
     /** Something typed into a form and not saved yet: the 15-second refresh waits. */
     private var formDirty = false
+    private var noticeOpen = false
 
     /** This sign-in is restricted (new device, or after a SIM change): the registry refuses
      *  approvals and other high-trust actions, so those buttons become a note instead. */
@@ -920,9 +921,11 @@ class MainActivity : Activity() {
 
     /** A button that shows or hides the full notice, in the language the server sent. */
     private fun noticeToggle(parent: LinearLayout, n: JSONObject) {
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+        // stays open across the 15-second refresh, so it doesn't close while someone reads it
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = if (noticeOpen) View.VISIBLE else View.GONE }
         button(parent, getString(R.string.privacy_read), style = Style.SECONDARY) {
-            body.visibility = if (body.visibility == View.GONE) View.VISIBLE else View.GONE
+            noticeOpen = !noticeOpen
+            body.visibility = if (noticeOpen) View.VISIBLE else View.GONE
         }
         parent.addView(body, LinearLayout.LayoutParams(-1, -2))
         val parts = listOf("what_we_collect" to R.string.notice_collect, "why" to R.string.notice_why,
