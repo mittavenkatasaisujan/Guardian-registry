@@ -312,6 +312,7 @@ class MainActivity : Activity() {
         val wards: JSONArray? = null, val alerts: JSONArray? = null, val devices: JSONArray? = null,
         val myKeyId: String? = null, val nominee: JSONObject? = null,
         val notice: JSONObject? = null, val consents: JSONObject? = null, val erasure: JSONObject? = null,
+        val complaints: JSONArray? = null,
     )
 
     private fun load(which: String): Data {
@@ -328,7 +329,8 @@ class MainActivity : Activity() {
                           changes = a.arr("/v1/me/changes"), payments = a.arr("/v1/me/payments?limit=10"),
                           presets = a.obj("/v1/presets"), nominee = a.obj("/v1/me/nominee").optJSONObject("nominee"),
                           notice = a.obj("/v1/privacy/notice"), consents = a.obj("/v1/me/consents"),
-                          erasure = a.obj("/v1/me/erasure").optJSONObject("erasure"))
+                          erasure = a.obj("/v1/me/erasure").optJSONObject("erasure"),
+                          complaints = a.arr("/v1/me/grievances"))
         }
     }
 
@@ -641,6 +643,28 @@ class MainActivity : Activity() {
                     act(b, { api().post("/v1/me/erasure") }) { getString(R.string.deletion_requested) }
                 }
             }
+        }
+
+        // DPDP Act s.13: complain to the grievance officer; the answer comes back here
+        val gc = card()
+        heading(gc, getString(R.string.complaints))
+        para(gc, getString(R.string.complaints_explain), MUTED, 13f)
+        val complaint = input(gc, getString(R.string.your_complaint),
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, null)
+            .apply { minLines = 3; gravity = android.view.Gravity.TOP or android.view.Gravity.START; contentDescription = getString(R.string.your_complaint) }
+        button(gc, getString(R.string.send_complaint), style = Style.SECONDARY) { b ->
+            act(b, { api().post("/v1/me/grievances", JSONObject().put("text", complaint.text.toString().trim())) }) {
+                getString(R.string.complaint_sent)
+            }
+        }
+        for (g in d.complaints?.objects() ?: emptyList()) {
+            item(gc)
+            val answered = g.str("status") == "answered"
+            rowWithPill(gc, Wire.time(g.str("created_at")), null, getString(if (answered) R.string.answered else R.string.waiting),
+                if (answered) OK else WARN)
+            para(gc, g.str("text"), INK, 15f)
+            if (answered) para(gc, getString(R.string.our_answer, g.str("answer")), OK, 15f)
+            else para(gc, getString(R.string.answer_due, Wire.time(g.str("due_at"))), MUTED, 13f)
         }
 
         val l = card()

@@ -168,6 +168,9 @@ details.notice summary { cursor: pointer; font-weight: 600; min-height: 44px; di
 .notice-body ul { margin: 0; padding-left: 1.2em; }
 .notice-body li { margin: 4px 0; }
 
+.complaint { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0; }
+.complaint.answer { border-left: 3px solid var(--ok, #2e7d32); padding-left: 10px; }
+textarea { min-height: 96px; resize: vertical; }
 .narration { margin: 6px 0 0; font-style: italic; overflow-wrap: anywhere; }
 
 fieldset.plain { border: 0; padding: 0; margin: 12px 0 0; min-width: 0; }

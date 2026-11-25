@@ -22,7 +22,7 @@ the retention periods and the provider contracts before real users.
 | Security safeguards (s.8(5)) | See [security-review.md](security-review.md) | Independent penetration test before launch. |
 | Breach notification (s.8(6)) | `breach.py`: incident record, notify the Board and affected people, four-eyes approval of notices | **Counsel:** confirm the Rules' timeline (commentary cites 72 hours; verify in the Gazette text). |
 | Retention and erasure (s.8(7)) | **"Delete my account"** in the apps (held 7 days, guardians told, can be cancelled; `GET /v1/me/erasure` shows a waiting deletion). Erasure deletes number, name, sessions, devices, push tokens, rules, nominee; alerts deleted after 180 days, sessions after 90 | **Counsel:** payment check records (without number or name) and the audit chain are kept after erasure for banks' record-keeping; confirm the period and basis. |
-| Grievance officer (s.8(10)) | `GR_GRIEVANCE_CONTACT` in the notice | Appoint one. |
+| Grievance officer (s.8(10)) and redressal (s.13) | `GR_GRIEVANCE_CONTACT` in the notice. **Built (v0.30.0):** "Complaints" in the web, Android and iOS apps; complaints are stored encrypted, have a 90-day due date (the Rules), appear in the operator console (Complaints, overdue ones flagged) and are answered there; the person gets an alert and reads the answer in the app. Included in the data export, deleted with the account | Appoint the officer and staff the console. |
 | Children (s.9) | **Fixed (v0.29.0):** a new account needs "I am 18 or older" ticked in the web, Android and iOS apps; the server refuses enrolment without it (`adult_required`) and records when it was confirmed (`users.adult_confirmed_at`, in the data export) | **Counsel:** whether self-declaration is enough, or banks' KYC age should be relied on. |
 | Access (s.11) | `GET /v1/me/data-export`; **"Download my data"** in the web, Android and iOS apps (v0.28.0) | — |
 | **Correction (s.12)** | **Fixed:** `PUT /v1/me/name` (the notice already promised it; it didn't exist) | Rules are corrected in the app. |
@@ -48,7 +48,7 @@ the circular as a bank's service provider. Two consequences:
 
 1. Final notice text, in English and the languages offered.
 2. Lawful basis for each purpose; retention periods; banks' record-keeping basis for kept checks.
-3. Children: enforce adults only, or design verifiable parental consent.
+3. Children: the apps now require "I am 18 or older" at sign-up; decide whether self-declaration is enough.
 4. Contracts with every processor; hosting in India confirmed.
 5. Grievance officer appointed; breach procedure rehearsed against the Rules' timeline.
 6. Agreements with partner banks (roles: who is the data fiduciary for checks).

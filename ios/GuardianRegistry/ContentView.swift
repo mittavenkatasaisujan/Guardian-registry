@@ -249,6 +249,7 @@ struct MyProtectionView: View {
     @State private var invite = ""
     @State private var confirmLost = false
     @State private var confirmDelete = false
+    @State private var complaint = ""
     @State private var limits: [String: String] = [:]
     @State private var limitsLoaded = false
     @State private var newName = ""
@@ -276,6 +277,7 @@ struct MyProtectionView: View {
                 details
                 if model.agreedToNotice { privacy }
                 yourData
+                complaintsSection
                 lost
             }
         }
@@ -569,6 +571,41 @@ struct MyProtectionView: View {
             }
         } header: {
             Heading("Your data")
+        }
+    }
+
+    /// DPDP Act s.13: complain to the grievance officer; answers come back here within 90 days.
+    private var complaintsSection: some View {
+        Section {
+            TextField("Your complaint", text: $complaint, axis: .vertical)
+                .lineLimit(3...8)
+                .accessibilityIdentifier("complaint")
+            Button("Send complaint") { model.sendComplaint(complaint) { complaint = "" } }
+                .disabled(complaint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            ForEach(model.complaints.indices, id: \.self) { i in
+                let g = model.complaints[i]
+                let answered = (g["status"] as? String) == "answered"
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(verbatim: Wire.time(g["created_at"] as? String ?? "")).font(.footnote).foregroundStyle(.secondary)
+                        Spacer()
+                        Text(answered ? "Answered" : "Waiting").font(.caption.bold())
+                            .foregroundStyle(answered ? .green : .orange)
+                    }
+                    Text(verbatim: g["text"] as? String ?? "")
+                    if answered {
+                        Text(verbatim: L("Our answer: %@", g["answer"] as? String ?? "")).foregroundStyle(.green)
+                    } else {
+                        Text(verbatim: L("Answer due by %@", Wire.time(g["due_at"] as? String ?? "")))
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        } header: {
+            Heading("Complaints")
+        } footer: {
+            Text("Not happy with how we handle your data or your protection? Write to our grievance officer. We answer within 90 days, here in the app.")
         }
     }
 

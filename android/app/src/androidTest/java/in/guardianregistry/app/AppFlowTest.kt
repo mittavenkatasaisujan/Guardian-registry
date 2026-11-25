@@ -490,6 +490,18 @@ class AppFlowTest {
         shot("13b-deletion-waiting")
         tapUntil(s(R.string.cancel_deletion), "deletion cancelled") { P.obj("/v1/me/erasure").isNull("erasure") }
         seeFirst(s(R.string.delete_account))   // the heading and the button share the words
+
+        // a complaint to the grievance officer, answered by an operator, shows the answer here
+        tapUntil(s(R.string.send_complaint), "complaint sent", fill = {
+            onView(withContentDescription(s(R.string.your_complaint)))
+                .perform(scrollTo(), replaceText("A payment of mine was held and I don't know why."), closeSoftKeyboard())
+        }) { P.arr("/v1/me/grievances").length() == 1 }
+        val gid = P.arr("/v1/me/grievances").getJSONObject(0).getString("id")
+        admin.post("/v1/admin/grievances/$gid/answer", JSONObject().put("answer", "It was over your daily limit."))
+        tab(R.string.tab_guardian)
+        tab(R.string.tab_me)
+        see(s(R.string.our_answer, "It was over your daily limit."))
+        shot("13c-complaint-answered")
         app.close()
     }
 }

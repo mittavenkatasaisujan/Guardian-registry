@@ -14,6 +14,7 @@
 "All payments are paused." = "सभी भुगतान रोक दिए गए हैं।";
 "Allowed" = "अनुमत";
 "Answer by %@" = "%@ तक जवाब दें";
+"Answer due by %@" = "जवाब %@ तक";
 "Applied." = "लागू किया गया।";
 "Apply" = "लागू करें";
 "Approve" = "मंज़ूर करें";
@@ -32,6 +33,8 @@
 "Change my limits" = "मेरी सीमाएँ बदलें";
 "Changes waiting" = "प्रतीक्षा में बदलाव";
 "Choose at least one payment type, and different start and end times." = "कम से कम एक भुगतान माध्यम चुनें, और शुरू व खत्म होने का अलग-अलग समय।";
+"Complaint sent. We answer within 90 days." = "शिकायत भेज दी गई। हम 90 दिनों के भीतर जवाब देंगे।";
+"Complaints" = "शिकायतें";
 "Daily limits by channel" = "माध्यम के अनुसार दैनिक सीमाएँ";
 "Decline" = "अस्वीकार करें";
 "Declined." = "अस्वीकार किया।";
@@ -112,6 +115,7 @@
 "Nominee's mobile number" = "नामित व्यक्ति का मोबाइल नंबर";
 "Nominee's name" = "नामित व्यक्ति का नाम";
 "None" = "कोई नहीं";
+"Not happy with how we handle your data or your protection? Write to our grievance officer. We answer within 90 days, here in the app." = "आपके डेटा या आपकी सुरक्षा के बारे में हमारे काम से खुश नहीं हैं? हमारे शिकायत अधिकारी को लिखें। हम 90 दिनों के भीतर यहीं ऐप में जवाब देते हैं।";
 "Not on this sign-in yet: it is restricted (see the note at the top)." = "इस साइन-इन पर अभी नहीं: यह सीमित है (ऊपर की सूचना देखें)।";
 "Not sure? Call them on a number you know before approving." = "पक्का नहीं? मंज़ूरी से पहले उन्हें किसी जाने-पहचाने नंबर पर कॉल करें।";
 "Note: %@" = "विवरण: %@";
@@ -119,6 +123,7 @@
 "On hold" = "रोका गया";
 "Only approve if you have spoken to them yourself, on a call YOU placed or in person. If in doubt, deny." = "तभी मंज़ूर करें जब आपने खुद उनसे बात की हो, ऐसी कॉल पर जो आपने ख़ुद की हो, या आमने-सामने। शक हो तो अस्वीकार करें।";
 "Only bank-verified guardians approve" = "केवल बैंक-सत्यापित गार्डियन मंज़ूरी दें";
+"Our answer: %@" = "हमारा जवाब: %@";
 "Pause all payments" = "सभी भुगतान रोकें";
 "Pause all payments for %@?" = "%@ के सभी भुगतान रोकें?";
 "Pause their payments" = "उनके भुगतान रोकें";
@@ -151,6 +156,7 @@
 "Saved your data." = "आपका डेटा सहेज लिया।";
 "Saved." = "सहेज लिया।";
 "Send code" = "कोड भेजें";
+"Send complaint" = "शिकायत भेजें";
 "Sign in" = "साइन इन करें";
 "Sign out" = "साइन आउट";
 "Sign out everywhere" = "हर जगह साइन आउट करें";
@@ -199,6 +205,7 @@
 "Your SIM card was reported changed" = "आपका सिम कार्ड बदले जाने की सूचना मिली है";
 "Your account and your protection end 7 days after you ask. Your guardians are told, and you can cancel until then." = "माँगने के 7 दिन बाद आपका खाता और आपकी सुरक्षा खत्म हो जाती है। आपके गार्डियन को बताया जाता है, और तब तक आप इसे रद्द कर सकते हैं।";
 "Your account will be deleted on %@." = "आपका खाता %@ को मिटा दिया जाएगा।";
+"Your complaint" = "आपकी शिकायत";
 "Your data" = "आपका डेटा";
 "Your details" = "आपकी जानकारी";
 "Your guardians stop protecting your payments then. If someone told you to do this, cancel it." = "तब आपके गार्डियन आपके भुगतानों की सुरक्षा बंद कर देंगे। अगर किसी ने आपसे ऐसा करने को कहा है, तो इसे रद्द करें।";

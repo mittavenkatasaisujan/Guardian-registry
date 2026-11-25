@@ -281,6 +281,31 @@
    "web"
   ]
  },
+ "30a1a92f39": {
+  "en": "Answer due by %1$s",
+  "where": [
+   "android:answer_due"
+  ]
+ },
+ "a564cb475f": {
+  "en": "Answer due by %@",
+  "where": [
+   "ios"
+  ]
+ },
+ "bd8e8ff131": {
+  "en": "Answer due by {date}",
+  "where": [
+   "web"
+  ]
+ },
+ "e0aafffa02": {
+  "en": "Answered",
+  "where": [
+   "web",
+   "android:answered"
+  ]
+ },
  "c0b885fe69": {
   "en": "applied",
   "where": [
@@ -598,6 +623,22 @@
   "en": "code expired or not requested",
   "where": [
    "server:error"
+  ]
+ },
+ "5b5dee78f5": {
+  "en": "Complaint sent. We answer within 90 days.",
+  "where": [
+   "web",
+   "android:complaint_sent",
+   "ios"
+  ]
+ },
+ "527dcedaf8": {
+  "en": "Complaints",
+  "where": [
+   "web",
+   "android:complaints",
+   "ios"
   ]
  },
  "231e564db4": {
@@ -1657,6 +1698,14 @@
    "server:error"
   ]
  },
+ "1e2eb76826": {
+  "en": "Not happy with how we handle your data or your protection? Write to our grievance officer. We answer within 90 days, here in the app.",
+  "where": [
+   "web",
+   "android:complaints_explain",
+   "ios"
+  ]
+ },
  "7295c78abd": {
   "en": "Not on this sign-in yet: it is restricted (see the note at the top).",
   "where": [
@@ -1743,6 +1792,30 @@
  },
  "a75957e55b": {
   "en": "Open Guardian Registry to see the details.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "5127a9c012": {
+  "en": "Our answer: %1$s",
+  "where": [
+   "android:our_answer"
+  ]
+ },
+ "f2e9941be2": {
+  "en": "Our answer: %@",
+  "where": [
+   "ios"
+  ]
+ },
+ "42f6bab9f6": {
+  "en": "Our answer: {text}",
+  "where": [
+   "web"
+  ]
+ },
+ "cb1a4f7c02": {
+  "en": "Our grievance officer has answered your complaint. Open the app to read the answer.",
   "where": [
    "server:alert"
   ]
@@ -2242,6 +2315,14 @@
   "where": [
    "web",
    "android:send_code",
+   "ios"
+  ]
+ },
+ "17bbbedbc8": {
+  "en": "Send complaint",
+  "where": [
+   "web",
+   "android:send_complaint",
    "ios"
   ]
  },
@@ -2879,6 +2960,13 @@
    "server:error"
   ]
  },
+ "33d3063284": {
+  "en": "Waiting",
+  "where": [
+   "web",
+   "android:waiting"
+  ]
+ },
  "0a1ea5282f": {
   "en": "Waiting for approval",
   "where": [
@@ -2957,6 +3045,12 @@
    "server:error-phrase"
   ]
  },
+ "a2564fb227": {
+  "en": "write your complaint in 10 to 2000 characters",
+  "where": [
+   "server:error"
+  ]
+ },
  "7a3066e404": {
   "en": "wrong code",
   "where": [
@@ -2977,6 +3071,12 @@
    "web",
    "android:sim_confirm",
    "ios"
+  ]
+ },
+ "cd8c77c0cb": {
+  "en": "you already have 5 complaints waiting; we answer each within 90 days",
+  "where": [
+   "server:error"
   ]
  },
  "b9fb4f4416": {
@@ -3093,6 +3193,20 @@
  },
  "189fc3f1a8": {
   "en": "Your bank's identity confirmation is more than a year old. Ask your bank to confirm it again.",
+  "where": [
+   "server:alert"
+  ]
+ },
+ "94e3026ee0": {
+  "en": "Your complaint",
+  "where": [
+   "web",
+   "android:your_complaint",
+   "ios"
+  ]
+ },
+ "a6fbd72a49": {
+  "en": "Your complaint was answered",
   "where": [
    "server:alert"
   ]

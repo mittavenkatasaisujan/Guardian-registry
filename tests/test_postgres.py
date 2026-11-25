@@ -125,6 +125,7 @@ class TestMultiNode:
         c.execute("DROP TABLE nominees")  # v20
         c.execute("ALTER TABLE users DROP COLUMN adult_confirmed_at")  # v21
         c.execute("ALTER TABLE checks DROP COLUMN narration")
+        c.execute("DROP TABLE grievances")  # v22
         c.execute("UPDATE gr_schema SET version = 8")
         upgraded = Database(PG_URL, schema=schema)
         assert upgraded.one("SELECT version FROM gr_schema")["version"] == len(MIGRATIONS)
@@ -134,6 +135,7 @@ class TestMultiNode:
         assert upgraded.one("SELECT COUNT(*) n FROM nominees")["n"] == 0   # v20 back
         upgraded.one("SELECT narration FROM checks LIMIT 1")          # v21 back
         upgraded.one("SELECT adult_confirmed_at FROM users LIMIT 1")
+        assert upgraded.one("SELECT COUNT(*) n FROM grievances")["n"] == 0   # v22 back
         with upgraded.tx() as tx:  # v11 + its Postgres extra: streams and an auto seq
             audit_mod.append(tx, "t", "x", "a", None, {})
         assert upgraded.one("SELECT stream, stream_seq, seq FROM audit_log")["stream"] == "system"

@@ -334,11 +334,11 @@ function signInView() {
 
 // ------------------------------------------------------------------ my protection
 async function meView() {
-  const [me, rules, security, guardians, changes, payments, presets, nom, notice, consents, era] = await Promise.all([
+  const [me, rules, security, guardians, changes, payments, presets, nom, notice, consents, era, complaints] = await Promise.all([
     api("GET", "/v1/me"), api("GET", "/v1/me/rules"), api("GET", "/v1/me/security"),
     api("GET", "/v1/me/guardians"), api("GET", "/v1/me/changes"), api("GET", "/v1/me/payments?limit=10"),
     api("GET", "/v1/presets"), api("GET", "/v1/me/nominee"), api("GET", "/v1/privacy/notice"), api("GET", "/v1/me/consents"),
-    api("GET", "/v1/me/erasure"),
+    api("GET", "/v1/me/erasure"), api("GET", "/v1/me/grievances"),
   ]);
   const erasure = era && era.erasure;
   const nominee = nom && nom.nominee;
@@ -545,6 +545,26 @@ async function meView() {
              if (!confirm(t("Delete your account in 7 days? Your guardians will stop protecting your payments."))) return;
              act(e.target, () => api("POST", "/v1/me/erasure"), t("Deletion requested. You can cancel it until then."));
            } }, t("Delete my account")))]),
+
+    h("section", { class: "card", id: "complaints" },
+      h("h2", {}, t("Complaints")),
+      h("p", { class: "muted small" }, t("Not happy with how we handle your data or your protection? Write to our grievance officer. We answer within 90 days, here in the app.")),
+      h("form", { onsubmit: (e) => {
+        e.preventDefault();
+        const f = e.target;
+        act(f.querySelector("button"), () => api("POST", "/v1/me/grievances", { text: f.complaint.value.trim() }),
+          t("Complaint sent. We answer within 90 days."));
+      } },
+        h("label", { for: "complaint" }, t("Your complaint")),
+        h("textarea", { id: "complaint", name: "complaint", rows: 4, minlength: 10, maxlength: 2000, required: true }),
+        h("div", { class: "row mt" }, h("button", { type: "submit", class: "secondary" }, t("Send complaint")))),
+      complaints.length ? h("ul", { class: "list mt" }, complaints.map((g) => h("li", {},
+        h("div", { class: "row space" }, h("span", { class: "muted small" }, when(g.created_at)),
+          h("span", { class: `pill ${g.status === "answered" ? "ok" : "warn"}` }, g.status === "answered" ? t("Answered") : t("Waiting"))),
+        h("p", { class: "complaint" }, g.text),
+        g.answer
+          ? h("p", { class: "complaint answer" }, t("Our answer: {text}", { text: g.answer }))
+          : h("p", { class: "muted small" }, t("Answer due by {date}", { date: when(g.due_at) }))))) : null),
 
     h("section", { class: "card" },
       h("h2", {}, t("Lost your phone?")),

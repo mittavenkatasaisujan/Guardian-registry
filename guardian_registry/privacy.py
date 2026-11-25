@@ -37,6 +37,8 @@ from .security import _fernet, decrypt_mobile, encrypt_mobile, new_id, normalize
 
 NOTICE_VERSION = "2026-11-25"
 ERASURE_HOLD_DAYS = 7
+GRIEVANCE_DAYS = 90        # DPDP Rules 2025: complaints are answered within 90 days
+MAX_OPEN_GRIEVANCES = 5
 
 NOTICE = {
     "version": NOTICE_VERSION,
@@ -250,9 +252,69 @@ class PrivacyMixin:
                                "WHERE user_id=?", uid),
             "consents": self.consents(uid)["accepted"],
             "nominee": self.nominee(uid),
+            "complaints": self.grievances(uid),
             "erasure": self._erasure_view(uid),
             "audit_trail": audit_rows,
         }
+
+    # ------------------------------------------------------------- complaints (grievance redressal)
+    def _grievance_view(self, r, operator: bool = False) -> dict:
+        from .security import decrypt_text
+        view = {"id": r["id"], "status": r["status"], "text": decrypt_text(r["text_enc"]),
+                "created_at": r["created_at"], "due_at": r["due_at"],
+                "answer": decrypt_text(r["answer_enc"]) if r["answer_enc"] else None,
+                "answered_at": r["answered_at"]}
+        if operator:
+            view.update(user_id=r["user_id"], person_name=self._user(r["user_id"])["display_name"],
+                        answered_by=r["answered_by"],
+                        overdue=r["status"] == "open" and r["due_at"] < self._now())
+        return view
+
+    def raise_grievance(self, uid: str, text: str) -> dict:
+        """DPDP Act s.13: a complaint to the grievance officer, answered in the app within 90 days."""
+        from .security import encrypt_text
+        text = (text or "").strip()
+        if not 10 <= len(text) <= 2000:
+            raise Invalid("write your complaint in 10 to 2000 characters")
+        now = self.clock.now()
+        with self.db.tx(uid) as c:
+            n = c.execute("SELECT COUNT(*) n FROM grievances WHERE user_id=? AND status='open'", (uid,)).fetchone()["n"]
+            if n >= MAX_OPEN_GRIEVANCES:
+                raise Conflict("you already have 5 complaints waiting; we answer each within 90 days")
+            gid = new_id("grv")
+            c.execute("INSERT INTO grievances (id, user_id, text_enc, status, created_at, due_at) VALUES (?,?,?,?,?,?)",
+                      (gid, uid, encrypt_text(text), "open", iso(now), iso(now + timedelta(days=GRIEVANCE_DAYS))))
+            self._audit(c, uid, "privacy.grievance_raised", uid, grievance_id=gid)
+        return self._grievance_view(self.db.one("SELECT * FROM grievances WHERE id=?", (gid,)))
+
+    def grievances(self, uid: str) -> list[dict]:
+        return [self._grievance_view(r) for r in
+                self.db.all("SELECT * FROM grievances WHERE user_id=? ORDER BY created_at DESC", (uid,))]
+
+    def grievances_for_operator(self, status: str = "open") -> list[dict]:
+        if status not in ("open", "answered", "all"):
+            raise Invalid("status must be open, answered or all")
+        sql = "SELECT * FROM grievances" + ("" if status == "all" else " WHERE status=?") + " ORDER BY due_at"
+        return [self._grievance_view(r, operator=True)
+                for r in self.db.all(sql, () if status == "all" else (status,))]
+
+    def answer_grievance(self, operator_id: str, gid: str, answer: str) -> dict:
+        from .security import encrypt_text
+        answer = (answer or "").strip()
+        if not 1 <= len(answer) <= 4000:
+            raise Invalid("write an answer of 1 to 4000 characters")
+        r = self.db.one("SELECT user_id, status FROM grievances WHERE id=?", (gid,))
+        if not r:
+            raise NotFound("complaint not found")
+        uid = r["user_id"]
+        with self.db.tx(uid) as c:
+            if not c.execute("UPDATE grievances SET status='answered', answer_enc=?, answered_at=?, answered_by=? "
+                             "WHERE id=? AND status='open'", (encrypt_text(answer), self._now(), operator_id, gid)).rowcount:
+                raise Conflict("this complaint was already answered")
+            self._audit(c, operator_id, "privacy.grievance_answered", uid, grievance_id=gid)
+            self._alert(c, [uid], "grievance_answered", "Your complaint was answered",
+                        "Our grievance officer has answered your complaint. Open the app to read the answer.", uid)
+        return self._grievance_view(self.db.one("SELECT * FROM grievances WHERE id=?", (gid,)), operator=True)
 
     # ------------------------------------------------------------- erasure
     def _erasure_view(self, uid: str) -> dict | None:
@@ -319,7 +381,8 @@ class PrivacyMixin:
         c.execute("UPDATE recoveries SET new_mobile_enc='', new_mobile_masked='(erased)' WHERE user_id=?", (uid,))
         for table, col in (("sessions", "user_id"), ("push_tokens", "user_id"), ("device_keys", "user_id"),
                            ("devices", "user_id"), ("trusted_payees", "principal_id"), ("consents", "user_id"),
-                           ("sim_events", "user_id"), ("nominees", "user_id")):
+                           ("sim_events", "user_id"), ("nominees", "user_id"),
+                           ("grievances", "user_id")):
             c.execute(f"DELETE FROM {table} WHERE {col}=?", (uid,))  # nosec B608: only fixed SQL fragments / '?' placeholders are spliced in; values are parameters
         c.execute("DELETE FROM notifications WHERE recipient_type='user' AND recipient_id=?", (uid,))
         c.execute("UPDATE pending_changes SET status='cancelled' WHERE principal_id=? AND status='pending'", (uid,))
@@ -343,4 +406,4 @@ class PrivacyMixin:
         return out
 
 
-__all__ = ["PrivacyMixin", "NOTICE_VERSION", "NOTICE_HI", "ERASURE_HOLD_DAYS", "RETAINED", "notify"]
+__all__ = ["PrivacyMixin", "NOTICE_VERSION", "NOTICE_HI", "GRIEVANCE_DAYS", "ERASURE_HOLD_DAYS", "RETAINED", "notify"]

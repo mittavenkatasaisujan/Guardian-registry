@@ -45,6 +45,7 @@ final class AppModel: ObservableObject {
     @Published var notice: [String: Any] = [:]
     @Published var agreedToNotice = true
     @Published var erasure: [String: Any]?
+    @Published var complaints: [[String: Any]] = []
     @Published var exportFile: JSONFile?
 
     init() {
@@ -205,8 +206,10 @@ final class AppModel: ObservableObject {
             async let no = a.object("/v1/privacy/notice")
             async let co = a.object("/v1/me/consents")
             async let er = a.object("/v1/me/erasure")
+            async let gr = a.list("/v1/me/grievances")
             let (mm, rr, gg, cc, pp, ps, nn) = try await (m, r, g, c, p, pr, nm)
-            let (nt, cs, ee) = try await (no, co, er)
+            let (nt, cs, ee, gg2) = try await (no, co, er, gr)
+            complaints = gg2
             erasure = ee["erasure"] as? [String: Any]
             me = mm; rules = rr; guardians = gg; changes = cc; payments = pp
             nominee = nn["nominee"] as? [String: Any]
@@ -314,6 +317,16 @@ final class AppModel: ObservableObject {
             let all = try await self.api.object("/v1/me/data-export")
             let data = try JSONSerialization.data(withJSONObject: all, options: [.prettyPrinted, .sortedKeys])
             self.exportFile = JSONFile(data: data)
+        }
+    }
+
+    /// DPDP Act s.13: a complaint to the grievance officer; the answer comes back in the app.
+    func sendComplaint(_ text: String, done: @escaping () -> Void) {
+        run {
+            try await self.api.call("POST", "/v1/me/grievances", ["text": text.trimmingCharacters(in: .whitespacesAndNewlines)])
+            try await self.load()
+            self.message = L("Complaint sent. We answer within 90 days.")
+            done()
         }
     }
 

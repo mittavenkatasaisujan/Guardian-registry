@@ -134,3 +134,54 @@ def test_new_accounts_must_confirm_they_are_adults(reg):
             assert c.post("/v1/auth/verify", json={"mobile": m, "code": code}).status_code == 200
     finally:
         del os.environ["GR_OTP_DEV_ECHO"]
+
+
+# DPDP Act s.13: complaints to the grievance officer, answered in the app within 90 days
+def test_complaints_are_answered_in_the_app(reg, family, clock):
+    from guardian_registry.errors import Conflict as _Conflict
+    from guardian_registry.errors import Invalid as _Invalid
+    amma = family["amma"]
+    with pytest.raises(_Invalid, match="10 to 2000"):
+        reg.raise_grievance(amma, "too short")
+    g = reg.raise_grievance(amma, "  My guardian was told about a payment I never made.  ")
+    assert g["status"] == "open" and g["text"] == "My guardian was told about a payment I never made."
+    assert g["due_at"][:10] == "2027-02-21"                            # 90 days from 2026-11-23
+    row = reg.db.one("SELECT text_enc FROM grievances WHERE id=?", (g["id"],))
+    assert "guardian" not in row["text_enc"]                           # stored encrypted
+    op = reg.grievances_for_operator()
+    assert [x["id"] for x in op] == [g["id"]] and op[0]["person_name"] == "Amma" and not op[0]["overdue"]
+    out = reg.answer_grievance("op-1", g["id"], "We checked: it was a bank test message. Sorry.")
+    assert out["status"] == "answered" and out["answered_by"] == "op-1"
+    with pytest.raises(_Conflict):
+        reg.answer_grievance("op-1", g["id"], "again")
+    mine = reg.grievances(amma)
+    assert mine[0]["answer"].startswith("We checked") and "answered_by" not in mine[0]
+    alerts = reg.db.all("SELECT kind FROM notifications WHERE recipient_id=? AND kind='grievance_answered'", (amma,))
+    assert alerts
+    assert reg.data_export(amma)["complaints"][0]["id"] == g["id"]
+    for i in range(5):
+        reg.raise_grievance(amma, f"complaint number {i} about something")
+    with pytest.raises(_Conflict, match="5 complaints"):
+        reg.raise_grievance(amma, "one complaint too many here")
+    clock.advance(days=91)
+    assert all(x["overdue"] for x in reg.grievances_for_operator())
+
+
+def test_complaints_over_http_and_erasure(reg, family, clock):
+    from fastapi.testclient import TestClient
+
+    from guardian_registry.api import create_app
+    uid, tok = reg.register_user("+919833330001", "Complainer")
+    h = {"Authorization": f"Bearer {tok}"}
+    with TestClient(create_app(reg, admin_token="adm", run_worker=False)) as c:
+        r = c.post("/v1/me/grievances", headers={**h, "Accept-Language": "hi"}, json={"text": "short"})
+        assert r.status_code == 422 and "अक्षरों" in r.json()["detail"]
+        gid = c.post("/v1/me/grievances", headers=h, json={"text": "Please explain why my payment was held."}).json()["id"]
+        assert c.get("/v1/admin/grievances", headers={"X-Admin-Token": "adm"}).json()[0]["id"] == gid
+        assert c.get("/v1/admin/grievances", headers=h).status_code in (401, 403)       # people can't read others'
+        c.post(f"/v1/admin/grievances/{gid}/answer", headers={"X-Admin-Token": "adm"}, json={"answer": "It was over your limit."})
+        assert c.get("/v1/me/grievances", headers=h).json()[0]["answer"] == "It was over your limit."
+    reg.request_erasure(uid)
+    clock.advance(days=8)
+    reg.sweep_erasure()
+    assert reg.db.one("SELECT COUNT(*) n FROM grievances WHERE user_id=?", (uid,))["n"] == 0

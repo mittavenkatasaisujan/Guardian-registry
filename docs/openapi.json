@@ -423,6 +423,37 @@
         "title": "FraudPayeeIn",
         "type": "object"
       },
+      "GrievanceAnswerIn": {
+        "properties": {
+          "answer": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Answer",
+            "type": "string"
+          }
+        },
+        "required": [
+          "answer"
+        ],
+        "title": "GrievanceAnswerIn",
+        "type": "object"
+      },
+      "GrievanceIn": {
+        "properties": {
+          "text": {
+            "description": "the complaint, in the person's words",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "GrievanceIn",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1517,7 +1548,7 @@
   "info": {
     "description": "Cross-bank trusted-person and payment-protection registry.",
     "title": "Guardian Registry",
-    "version": "0.29.0"
+    "version": "0.30.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1774,6 +1805,162 @@
           }
         },
         "summary": "Rotate Data Key",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/v1/admin/grievances": {
+      "get": {
+        "description": "People's complaints, oldest due date first. Each must be answered by due_at.",
+        "operationId": "admin_grievances_v1_admin_grievances_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "open",
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-admin-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Admin-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Grievances",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/v1/admin/grievances/{grievance_id}/answer": {
+      "post": {
+        "operationId": "admin_answer_grievance_v1_admin_grievances__grievance_id__answer_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "grievance_id",
+            "required": true,
+            "schema": {
+              "title": "Grievance Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-admin-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Admin-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrievanceAnswerIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Answer Grievance",
         "tags": [
           "ops"
         ]
@@ -7201,6 +7388,109 @@
           }
         },
         "summary": "Request Erasure",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/v1/me/grievances": {
+      "get": {
+        "operationId": "my_grievances_v1_me_grievances_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "My Grievances",
+        "tags": [
+          "people"
+        ]
+      },
+      "post": {
+        "description": "Complain to the grievance officer (DPDP Act s.13). Answered in the app within 90 days.",
+        "operationId": "raise_grievance_v1_me_grievances_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrievanceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Raise Grievance",
         "tags": [
           "people"
         ]

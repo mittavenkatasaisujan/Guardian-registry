@@ -546,9 +546,26 @@ ALTER TABLE users ADD COLUMN adult_confirmed_at TEXT;
 ALTER TABLE checks ADD COLUMN narration TEXT;
 """
 
+SCHEMA_V22 = """
+-- DPDP Act s.13: a person's complaints to the grievance officer, answered within 90 days (the Rules)
+CREATE TABLE grievances (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL REFERENCES users(id),
+    text_enc     TEXT NOT NULL,           -- encrypted: may hold personal details
+    status       TEXT NOT NULL,           -- open, answered
+    created_at   TEXT NOT NULL,
+    due_at       TEXT NOT NULL,
+    answer_enc   TEXT,
+    answered_at  TEXT,
+    answered_by  TEXT
+);
+CREATE INDEX ix_grievances_user ON grievances(user_id);
+CREATE INDEX ix_grievances_status ON grievances(status, due_at);
+"""
+
 MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8, SCHEMA_V9,
               SCHEMA_V10, SCHEMA_V11, SCHEMA_V12, SCHEMA_V13, SCHEMA_V14, SCHEMA_V15, SCHEMA_V16, SCHEMA_V17,
-              SCHEMA_V18, SCHEMA_V19, SCHEMA_V20, SCHEMA_V21]
+              SCHEMA_V18, SCHEMA_V19, SCHEMA_V20, SCHEMA_V21, SCHEMA_V22]
 
 # Postgres-only follow-ups, run after the baseline or after the portable migration of the
 # same version. v11: audit rows get their global seq from a sequence (SQLite's INTEGER

@@ -459,6 +459,20 @@ final class AppFlowUITests: XCTestCase {
         try tapUntil(app, button: "Cancel deletion", "deletion cancelled") {
             (try obj("/v1/me/erasure", token: p)["erasure"] as? [String: Any]) == nil
         }
+
+        // a complaint to the grievance officer, answered by an operator, shows the answer here
+        let box = see(app, app.textFields["complaint"], "complaint box")
+        box.tap()
+        box.typeText("A payment of mine was held and I don't know why.")
+        try tapUntil(app, button: "Send complaint", "complaint sent") {
+            ((try call("GET", "/v1/me/grievances", token: p)) as? [[String: Any]] ?? []).count == 1
+        }
+        let gid = try XCTUnwrap(((try call("GET", "/v1/me/grievances", token: p)) as? [[String: Any]])?.first?["id"] as? String)
+        try call("POST", "/v1/admin/grievances/\(gid)/answer", ["answer": "It was over your daily limit."],
+                 headers: ["X-Admin-Token": "dev-admin"])
+        reloadTab(app, 0)
+        see(app, text(app, "It was over your daily limit."), "answer shown")
+        shot("ios-13c-complaint-answered")
         app.terminate()
     }
 }

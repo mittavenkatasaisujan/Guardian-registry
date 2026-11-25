@@ -220,4 +220,13 @@
     <string name="adult_first">I am 18 or older</string>
     <string name="adults_only">This service is for adults. Children can\'t create an account.</string>
     <string name="note_text" formatted="true">Note: %1$s</string>
+    <string name="complaints">Complaints</string>
+    <string name="complaints_explain">Not happy with how we handle your data or your protection? Write to our grievance officer. We answer within 90 days, here in the app.</string>
+    <string name="your_complaint">Your complaint</string>
+    <string name="send_complaint">Send complaint</string>
+    <string name="complaint_sent">Complaint sent. We answer within 90 days.</string>
+    <string name="answered">Answered</string>
+    <string name="waiting">Waiting</string>
+    <string name="our_answer" formatted="true">Our answer: %1$s</string>
+    <string name="answer_due" formatted="true">Answer due by %1$s</string>
 </resources>

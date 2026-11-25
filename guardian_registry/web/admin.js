@@ -247,6 +247,33 @@ async function signalsView() {
 // ------------------------------------------------------------------ personal-data incidents
 const CATS = ["mobile_numbers", "names", "dates_of_birth", "payment_history", "sign_in_sessions", "device_data"];
 
+// ------------------------------------------------------------------ complaints (DPDP Act s.13)
+async function complaintsView() {
+  const status = state.complaints || "open";
+  const list = await api("GET", `/v1/admin/grievances?status=${status}`);
+  const filter = h("div", { class: "row" }, ["open", "answered", "all"].map((s) =>
+    h("button", { class: s === status ? "" : "secondary", onclick: () => { state.complaints = s; render(); } },
+      { open: "Waiting", answered: "Answered", all: "All" }[s])));
+  return [h("h1", {}, "Complaints"),
+    h("p", { class: "muted" }, "People's complaints to the grievance officer. The DPDP Rules give 90 days to answer; the answer appears in the person's app and they get an alert."),
+    filter,
+    h("section", { class: "card" }, list.length ? h("ul", { class: "list" }, list.map((g) => {
+      const box = h("textarea", { "aria-label": "Answer", maxlength: 4000 });
+      return h("li", {},
+        h("div", { class: "row space" }, h("strong", {}, g.person_name),
+          pill(g.status === "open" ? (g.overdue ? "overdue" : "waiting") : "answered", g.status === "open" ? (g.overdue ? "bad" : "warn") : "ok")),
+        h("p", { class: "small muted" }, `Sent ${when(g.created_at)} · answer by ${when(g.due_at)}`),
+        h("p", { class: "complaint" }, g.text),
+        g.status === "answered"
+          ? h("p", { class: "small" }, `Answered ${when(g.answered_at)} by ${g.answered_by}: ${g.answer}`)
+          : [box, h("div", { class: "row" }, h("button", { onclick: (e) => {
+              if (!box.value.trim()) { toast("Write an answer first."); return; }
+              act(e.target, () => api("POST", `/v1/admin/grievances/${g.id}/answer`, { answer: box.value.trim() }), "Answered. They have been alerted.");
+            } }, "Send answer"))]);
+    })) : h("p", { class: "empty" }, status === "open" ? "No complaints waiting." : "None.")),
+  ];
+}
+
 async function incidentsView() {
   const list = await api("GET", "/v1/admin/incidents");
   const out = h("pre", { class: "card small", hidden: true });
@@ -326,7 +353,7 @@ async function systemView() {
 }
 
 // ------------------------------------------------------------------ shell
-const VIEWS = { queue: queueView, participants: participantsView, watchlist: watchlistView, signals: signalsView, incidents: incidentsView, registers: registersView, system: systemView };
+const VIEWS = { queue: queueView, participants: participantsView, watchlist: watchlistView, signals: signalsView, complaints: complaintsView, incidents: incidentsView, registers: registersView, system: systemView };
 
 function show(nodes) {
   const v = document.getElementById("view");

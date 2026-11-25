@@ -264,6 +264,14 @@ class RulesPatch(BaseModel):
     quiet_hours: QuietHoursIn | None = None
 
 
+class GrievanceIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000, description="the complaint, in the person's words")
+
+
+class GrievanceAnswerIn(BaseModel):
+    answer: str = Field(min_length=1, max_length=4000)
+
+
 class NameIn(BaseModel):
     display_name: str = Field(min_length=1, max_length=80)
 
@@ -662,6 +670,15 @@ def create_app(
     @app.post("/v1/admin/checks/{check_id}/fraud-label", tags=["ops"])
     def admin_label(check_id: str, body: FraudLabelIn, op: Operator):
         return reg.label_check(f"operator:{op}", check_id, body.fraud, body.note)
+
+    @app.get("/v1/admin/grievances", tags=["ops"])
+    def admin_grievances(_: Operator, status: str = "open"):
+        """People's complaints, oldest due date first. Each must be answered by due_at."""
+        return reg.grievances_for_operator(status)
+
+    @app.post("/v1/admin/grievances/{grievance_id}/answer", tags=["ops"])
+    def admin_answer_grievance(grievance_id: str, body: GrievanceAnswerIn, op: Operator):
+        return reg.answer_grievance(op, grievance_id, body.answer)
 
     @app.get("/v1/admin/incidents", tags=["ops"])
     def list_incidents(_: Operator):
@@ -1109,6 +1126,15 @@ def create_app(
     def request_erasure(uid: TrustedUser):
         """Delete my account. Held for 7 days (your guardians are told; you can cancel)."""
         return reg.request_erasure(uid)
+
+    @app.post("/v1/me/grievances", status_code=201, tags=["people"])
+    def raise_grievance(body: GrievanceIn, uid: User):
+        """Complain to the grievance officer (DPDP Act s.13). Answered in the app within 90 days."""
+        return reg.raise_grievance(uid, body.text)
+
+    @app.get("/v1/me/grievances", tags=["people"])
+    def my_grievances(uid: User):
+        return reg.grievances(uid)
 
     @app.get("/v1/me/erasure", tags=["people"])
     def erasure_status(uid: User):

@@ -28,6 +28,9 @@ ALERTS_HI = {
     "A recovery to the number {0} was started. If this isn't you, cancel it here.":
         "नंबर {0} पर खाता वापसी शुरू की गई है। अगर यह आप नहीं हैं, तो इसे यहाँ रद्द करें।",
     "Account deletion requested": "खाता हटाने का अनुरोध",
+    "Your complaint was answered": "आपकी शिकायत का जवाब आ गया",
+    "Our grievance officer has answered your complaint. Open the app to read the answer.":
+        "हमारे शिकायत अधिकारी ने आपकी शिकायत का जवाब दिया है। जवाब पढ़ने के लिए ऐप खोलें।",
     "Account recovered": "खाता वापस मिल गया",
     "Account recovery request": "खाता वापसी का अनुरोध",
     "Account recovery stopped": "खाता वापसी रोकी गई",
@@ -262,6 +265,9 @@ ERRORS_HI = {
     "a new guardian can approve payments only after the waiting period set in this person's rules":
         "नया गार्डियन इस व्यक्ति के नियमों में तय प्रतीक्षा अवधि के बाद ही भुगतान मंज़ूर कर सकता है",
     "approval_scope must be all or rbi": "मंज़ूरी का दायरा 'सभी' या 'RBI' होना चाहिए",
+    "write your complaint in 10 to 2000 characters": "अपनी शिकायत 10 से 2000 अक्षरों में लिखें",
+    "you already have 5 complaints waiting; we answer each within 90 days":
+        "आपकी 5 शिकायतें पहले से जवाब के इंतज़ार में हैं; हम हर शिकायत का जवाब 90 दिनों के भीतर देते हैं",
     "confirm you are 18 or older to create an account": "खाता बनाने के लिए पुष्टि करें कि आपकी उम्र 18 वर्ष या उससे ज़्यादा है",
     "narration must be at most 140 characters": "भुगतान का विवरण 140 अक्षरों से ज़्यादा नहीं हो सकता",
     "quiet_hours needs one or more channels and a start and end hour (0 to 23) that differ":
@@ -319,6 +325,8 @@ ERROR_FRAGMENTS_HI = {
 
 # Errors only banks, operators or developers see; they stay English (API field names, formats).
 NOT_FOR_PEOPLE = {
+    "complaint not found", "this complaint was already answered", "write an answer of 1 to 4000 characters",
+    "status must be open, answered or all",
     "KYC record is too old; re-verify the customer first", "amount must be a whole number of paise",
     "assisted recovery needs KYC done in the last 30 days",
     "assisted recovery needs verified_on (the in-person KYC you just did)", "at most {0} events per batch",
