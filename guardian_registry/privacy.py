@@ -294,9 +294,9 @@ class PrivacyMixin:
     def grievances_for_operator(self, status: str = "open") -> list[dict]:
         if status not in ("open", "answered", "all"):
             raise Invalid("status must be open, answered or all")
-        sql = "SELECT * FROM grievances" + ("" if status == "all" else " WHERE status=?") + " ORDER BY due_at"
-        return [self._grievance_view(r, operator=True)
-                for r in self.db.all(sql, () if status == "all" else (status,))]
+        rows = (self.db.all("SELECT * FROM grievances ORDER BY due_at") if status == "all" else
+                self.db.all("SELECT * FROM grievances WHERE status=? ORDER BY due_at", (status,)))
+        return [self._grievance_view(r, operator=True) for r in rows]
 
     def answer_grievance(self, operator_id: str, gid: str, answer: str) -> dict:
         from .security import encrypt_text
